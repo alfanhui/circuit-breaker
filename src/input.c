@@ -47,7 +47,7 @@ void gamepad_input(void)
 	}
 
 	// if(rot.rx < JO_DEG_TO_RAD(90) )
-	rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
+	//rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
 	
 	if (jo_is_pad1_key_pressed(JO_KEY_L))
 		pos.z += 1.0;
@@ -62,7 +62,7 @@ void gamepad_input(void)
 	{
 		pos.x = toFIXED(boundary);
 	}
-	else if (pos.x < -toFIXED(0.0015 && boundary_enabled))
+	else if (pos.x < -toFIXED(0.0015) && boundary_enabled)
 	{
 		pos.x = -toFIXED(0.0015);
 	}

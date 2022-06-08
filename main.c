@@ -34,12 +34,6 @@ jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(1000, 1000, 128);
 jo_3d_quad cube_quads[6];
 Sint16 draw_distance = 10000;
 
-
-
-int box1_texture_id = 0;
-int box2_texture_id = 0;
-int box3_texture_id = 0;
-int box4_texture_id = 0;
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
@@ -118,19 +112,19 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
-	//draw_arena_walls();
+	draw_arena_walls();
 	debug_3d();
 }
 
-//Shoddy attempt at walls with cube
-void create_cube(void)
-{
-	jo_3d_create_cube(cube_quads, cube_vertices);
-	jo_3d_set_texture(&cube_quads[1], plane1_texture_id); //up-side-down?
-	jo_3d_set_texture(&cube_quads[3], plane1_texture_id); //up-side-down?
-	jo_3d_set_texture(&cube_quads[4], plane1_texture_id);
-	jo_3d_set_texture(&cube_quads[5], plane1_texture_id);
-}
+// //Shoddy attempt at walls with cube
+// void create_cube(void)
+// {
+// 	jo_3d_create_cube(cube_quads, cube_vertices);
+// 	jo_3d_set_texture(&cube_quads[1], plane1_texture_id); //up-side-down?
+// 	jo_3d_set_texture(&cube_quads[3], plane1_texture_id); //up-side-down?
+// 	jo_3d_set_texture(&cube_quads[4], plane1_texture_id);
+// 	jo_3d_set_texture(&cube_quads[5], plane1_texture_id);
+// }
 
 jo_palette *my_tga_palette_handling(void)
 {
@@ -163,10 +157,6 @@ void init_3d_planes(void)
 }
 
 void load_textures(void){
-	box1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX1.TGA", JO_COLOR_Transparent);	   // spirit 1
-	box2_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX2.TGA", JO_COLOR_Transparent);	   // spirit 2
-	box3_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX3.TGA", JO_COLOR_Transparent);	   // spirit 3
-	box4_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX4.TGA", JO_COLOR_Transparent);	   // spirit 4
 	floor_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "FLOOR.TGA", JO_COLOR_Transparent);  // spirit 5
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black); // spirit 7
@@ -184,7 +174,7 @@ void jo_main(void)
 	init_3d_planes();
 	initCamera(&cam);
 
-	create_cube();
+	//create_cube();
 	create_arena_walls();
 
 	jo_core_add_callback(gamepad_input);
