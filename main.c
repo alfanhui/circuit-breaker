@@ -43,12 +43,12 @@ void initCamera(jo_camera *curCam)
 	(*curCam).viewpoint[X] = toFIXED(0.0);
 	(*curCam).viewpoint[Y] = toFIXED(0.0);
 	(*curCam).viewpoint[Z] = toFIXED(5.0); // 5.0
-	(*curCam).z_angle = DEGtoANG(0.0);	   // oritenation
+	(*curCam).z_angle = DEGtoANG(0.0);	   // orientation
 	(*curCam).target[X] = toFIXED(0.0);
 	(*curCam).target[Y] = toFIXED(0.0);
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
-	//slZdspLevel(0);
+	// slZdspLevel(0);
 	jo_3d_perspective_angle(90); // FOV 90
 
 	pos.x = player_start_pos_x;
@@ -57,28 +57,58 @@ void initCamera(jo_camera *curCam)
 
 	rot.rx = JO_DEG_TO_RAD(90.0);
 	rot.ry = JO_DEG_TO_RAD(0.0);
-	rot.rz = JO_DEG_TO_RAD(0.0);
+	rot.rz = JO_DEG_TO_RAD(1.0); // start a good number
 }
 
 void debug_3d(void)
 {
-	jo_printf(0, 0, "pos.x %d", toFIXED(pos.x));
-	jo_printf(0, 1, "pos.y %d", toFIXED(pos.y));
-	jo_printf(0, 2, "pos.z %d", toFIXED(pos.z));
-	jo_printf(0, 3, "rot.rx %d", rot.rx);
-	jo_printf(0, 4, "rot.ry %d", rot.ry);
-	jo_printf(0, 5, "rot.rz %d", rot.rz);
+
+	int degree = 45;
+	float radian = JO_DEG_TO_RAD(degree);
+
+	slPrint("pos.x", slLocate(0, 0));
+	slPrintFX(pos.x, slLocate(5, 0));
+	slPrint("pos.y", slLocate(0, 1));
+	slPrintFX(pos.y, slLocate(5, 1));
+	slPrint("pos.z", slLocate(0, 2));
+	slPrintFX(pos.z, slLocate(5, 2));
+
+	slPrint("rot.rx", slLocate(0, 3));
+	slPrintFX(rot.rx, slLocate(6, 3));
+	slPrint("rot.ry", slLocate(0, 4));
+	slPrintFX(rot.ry, slLocate(6, 4));
+	slPrint("rot.rz", slLocate(0, 5));
+	slPrintFX(rot.rz, slLocate(6, 5));
+
+	// slPrint("degree = 45", slLocate(0,9));
+	// slPrintFX(jo_sin_rad(radian), slLocate(4,10));
+	// slPrint("sin", slLocate(4,10));
+	// slPrintFX(jo_cos_rad_old(radian), slLocate(4,11));
+	// slPrint("old_cos", slLocate(0,11));
+	// slPrintFX(jo_cos_rad(radian),slLocate(4,12));
+	// slPrint("new_cos", slLocate(0,12));
+	// slPrintFX(jo_tan_rad_old(radian), slLocate(4,13));
+	// slPrint("old_tan", slLocate(0,13));
+	// slPrintFX(jo_tan_rad(radian), slLocate(4,14));
+	// slPrint("new_tan", slLocate(0,14));
+
+	// SGL
+	//  slPrintFX(slSin(jo_DEGtoANG(degree)), slLocate(24,10));
+	//  slPrint("sgl_sin", slLocate(20,10));
+	//  slPrintFX(slCos(jo_DEGtoANG(degree)), slLocate(24,11));
+	//  slPrint("sgl_cos", slLocate(20,11));
+	//  slPrintFX(slTan(jo_DEGtoANG(degree)), slLocate(24,12));
+	//  slPrint("sgl_tan", slLocate(20,12));
 }
 
-void draw_cube(void)
+void debug_pad1(void)
 {
-	jo_3d_push_matrix();
-	{
-		jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-		jo_3d_translate_matrixf(pos.x - player_start_pos_x, pos.y - player_start_pos_y, pos.z + 120);
-		jo_3d_draw_array(cube_quads, 6);
-	}
-	jo_3d_pop_matrix();
+	jo_printf(20, 0, "a.pressed %d", is_key_pressed(DIGI_A));
+	jo_printf(20, 1, "a.up %d", is_key_up(DIGI_A));
+	jo_printf(20, 2, "a.down %d", is_key_down(DIGI_A));
+	jo_printf(20, 3, "key changed %d", is_key_change(DIGI_A));
+	jo_printf(20, 4, "a.release %d", is_key_release(DIGI_A));
+	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
 void draw_hud(void)
@@ -94,12 +124,12 @@ void draw_hud(void)
 void draw_3d(void)
 {
 	jo_3d_camera_look_at(&cam);
-	//draw_hud();
-	// FLOOR
+	// draw_hud();
+	//  FLOOR
 	jo_3d_push_matrix();
 	{
 		jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-		jo_3d_translate_matrixf(pos.x, pos.y, pos.z);
+		jo_3d_translate_matrixf(pos.x - 50, pos.y - 5, pos.z);
 		jo_background_3d_plane_a_draw(true);
 	}
 	jo_3d_pop_matrix();
@@ -107,13 +137,14 @@ void draw_3d(void)
 	// SKY
 	jo_3d_push_matrix();
 	{
-		jo_3d_translate_matrix(rot.rz * 100, 110 - 112 * jo_cos_radf(0), 100); //rot.rx
+		jo_3d_translate_matrix(rot.rz * 100, 110 - 112 * jo_cos_radf(0), 100); // rot.rx
 		jo_background_3d_plane_b_draw(false);
 	}
 	jo_3d_pop_matrix();
 
 	draw_arena_walls();
 	debug_3d();
+	// debug_pad1();
 }
 
 // //Shoddy attempt at walls with cube
@@ -156,10 +187,11 @@ void init_3d_planes(void)
 	jo_core_tv_on();
 }
 
-void load_textures(void){
+void load_textures(void)
+{
 	floor_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "FLOOR.TGA", JO_COLOR_Transparent);  // spirit 5
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
-	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black); // spirit 7
+	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
 }
 
 void jo_main(void)
@@ -170,12 +202,12 @@ void jo_main(void)
 	load_textures();
 	load_arena_textures();
 
-
 	init_3d_planes();
 	initCamera(&cam);
 
-	//create_cube();
 	create_arena_walls();
+	// Enable low_level_input
+	jo_core_add_vblank_callback(operate_digital_pad1);
 
 	jo_core_add_callback(gamepad_input);
 	jo_core_add_callback(draw_3d);

@@ -42,13 +42,11 @@ extern jo_vertice cube_vertices[];
 extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
-
 void initCamera(jo_camera *curCam);
 void debug_3d(void);
 void draw_cube(void);
 void draw_hud(void);
 void draw_3d(void);
-//void create_cube(void);
 jo_palette *my_tga_palette_handling(void);
 void init_3d_planes(void);
 void load_textures(void);
