@@ -57,3 +57,5 @@ dkms.conf
 *.elf
 *.iso
 *.map
+
+*.log
