@@ -6,9 +6,9 @@
 
 extern jo_pos3Df pos;
 extern jo_rot3Df rot;
-extern float boundary;
 
-char compass(int index);
+void debug_buttons(void);
+void debug_controller(void);
 void gamepad_input(void);
 
 #endif
