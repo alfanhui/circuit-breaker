@@ -14,7 +14,8 @@ SRCS=main.c \
 	src/utils/3d.c \
 	src/utils/low_level_input.c \
 	src/input.c \
-	src/level.c
+	src/level.c \
+	src/trails.c
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler
 include $(COMPILER_DIR)/COMMON/jo_engine_makefile

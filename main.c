@@ -145,6 +145,7 @@ void draw_3d(void)
 	draw_arena_walls();
 	debug_3d();
 	// debug_pad1();
+	draw_player1_trails();
 }
 
 // //Shoddy attempt at walls with cube
@@ -201,11 +202,13 @@ void jo_main(void)
 
 	load_textures();
 	load_arena_textures();
+	load_player1_trail_textures();
 
 	init_3d_planes();
 	initCamera(&cam);
 
-	create_arena_walls();
+	init_arena_walls();
+	add_player1_x_trails();
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
 

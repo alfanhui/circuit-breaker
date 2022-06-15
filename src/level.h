@@ -13,7 +13,7 @@ extern const float player_start_pos_x;
 extern const float player_start_pos_y;
 
 void load_arena_textures(void);
-void create_arena_walls(void);
+void init_arena_walls(void);
 void draw_arena_walls(void);
 
 #endif

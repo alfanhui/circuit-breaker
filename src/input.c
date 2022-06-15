@@ -19,7 +19,7 @@ const float turn_incrementor = 0.15707f;
 const float degree90_radian = 1.570796f;
 const char compass[4] = "NESW";
 
-static bool debug = false;
+static bool debug = true;
 static int movement_speed = 0;
 static float angle_increment = 0.0f;
 static float x_angle_increment = 0.0f;

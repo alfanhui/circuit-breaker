@@ -94,6 +94,26 @@
   { WIDTH, HEIGHT, -DEPTH }, \
   { -WIDTH, HEIGHT, -DEPTH } \
 }
+
+
+
+/** @brief Plane Rectangle vertice table */
+# define JO_3D_TRAIL_PLANE_VERTICES_X(X1, X2, HEIGHT) \
+{ \
+  {   X1 , 0, HEIGHT  }, \
+  {   X1 , 0, 0   }, \
+  {   X2 , 0, 0   }, \
+  {   X2 , 0, HEIGHT  }  \
+}
+
+/** @brief Plane Rectangle vertice table */
+# define JO_3D_TRAIL_PLANE_VERTICES_Y(Y1, Y2, HEIGHT) \
+{ \
+  {  0, Y1,  0 }, \
+  {  0, Y1,  HEIGHT  }, \
+  {  0, Y2,  HEIGHT  }, \
+  {  0, Y2,  0 }  \
+}
 /*
 ** END OF FILE
 */

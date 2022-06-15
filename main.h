@@ -32,6 +32,7 @@
 #include <jo/jo.h>
 #include "src/input.h"
 #include "src/level.h"
+#include "src/trails.h"
 
 extern jo_camera cam;
 extern jo_pos3Df pos;

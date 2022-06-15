@@ -102,7 +102,7 @@ void load_arena_textures(void)
 }
 
 // Arena walls
-void create_arena_walls(void)
+void init_arena_walls(void)
 {
 	for (int i = 0; i < 16; ++i)
 	{
