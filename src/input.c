@@ -2,6 +2,8 @@
 
 jo_pos3Df pos;
 jo_rot3Df rot;
+int compass_index = 0;
+int previous_compass_index = 0;
 
 const float turn_angle = 1.5f;	 // 1.5f
 const float x_turn_angle = 0.2f; // 1.5f
@@ -19,11 +21,10 @@ const float turn_incrementor = 0.15707f;
 const float degree90_radian = 1.570796f;
 const char compass[4] = "NESW";
 
-static bool debug = true;
+static bool debug = false;
 static int movement_speed = 0;
 static float angle_increment = 0.0f;
 static float x_angle_increment = 0.0f;
-static int compass_index = 0;
 static float boost_gauge = 100.0f;
 static float boost_movement = 1.0f;
 static float turn_left_target = 0.0f;
@@ -157,6 +158,9 @@ void gamepad_input(void)
 		angle_increment = turn_left_target;
 		rot.rz = turn_left_target;
 		turning_left = false;
+		//trail stuff
+		player1_previous_coordinate.x = pos.x;
+		player1_previous_coordinate.y = pos.y;
 	}
 
 	//Gradual turning right mechanism
@@ -169,24 +173,33 @@ void gamepad_input(void)
 		angle_increment = turn_right_target;
 		rot.rz = turn_right_target;
 		turning_right = false;
+		//trail stuff
+		player1_previous_coordinate.x = pos.x;
+		player1_previous_coordinate.y = pos.y;
 	}
 
 	// Turning with compass setting
 	if (is_key_struck(DIGI_LEFT) && !turning_right)
 	{
+		previous_compass_index = compass_index;
 		compass_index -= 1;
 		if (compass_index < 0)
 			compass_index = 3;
 		turn_left_target = angle_increment - degree90_radian;
 		turning_left = true;
+		//trigger trail creation
+		create_trail = true;
 	}
 	else if (is_key_struck(DIGI_RIGHT) && !turning_left)
 	{
+		previous_compass_index = compass_index;
 		compass_index += 1;
 		if (compass_index == 4)
 			compass_index = 0;
 		turn_right_target = angle_increment + degree90_radian;
 		turning_right = true;
+		//trigger trail creation
+		create_trail = true;
 	}
 
 	rot.rz = angle_increment;

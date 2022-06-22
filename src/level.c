@@ -5,9 +5,6 @@ const int wall_height = 128;
 const int wall_half_width = 500;
 const int wall_half_height = 120; // This is used to riase the wall to the ground
 
-const float player_start_pos_x = 500.0f;
-const float player_start_pos_y = 500.0f;
-
 const float division_space_modifier = 1.981f;
 const float wall_spacer_modifier = 1.91f;
 
@@ -125,7 +122,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - (player_start_pos_x * 3), pos.y - (player_start_pos_y * 3), pos.z + wall_half_height);
+			jo_3d_translate_matrixf(pos.x + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - wall_width, pos.y - wall_width, pos.z + wall_half_height);
 			jo_3d_draw(&wall1[i]);
 		}
 		jo_3d_pop_matrix();
@@ -133,7 +130,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - (player_start_pos_x * 3) + (wall_width * wall_spacer_modifier), pos.y - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - (player_start_pos_y * 3), pos.z + wall_half_height);
+			jo_3d_translate_matrixf(pos.x - wall_width + (wall_width * wall_spacer_modifier), pos.y - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width, pos.z + wall_half_height);
 			jo_3d_draw(&wall2[i]);
 		}
 		jo_3d_pop_matrix();
@@ -141,7 +138,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - (player_start_pos_x * 3), pos.y + (wall_width * wall_spacer_modifier) - (player_start_pos_y * 3), pos.z + wall_half_height);
+			jo_3d_translate_matrixf(pos.x - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width, pos.y + (wall_width * wall_spacer_modifier) - wall_width, pos.z + wall_half_height);
 			jo_3d_draw(&wall3[i]);
 		}
 		jo_3d_pop_matrix();
@@ -149,7 +146,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - (player_start_pos_x * 3), pos.y + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - (player_start_pos_y * 3), pos.z + wall_half_height);
+			jo_3d_translate_matrixf(pos.x - wall_width, pos.y + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - wall_width, pos.z + wall_half_height);
 			jo_3d_draw(&wall4[i]);
 		}
 		jo_3d_pop_matrix();
