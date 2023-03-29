@@ -1,0 +1,997 @@
+
+../../jo_engine/3d.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	3d.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000014	l	O	.data	00000014	20	_polygon.4866
+00000000	l	O	.data	00000014	20	_polygon.4871
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+0000019c	l	O	.rodata.str1.4	00000010	16	___FUNCTION__.4892
+00000178	l	O	.rodata.str1.4	00000024	36	___FUNCTION__.4902
+0000015c	l	O	.rodata.str1.4	0000001c	28	___FUNCTION__.4908
+00000138	l	O	.rodata.str1.4	00000024	36	___FUNCTION__.4917
+0000011c	l	O	.rodata.str1.4	0000001c	28	___FUNCTION__.4923
+000000fc	l	O	.rodata.str1.4	0000001d	29	___FUNCTION__.4932
+000000e4	l	O	.rodata.str1.4	00000015	21	___FUNCTION__.4938
+000000c4	l	O	.rodata.str1.4	0000001f	31	___FUNCTION__.4949
+000000ac	l	O	.rodata.str1.4	00000017	23	___FUNCTION__.4955
+0000008c	l	O	.rodata.str1.4	0000001d	29	___FUNCTION__.4966
+00000074	l	O	.rodata.str1.4	00000015	21	___FUNCTION__.4972
+00000058	l	O	.rodata.str1.4	00000019	25	___FUNCTION__.4985
+00000068	g	F	.text	00000028	40	_jo_3d_init
+00000000	g	O	.bss	000003fc	1020	___jo_sprite_quad
+00000090	g	F	.text	0000003c	60	_jo_3d_create_triangle
+000000cc	g	F	.text	00000040	64	_jo_3d_create_plane
+0000010c	g	F	.text	00000114	276	_jo_3d_create_mesh_from_vertices_and_normals
+00000220	g	F	.text	00000054	84	_jo_3d_free_mesh
+00000274	g	F	.text	0000005c	92	_jo_3d_create_cube
+000002d0	g	F	.text	00000074	116	_jo_3d_set_mesh_polygon_transparency
+00000344	g	F	.text	0000006c	108	_jo_3d_set_mesh_transparency
+000003b0	g	F	.text	00000078	120	_jo_3d_set_mesh_polygon_screen_doors
+00000428	g	F	.text	0000006c	108	_jo_3d_set_mesh_screen_doors
+00000494	g	F	.text	00000070	112	_jo_3d_set_mesh_polygon_light
+00000504	g	F	.text	0000006c	108	_jo_3d_set_mesh_light
+00000570	g	F	.text	000000cc	204	_jo_3d_set_mesh_polygon_texture
+0000063c	g	F	.text	0000006c	108	_jo_3d_set_mesh_texture
+000006a8	g	F	.text	000000ac	172	_jo_3d_set_mesh_polygon_color
+00000754	g	F	.text	0000006c	108	_jo_3d_set_mesh_color
+000007c0	g	F	.text	0000002c	44	_jo_3d_free_sprite_quad
+000007ec	g	F	.text	000000fc	252	_jo_3d_create_sprite_quad
+
+
+
+../../jo_engine/core.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	core.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000024	36	___jo_vblank_callbacks
+00060054	l	O	.bss	00000010	16	___vblank_callbacks
+00000024	l	F	.text	00000006	6	_nop
+0000002c	l	F	.text	00000006	6	_sleep
+00000034	l	F	.text	00000008	8	_tas
+0000003c	l	F	.text	00000006	6	_set_sr
+00000044	l	F	.text	00000006	6	_get_sr
+0000004c	l	F	.text	0000000a	10	_get_imask
+00000058	l	F	.text	00000014	20	_set_imask
+0000006c	l	F	.text	00000006	6	_set_vbr
+00000074	l	F	.text	00000006	6	_get_vbr
+0000007c	l	F	.text	00000006	6	_set_gbr
+00000084	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+000001e4	l	O	.rodata.str1.4	0000001c	28	___FUNCTION__.4814
+00000040	l	O	.bss	00060000	393216	_global_memory.4784
+00060044	l	O	.bss	00000010	16	___callbacks
+00000200	l	O	.rodata.str1.4	0000000d	13	___FUNCTION__.4809
+000001c4	l	O	.rodata.str1.4	0000001f	31	___FUNCTION__.4818
+000001ac	l	O	.rodata.str1.4	00000015	21	___FUNCTION__.4823
+00000194	l	O	.rodata.str1.4	00000018	24	___FUNCTION__.4827
+00060040	l	O	.bss	00000004	4	___jo_restart_game_callback
+0000017c	l	O	.rodata.str1.4	00000017	23	___FUNCTION__.4857
+00000164	l	O	.rodata.str1.4	00000017	23	___FUNCTION__.4865
+00000000	l	d	.text.startup	00000000	0	.text.startup
+0000008c	g	F	.text	00000136	310	___jo_core_set_screens_order
+000001c4	g	F	.text	0000000c	12	_jo_goto_boot_menu
+000001d0	g	F	.text	000000e0	224	_jo_core_suspend
+000002b0	g	F	.text	00000120	288	___jo_core_error
+000003d0	g	F	.text	00000084	132	_jo_core_add_vblank_callback
+00000000	g	O	.bss	00000040	64	___jo_last_error
+00000454	g	F	.text	000001ec	492	_jo_core_init
+00000640	g	F	.text	00000060	96	_jo_core_remove_vblank_callback
+000006a0	g	F	.text	00000050	80	_jo_core_add_callback
+000006f0	g	F	.text	00000040	64	_jo_core_remove_callback
+00000730	g	F	.text	0000000c	12	_jo_core_set_restart_game_callback
+0000073c	g	F	.text	00000094	148	_jo_core_run
+000007d0	g	F	.text	0000005c	92	_jo_dump_vdp1_registers
+0000082c	g	F	.text	0000005c	92	_jo_dump_vdp2_registers
+00000000	g	F	.text.startup	00000040	64	_main
+
+
+
+../../jo_engine/font.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	font.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+000000ac	l	O	.rodata.str1.4	0000000d	13	___FUNCTION__.4472
+0000009c	l	O	.rodata.str1.4	0000000e	14	___FUNCTION__.4492
+00000084	l	O	.rodata.str1.4	00000017	23	___FUNCTION__.4505
+00000068	g	F	.text	00000290	656	_jo_font_load
+000002f8	g	F	.text	00000124	292	_jo_font_print
+0000041c	g	F	.text	00000158	344	_jo_font_print_centered
+
+
+
+../../jo_engine/fs.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	fs.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+0000182c	l	O	.bss	00000d08	3336	___jo_fs_work
+00000020	l	O	.bss	00001800	6144	___jo_fs_dirname
+00000004	l	O	.bss	0000001c	28	___jo_fs_background_jobs
+000001f8	l	O	.rodata.str1.4	0000000b	11	___FUNCTION__.4200
+00001820	l	O	.bss	0000000c	12	___jo_fs_dirtbl
+000001dc	l	O	.rodata.str1.4	0000001a	26	___FUNCTION__.4227
+000001d0	l	O	.rodata.str1.4	00000009	9	___FUNCTION__.4236
+000001bc	l	O	.rodata.str1.4	00000014	20	___FUNCTION__.4254
+000001a8	l	O	.rodata.str1.4	00000014	20	___FUNCTION__.4244
+00000000	l	O	.data	00000004	4	___jo_fs_read_buffer_size
+0000019c	l	O	.rodata.str1.4	0000000b	11	___FUNCTION__.4271
+00000188	l	O	.rodata.str1.4	00000013	19	___FUNCTION__.4279
+00000170	l	O	.rodata.str1.4	00000016	22	___FUNCTION__.4294
+00000164	l	O	.rodata.str1.4	0000000c	12	___FUNCTION__.4305
+00000148	l	O	.rodata.str1.4	0000001c	28	___FUNCTION__.4309
+00000068	g	F	.text	000000b0	176	_jo_fs_init
+00000000	g	O	.bss	00000004	4	___jo_fs_background_job_count
+00000118	g	F	.text	000000bc	188	_jo_fs_do_background_jobs
+000001d4	g	F	.text	000001a4	420	_jo_fs_read_file_async_ptr
+00000378	g	F	.text	00000070	112	_jo_fs_cd
+000003e8	g	F	.text	0000019c	412	_jo_fs_read_file_ptr
+00000584	g	F	.text	0000004c	76	_jo_fs_read_file_in_dir
+000005d0	g	F	.text	000000fc	252	_jo_fs_open
+000006cc	g	F	.text	00000110	272	_jo_fs_seek_forward
+000007dc	g	F	.text	000000f8	248	_jo_fs_read_next_bytes
+000008d4	g	F	.text	0000004c	76	_jo_fs_close
+00000920	g	F	.text	00000040	64	_jo_fs_set_read_sector_count
+
+
+
+../../jo_engine/image.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	image.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000170	l	O	.rodata.str1.4	0000000c	12	___FUNCTION__.4477
+00000154	l	O	.rodata.str1.4	0000001a	26	___FUNCTION__.4485
+00000140	l	O	.rodata.str1.4	00000011	17	___FUNCTION__.4509
+00000124	l	O	.rodata.str1.4	0000001a	26	___FUNCTION__.4529
+00000110	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4546
+000000f0	l	O	.rodata.str1.4	0000001e	30	___FUNCTION__.4553
+000000d4	l	O	.rodata.str1.4	00000019	25	___FUNCTION__.4570
+00000068	g	F	.text	00000050	80	___jo_bin_load
+000000b8	g	F	.text	00000048	72	_jo_free_img
+00000100	g	F	.text	000000d0	208	_jo_bin_loader_from_stream
+000001d0	g	F	.text	00000084	132	_jo_bin_loader
+00000254	g	F	.text	0000006c	108	_jo_replace_color
+000002c0	g	F	.text	000001f8	504	_jo_sprite_add_bin_tileset
+000004b8	g	F	.text	000000cc	204	_jo_sprite_add_bin
+00000584	g	F	.text	00000098	152	_jo_sprite_add_bin_from_stream
+0000061c	g	F	.text	00000194	404	_jo_sprite_add_image_pack
+
+
+
+../../jo_engine/input.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	input.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000068	g	F	.text	00000048	72	_jo_get_inputs_vblank
+00000000	g	O	.bss	00000120	288	_jo_inputs
+000000b0	g	F	.text	00000044	68	_jo_get_input_type
+000000f4	g	F	.text	00000024	36	_jo_get_input_count
+
+
+
+../../jo_engine/list.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	list.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000010	l	O	.rodata.str1.4	0000000c	12	___FUNCTION__.4293
+0000001c	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4287
+00000068	g	F	.text	0000000e	14	_jo_list_init
+00000078	g	F	.text	00000078	120	_jo_list_add
+000000f0	g	F	.text	000000b0	176	_jo_list_insert_at
+000001a0	g	F	.text	00000060	96	_jo_list_remove
+
+
+
+../../jo_engine/malloc.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	malloc.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+0000006c	l	O	.bss	00000004	4	___jo_memory_zone_index
+00000000	l	O	.bss	0000006c	108	_memory_zones
+000000cc	l	O	.rodata.str1.4	00000013	19	___FUNCTION__.4157
+000000b0	l	O	.rodata.str1.4	00000019	25	___FUNCTION__.4164
+000000a8	l	O	.rodata.str1.4	00000008	8	___FUNCTION__.4194
+00000090	l	O	.rodata.str1.4	00000018	24	___FUNCTION__.4202
+00000078	l	O	.rodata.str1.4	00000018	24	___FUNCTION__.4215
+00000068	g	F	.text	00000070	112	_jo_add_memory_zone
+000000d8	g	F	.text	0000014c	332	_jo_malloc_with_behaviour
+00000224	g	F	.text	00000074	116	_jo_reduce_memory_fragmentation
+00000298	g	F	.text	0000007c	124	_jo_free
+00000314	g	F	.text	00000104	260	_jo_memory_usage_percent
+00000418	g	F	.text	0000009c	156	_jo_memory_fragmentation
+
+
+
+../../jo_engine/map.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	map.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	000000c8	200	___internal_jo_map_add_tile
+00000020	l	O	.bss	00000010	16	_gl_map_tile_count
+00000030	l	O	.bss	00000020	32	_gl_map
+00000000	l	O	.bss	00000020	32	_gl_map_depth_fixed
+000000c8	l	F	.text	00000006	6	_nop
+000000d0	l	F	.text	00000006	6	_sleep
+000000d8	l	F	.text	00000008	8	_tas
+000000e0	l	F	.text	00000006	6	_set_sr
+000000e8	l	F	.text	00000006	6	_get_sr
+000000f0	l	F	.text	0000000a	10	_get_imask
+000000fc	l	F	.text	00000014	20	_set_imask
+00000110	l	F	.text	00000006	6	_set_vbr
+00000118	l	F	.text	00000006	6	_get_vbr
+00000120	l	F	.text	00000006	6	_set_gbr
+00000128	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000074	l	O	.rodata.str1.4	0000000e	14	___FUNCTION__.5169
+0000005c	l	O	.rodata.str1.4	00000016	22	___FUNCTION__.5251
+00000130	g	F	.text	00000194	404	_jo_map_per_pixel_vertical_collision
+000002c4	g	F	.text	00000070	112	_jo_map_hitbox_detection_custom_boundaries
+00000334	g	F	.text	0000007c	124	_jo_map_create
+000003b0	g	F	.text	00000024	36	_jo_map_add_tile
+000003d4	g	F	.text	00000024	36	_jo_map_add_animated_tile
+000003f8	g	F	.text	00000098	152	_jo_map_draw_background
+00000490	g	F	.text	0000013c	316	_jo_map_3d_draw
+000005cc	g	F	.text	000000fc	252	_jo_map_draw
+000006c8	g	F	.text	00000018	24	_jo_map_free
+000006e0	g	F	.text	000003d8	984	_jo_map_load_from_file
+00000ab8	g	F	.text	00000080	128	_jo_map_move_tiles_by_attribute
+
+
+
+../../jo_engine/math.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	math.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000028	l	O	.rodata.str1.4	00000007	7	___FUNCTION__.4190
+00000000	l	O	.rodata	00000010	16	_rsq_tab.4277
+00000000	l	d	.rodata	00000000	0	.rodata
+00000068	g	F	.text	00000012	18	_jo_fixed_mult
+0000007c	g	F	.text	00000018	24	_jo_fixed_dot
+00000094	g	F	.text	00000038	56	_jo_fixed_pow
+000000cc	g	F	.text	00000028	40	_jo_fixed_div
+000000f4	g	F	.text	00000138	312	_jo_fixed_sin
+0000022c	g	F	.text	00000180	384	_jo_fixed_cos
+000003ac	g	F	.text	00000070	112	_jo_gcd
+0000041c	g	F	.text	000001c4	452	_jo_atan2f_rad
+000005e0	g	F	.text	0000015c	348	_jo_planar_rotate
+0000073c	g	F	.text	00000070	112	_jo_random
+00000000	g	O	.data	00000004	4	_jo_random_seed
+000007ac	g	F	.text	00000190	400	_jo_vector_fixed_compute_bezier_point
+0000093c	g	F	.text	00000150	336	_jo_vectorf_compute_bezier_point
+00000a8c	g	F	.text	000000b0	176	_jo_fixed_sqrt
+00000b3c	g	F	.text	00000040	64	_jo_sqrt
+00000b7c	g	F	.text	00000110	272	_jo_fixed_rsqrt
+00000c8c	g	F	.text	00000070	112	_jo_rsqrt
+
+
+
+../../jo_engine/palette.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	palette.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000058	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4475
+00000040	l	O	.rodata.str1.4	00000018	24	___FUNCTION__.4480
+00000068	g	F	.text	00000054	84	_jo_create_palette
+000000bc	g	F	.text	00000064	100	_jo_set_palette_register
+00000120	g	F	.text	00000014	20	_jo_get_palette_register
+
+
+
+../../jo_engine/physics.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	physics.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+
+
+
+../../jo_engine/sprites.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	sprites.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000000	l	F	.text	00000134	308	___internal_jo_sprite_add
+00000000	l	O	.data	00000004	4	___jo_sprite_id
+000013ec	l	O	.bss	00000004	4	___jo_sprite_addr
+000000d4	l	O	.rodata.str1.4	00000019	25	___FUNCTION__.4931
+00000134	l	F	.text	00000006	6	_nop
+0000013c	l	F	.text	00000006	6	_sleep
+00000144	l	F	.text	00000008	8	_tas
+0000014c	l	F	.text	00000006	6	_set_sr
+00000154	l	F	.text	00000006	6	_get_sr
+0000015c	l	F	.text	0000000a	10	_get_imask
+00000168	l	F	.text	00000014	20	_set_imask
+0000017c	l	F	.text	00000006	6	_set_vbr
+00000184	l	F	.text	00000006	6	_get_vbr
+0000018c	l	F	.text	00000006	6	_set_gbr
+00000194	l	F	.text	00000006	6	_get_gbr
+00000128	l	O	.rodata.str1.4	0000000f	15	___FUNCTION__.4903
+00000114	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4912
+00000100	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4922
+000000f0	l	O	.rodata.str1.4	0000000e	14	___FUNCTION__.4935
+000000b8	l	O	.rodata.str1.4	0000001a	26	___FUNCTION__.4939
+00000000	l	d	.rodata	00000000	0	.rodata
+00000bf4	g	O	.bss	000007f8	2040	___jo_sprite_def
+000003fc	g	O	.bss	000007f8	2040	___jo_sprite_pic
+0000019c	g	F	.text	0000008c	140	_jo_sprite_usage_percent
+00000228	g	F	.text	0000000c	12	_jo_get_last_sprite_id
+00000234	g	F	.text	00000084	132	_jo_sprite_init
+00000000	g	O	.bss	000003fc	1020	___jo_hash_table
+000002b8	g	F	.text	00000078	120	_jo_sprite_name2id
+00000330	g	F	.text	00000120	288	_jo_sprite_replace
+00000450	g	F	.text	0000004c	76	_jo_sprite_add
+0000049c	g	F	.text	0000004c	76	_jo_sprite_add_8bits_image
+000004e8	g	F	.text	000000a8	168	_jo_sprite_free_from
+00000590	g	F	.text	00000028	40	_jo_set_gouraud_shading_colors
+00000004	g	O	.data	00000004	4	___jo_gouraud_shading_runtime_index
+000005b8	g	F	.text	00000040	64	_jo_set_gouraud_shading_brightness
+000005f8	g	F	.text	0000011c	284	_jo_sprite_draw_4p_fixed
+00000014	g	O	.data	00000018	24	___jo_sprite_attributes
+00000714	g	F	.text	0000014c	332	_jo_sprite_draw
+00000860	g	F	.text	000001a0	416	_jo_sprite_draw_rotate
+00000a00	g	F	.text	00000034	52	_jo_sprite_set_clipping_area
+00000008	g	O	.data	0000000c	12	___jo_sprite_pos
+
+
+
+../../jo_engine/sprite_animator.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	sprite_animator.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	000000ac	172	___jo_internal_frame_animator
+00000000	l	O	.data	00000004	4	___jo_sprite_anim_id
+000000ac	l	F	.text	00000006	6	_nop
+000000b4	l	F	.text	00000006	6	_sleep
+000000bc	l	F	.text	00000008	8	_tas
+000000c4	l	F	.text	00000006	6	_set_sr
+000000cc	l	F	.text	00000006	6	_get_sr
+000000d4	l	F	.text	0000000a	10	_get_imask
+000000e0	l	F	.text	00000014	20	_set_imask
+000000f4	l	F	.text	00000006	6	_set_vbr
+000000fc	l	F	.text	00000006	6	_get_vbr
+00000104	l	F	.text	00000006	6	_set_gbr
+0000010c	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+000000c0	l	O	.bss	00000001	1	___jo_sprite_anim_callback_event_id
+00000064	l	O	.rodata.str1.4	00000017	23	___FUNCTION__.4199
+0000004c	l	O	.rodata.str1.4	00000016	22	___FUNCTION__.4205
+00000000	g	O	.bss	000000c0	192	___jo_sprite_anim_tab
+00000114	g	F	.text	000000b4	180	_jo_replace_sprite_anim
+000001c8	g	F	.text	000000cc	204	_jo_create_sprite_anim
+00000294	g	F	.text	00000028	40	_jo_clear_all_sprite_anim
+
+
+
+../../jo_engine/tga.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	tga.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	000000c8	200	___jo_tga_read_header
+00000000	l	O	.bss	00000004	4	___jo_tga_palette_handling
+000000c8	l	F	.text	0000014c	332	___jo_tga_read_contents
+00000214	l	F	.text	00000006	6	_nop
+0000021c	l	F	.text	00000006	6	_sleep
+00000224	l	F	.text	00000008	8	_tas
+0000022c	l	F	.text	00000006	6	_set_sr
+00000234	l	F	.text	00000006	6	_get_sr
+0000023c	l	F	.text	0000000a	10	_get_imask
+00000248	l	F	.text	00000014	20	_set_imask
+0000025c	l	F	.text	00000006	6	_set_vbr
+00000264	l	F	.text	00000006	6	_get_vbr
+0000026c	l	F	.text	00000006	6	_set_gbr
+00000274	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000134	l	O	.rodata.str1.4	0000000e	14	___FUNCTION__.4655
+00000118	l	O	.rodata.str1.4	0000001c	28	___FUNCTION__.4747
+000000fc	l	O	.rodata.str1.4	0000001a	26	___FUNCTION__.4776
+000000dc	l	O	.rodata.str1.4	0000001e	30	___FUNCTION__.4793
+000000c8	l	O	.rodata.str1.4	00000012	18	___FUNCTION__.4802
+0000027c	g	F	.text	0000000c	12	_jo_set_tga_palette_handling
+00000288	g	F	.text	00000120	288	___jo_tga_load
+000003a8	g	F	.text	00000048	72	___jo_tga_any_loader_from_stream
+000003f0	g	F	.text	00000018	24	_jo_tga_8bits_loader_from_stream
+00000408	g	F	.text	00000018	24	_jo_tga_loader_from_stream
+00000420	g	F	.text	00000050	80	___jo_tga_any_loader
+00000470	g	F	.text	0000001c	28	_jo_tga_8bits_loader
+0000048c	g	F	.text	0000001c	28	_jo_tga_loader
+000004a8	g	F	.text	0000023c	572	_jo_tga_8bits_tileset_loader
+000006e4	g	F	.text	00000258	600	_jo_sprite_add_tga_tileset
+0000093c	g	F	.text	000000b8	184	_jo_sprite_add_tga_from_stream
+000009f4	g	F	.text	000000f0	240	_jo_sprite_add_tga
+
+
+
+../../jo_engine/time.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	time.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000008	l	O	.bss	00000004	4	_ticks.3564
+00000068	g	F	.text	0000002a	42	_jo_time_init
+00000094	g	F	.text	000000e0	224	_jo_get_ticks
+00000174	g	F	.text	0000010c	268	_jo_fixed_point_time
+00000004	g	O	.bss	00000004	4	_time_in_seconds
+00000000	g	O	.bss	00000004	4	_delta_time
+
+
+
+../../jo_engine/tools.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	tools.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+0000005c	l	O	.rodata.str1.4	00000009	9	___FUNCTION__.4331
+00000050	l	O	.rodata.str1.4	0000000b	11	___FUNCTION__.4350
+00000040	l	O	.rodata.str1.4	0000000e	14	___FUNCTION__.4365
+00000034	l	O	.rodata.str1.4	0000000a	10	___FUNCTION__.4373
+00000028	l	O	.rodata.str1.4	0000000b	11	___FUNCTION__.4384
+00000068	g	F	.text	00000050	80	_jo_print
+000000b8	g	F	.text	00000048	72	_jo_clear_screen_line
+00000100	g	F	.text	00000024	36	_jo_clear_screen
+00000124	g	F	.text	0000009c	156	_jo_getdate
+000001c0	g	F	.text	00000024	36	_jo_get_current_language
+000001e4	g	F	.text	00000080	128	_jo_tools_atoi
+00000264	g	F	.text	00000050	80	_jo_strlen
+000002b4	g	F	.text	000000ac	172	_jo_endwith
+00000360	g	F	.text	0000002e	46	_jo_strcmp
+00000390	g	F	.text	000000a4	164	_jo_memset
+00000434	g	F	.text	00000074	116	_jo_map_to_vram
+00000000	g	O	.bss	00000040	64	___jo_sprintf_buf
+
+
+
+../../jo_engine/vdp1_command_pipeline.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	vdp1_command_pipeline.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+
+
+
+../../jo_engine/vdp2.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	vdp2.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	0000007c	124	___jo_create_map
+0000007c	l	F	.text	00000006	6	_nop
+00000084	l	F	.text	00000006	6	_sleep
+0000008c	l	F	.text	00000008	8	_tas
+00000094	l	F	.text	00000006	6	_set_sr
+0000009c	l	F	.text	00000006	6	_get_sr
+000000a4	l	F	.text	0000000a	10	_get_imask
+000000b0	l	F	.text	00000014	20	_set_imask
+000000c4	l	F	.text	00000006	6	_set_vbr
+000000cc	l	F	.text	00000006	6	_get_vbr
+000000d4	l	F	.text	00000006	6	_set_gbr
+000000dc	l	F	.text	00000006	6	_get_gbr
+00000004	l	O	.bss	00000004	4	_back_color
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000054	l	O	.rodata.str1.4	00000015	21	___FUNCTION__.4639
+00000020	l	O	.bss	00000004	4	_rbg0_cell_a
+0000001c	l	O	.bss	00000004	4	_rbg0_cell_b
+00000018	l	O	.bss	00000004	4	_rbg0_map_a
+00000014	l	O	.bss	00000004	4	_rbg0_map_b
+0000000c	l	O	.bss	00000004	4	_rbg0_rtable
+00000010	l	O	.bss	00000004	4	_rbg0_ktable
+00000008	l	O	.bss	00000004	4	_screen_flags
+00000030	l	O	.bss	00000004	4	_nbg0_scroll_table
+00000028	l	O	.bss	00000004	4	_nbg1_cell
+0000002c	l	O	.bss	00000004	4	_nbg1_map
+00000024	l	O	.bss	00000004	4	_nbg1_scroll_table
+000000e4	g	F	.text	00000040	64	_jo_set_default_background_color
+00000124	g	F	.text	00000124	292	_jo_img_to_vdp2_cells
+00000248	g	F	.text	00000014	20	_jo_vdp2_replace_rbg0_plane_a_8bits_image
+0000025c	g	F	.text	00000014	20	_jo_vdp2_replace_rbg0_plane_b_8bits_image
+00000270	g	F	.text	000000c8	200	_jo_vdp2_set_rbg0_plane_a_8bits_image
+00000338	g	F	.text	000000c8	200	_jo_vdp2_set_rbg0_plane_b_8bits_image
+00000400	g	F	.text	000000d4	212	_jo_vdp2_enable_rbg0
+00000000	g	O	.bss	00000004	4	_nbg1_bitmap
+000004d4	g	F	.text	00000018	24	_jo_vdp2_disable_rbg0
+000004ec	g	F	.text	00000084	132	_jo_init_nbg0_printf
+00000570	g	F	.text	00000064	100	___jo_init_vdp2
+000005d4	g	F	.text	00000024	36	_jo_vdp2_disable_nbg0_line_scroll
+000005f8	g	F	.text	00000018	24	_jo_vdp2_compute_nbg0_line_scroll
+00000610	g	F	.text	00000070	112	_jo_vdp2_enable_nbg0_line_scroll
+00000680	g	F	.text	000000cc	204	_jo_vdp2_draw_bitmap_nbg1_line
+0000074c	g	F	.text	00000064	100	_jo_vdp2_clear_bitmap_nbg1
+000007b0	g	F	.text	000000e8	232	_jo_vdp2_set_nbg1_8bits_image
+00000898	g	F	.text	0000013c	316	_jo_vdp2_set_nbg1_image
+000009d4	g	F	.text	00000024	36	_jo_vdp2_disable_nbg1_line_scroll
+000009f8	g	F	.text	00000018	24	_jo_vdp2_compute_nbg1_line_scroll
+00000a10	g	F	.text	00000070	112	_jo_vdp2_enable_nbg1_line_scroll
+00000a80	g	F	.text	00000010	16	_jo_set_displayed_screens
+00000a90	g	F	.text	00000024	36	_jo_disable_all_screens_transparency
+00000ab4	g	F	.text	00000134	308	_jo_enable_screen_transparency
+
+
+
+../../jo_engine/vdp2_malloc.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	vdp2_malloc.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+000000dc	l	O	.bss	00000048	72	___jo_a0_segments
+00000094	l	O	.bss	00000048	72	___jo_b0_segments
+00000004	l	O	.bss	00000090	144	___jo_b1_segments
+00000008	l	O	.data	00000004	4	___jo_a0
+00000000	l	O	.data	00000004	4	___jo_b1
+00000004	l	O	.data	00000004	4	___jo_b0
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+0000002c	l	O	.rodata.str1.4	0000000f	15	___FUNCTION__.4650
+0000000c	l	O	.data	00000004	4	___jo_cram
+00000068	g	F	.text	00000038	56	_jo_vdp2_malloc_init
+000000a0	g	F	.text	000000c0	192	_jo_vdp2_free
+00000160	g	F	.text	000001d4	468	_jo_vdp2_malloc
+00000000	g	O	.bss	00000004	4	___jo_current_palette_id
+
+
+
+./main.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	main.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+0000001c	l	F	.text	00000006	6	_nop
+00000024	l	F	.text	00000006	6	_sleep
+0000002c	l	F	.text	00000008	8	_tas
+00000034	l	F	.text	00000006	6	_set_sr
+0000003c	l	F	.text	00000006	6	_get_sr
+00000044	l	F	.text	0000000a	10	_get_imask
+00000050	l	F	.text	00000014	20	_set_imask
+00000064	l	F	.text	00000006	6	_set_vbr
+0000006c	l	F	.text	00000006	6	_get_vbr
+00000074	l	F	.text	00000006	6	_set_gbr
+0000007c	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000000	g	F	.text	0000001c	28	_my_tga_palette_handling
+000000cc	g	O	.bss	00000008	8	_image_pal
+00000084	g	F	.text	00000088	136	_initCamera
+00000000	g	O	.data	00000002	2	_draw_distance
+0000010c	g	F	.text	00000110	272	_debug_3d
+0000021c	g	F	.text	000001e0	480	_draw_3d
+000000d4	g	O	.bss	0000001c	28	_cam
+000003fc	g	F	.text	000000e0	224	_debug_pad1
+000004dc	g	F	.text	0000004c	76	_draw_hud
+00000004	g	O	.bss	00000004	4	_hud1_texture_id
+00000528	g	F	.text	000000a4	164	_init_3d_planes
+000005cc	g	F	.text	00000050	80	_load_textures
+00000008	g	O	.bss	00000004	4	_floor_texture_id
+00000000	g	O	.bss	00000004	4	_plane1_texture_id
+0000061c	g	F	.text	00000094	148	_jo_main
+0000000c	g	O	.bss	000000c0	192	_cube_quads
+00000004	g	O	.data	00000120	288	_cube_vertices
+
+
+
+./src/input.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	input.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000004	l	O	.data	00000004	4	_boost_gauge
+00000038	l	O	.bss	00000001	1	_debug
+00000034	l	O	.bss	00000004	4	_movement_speed
+00000030	l	O	.bss	00000004	4	_angle_increment
+0000002c	l	O	.bss	00000004	4	_x_angle_increment
+00000000	l	O	.data	00000004	4	_boost_movement
+00000021	l	O	.bss	00000001	1	_turning_left
+00000020	l	O	.bss	00000001	1	_turning_right
+00000024	l	O	.bss	00000004	4	_turn_right_target
+00000028	l	O	.bss	00000004	4	_turn_left_target
+00000000	l	d	.rodata.cst4	00000000	0	.rodata.cst4
+00000000	l	d	.rodata.cst1	00000000	0	.rodata.cst1
+00000068	g	F	.text	000000b0	176	_debug_buttons
+00000004	g	O	.bss	00000004	4	_compass_index
+00000014	g	O	.rodata.str1.4	00000004	4	_compass
+00000008	g	O	.bss	0000000c	12	_rot
+00000118	g	F	.text	000003ac	940	_debug_controller
+00000014	g	O	.bss	0000000c	12	_pos
+000004c4	g	F	.text	0000044c	1100	_gamepad_input
+00000000	g	O	.bss	00000004	4	_previous_compass_index
+00000000	g	O	.rodata.cst4	00000004	4	_degree90_radian
+00000004	g	O	.rodata.cst4	00000004	4	_turn_incrementor
+00000008	g	O	.rodata.cst4	00000004	4	_boost_max_level
+0000000c	g	O	.rodata.cst4	00000004	4	_boost_gauge_incrementor
+0000000c	g	O	.rodata.cst4	00000004	4	_boost_speed_incrementor
+00000010	g	O	.rodata.cst4	00000004	4	_boost_gauge_decrementer
+00000014	g	O	.rodata.cst4	00000004	4	_movement_max_level
+00000018	g	O	.rodata.cst4	00000004	4	_movement_incrementor
+0000001c	g	O	.rodata.cst4	00000004	4	_boundary
+00000000	g	O	.rodata.cst1	00000001	1	_boundary_enabled
+00000020	g	O	.rodata.cst4	00000004	4	_x_turn_angle
+00000020	g	O	.rodata.cst4	00000004	4	_boost_speed_decrementer
+00000024	g	O	.rodata.cst4	00000004	4	_turn_angle
+
+
+
+./src/level.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	level.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000000	l	d	.rodata.cst4	00000000	0	.rodata.cst4
+00000068	g	F	.text	00000060	96	_load_arena_textures
+0000000c	g	O	.bss	00000004	4	_box1_texture_id
+00000008	g	O	.bss	00000004	4	_box2_texture_id
+00000004	g	O	.bss	00000004	4	_box3_texture_id
+00000000	g	O	.bss	00000004	4	_box4_texture_id
+000000c8	g	F	.text	000000c4	196	_init_arena_walls
+00000410	g	O	.bss	00000200	512	_wall2
+00000610	g	O	.bss	00000200	512	_wall1
+00000210	g	O	.bss	00000200	512	_wall3
+00000010	g	O	.bss	00000200	512	_wall4
+00000900	g	O	.data	00000300	768	_wall1_vertices
+00000600	g	O	.data	00000300	768	_wall2_vertices
+00000300	g	O	.data	00000300	768	_wall3_vertices
+00000000	g	O	.data	00000300	768	_wall4_vertices
+0000018c	g	F	.text	00000458	1112	_draw_arena_walls
+00000000	g	O	.rodata.cst4	00000004	4	_wall_spacer_modifier
+00000004	g	O	.rodata.cst4	00000004	4	_division_space_modifier
+00000008	g	O	.rodata.cst4	00000004	4	_wall_half_height
+0000000c	g	O	.rodata.cst4	00000004	4	_wall_half_width
+00000010	g	O	.rodata.cst4	00000004	4	_wall_height
+00000014	g	O	.rodata.cst4	00000004	4	_wall_width
+
+
+
+./src/main.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	main.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+0000001c	l	F	.text	00000006	6	_nop
+00000024	l	F	.text	00000006	6	_sleep
+0000002c	l	F	.text	00000008	8	_tas
+00000034	l	F	.text	00000006	6	_set_sr
+0000003c	l	F	.text	00000006	6	_get_sr
+00000044	l	F	.text	0000000a	10	_get_imask
+00000050	l	F	.text	00000014	20	_set_imask
+00000064	l	F	.text	00000006	6	_set_vbr
+0000006c	l	F	.text	00000006	6	_get_vbr
+00000074	l	F	.text	00000006	6	_set_gbr
+0000007c	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000000	g	F	.text	0000001c	28	_my_tga_palette_handling
+000000cc	g	O	.bss	00000008	8	_image_pal
+00000084	g	F	.text	00000098	152	_initCamera
+00000000	g	O	.data	00000002	2	_draw_distance
+0000011c	g	F	.text	00000110	272	_debug_3d
+0000022c	g	F	.text	000001e0	480	_draw_3d
+000000d4	g	O	.bss	0000001c	28	_cam
+0000040c	g	F	.text	000000e0	224	_debug_pad1
+000004ec	g	F	.text	0000004c	76	_draw_hud
+00000004	g	O	.bss	00000004	4	_hud1_texture_id
+00000538	g	F	.text	000000a4	164	_init_3d_planes
+000005dc	g	F	.text	00000050	80	_load_textures
+00000008	g	O	.bss	00000004	4	_floor_texture_id
+00000000	g	O	.bss	00000004	4	_plane1_texture_id
+0000062c	g	F	.text	00000094	148	_jo_main
+0000000c	g	O	.bss	000000c0	192	_cube_quads
+00000004	g	O	.data	00000120	288	_cube_vertices
+
+
+
+./src/trails.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	trails.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
+00000338	l	O	.bss	00000004	4	_trail_orange_texture_id
+00000334	l	O	.bss	00000004	4	_trail_blue_texture_id
+00000330	l	O	.bss	00000004	4	_player1_plane_x_count
+0000032c	l	O	.bss	00000004	4	_player1_plane_y_count
+000002dc	l	O	.bss	00000050	80	_player1_trails_x_coordinates
+0000028c	l	O	.bss	00000050	80	_player1_trails_y_coordinates
+00000000	l	O	.data	00000001	1	_first_frame
+00000000	l	d	.rodata	00000000	0	.rodata
+00000000	l	d	.rodata.cst4	00000000	0	.rodata.cst4
+00000068	g	F	.text	00000038	56	_load_player1_trail_textures
+000000a0	g	F	.text	00000054	84	_init_player1_x_trails
+00000000	g	O	.rodata	000001e0	480	_trail_plain_x
+00000140	g	O	.bss	00000140	320	_player1_quads_x
+000000f4	g	F	.text	00000054	84	_init_player1_y_trails
+000001e0	g	O	.rodata	000001e0	480	_trail_plain_y
+00000000	g	O	.bss	00000140	320	_player1_quads_y
+00000148	g	F	.text	00000054	84	_create_trail_x
+0000019c	g	F	.text	00000054	84	_create_trail_y
+000001f0	g	F	.text	000002f8	760	_calculate_player1_trails
+00000280	g	O	.bss	00000001	1	_create_trail
+000004e8	g	F	.text	000002dc	732	_draw_player1_trails
+00000000	g	O	.rodata.cst4	00000004	4	_plane_divider_length_sub
+00000004	g	O	.rodata.cst4	00000004	4	_plane_divider_length
+00000284	g	O	.bss	00000008	8	_player1_previous_coordinate
+
+
+
+./src/utils/3d.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	3d.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+
+
+
+./src/utils/low_level_input.o:	file	format	elf32-sh		0	
+
+SYMBOL TABLE:
+00000000	l	df	*ABS*	00000000	0	low_level_input.c
+00000000	l	d	.text	00000000	0	.text
+00000000	l	d	.data	00000000	0	.data
+00000000	l	d	.bss	00000000	0	.bss
+00000000	l	F	.text	00000006	6	_nop
+00000008	l	F	.text	00000006	6	_sleep
+00000010	l	F	.text	00000008	8	_tas
+00000018	l	F	.text	00000006	6	_set_sr
+00000020	l	F	.text	00000006	6	_get_sr
+00000028	l	F	.text	0000000a	10	_get_imask
+00000034	l	F	.text	00000014	20	_set_imask
+00000048	l	F	.text	00000006	6	_set_vbr
+00000050	l	F	.text	00000006	6	_get_vbr
+00000058	l	F	.text	00000006	6	_set_gbr
+00000060	l	F	.text	00000006	6	_get_gbr
+00000068	g	F	.text	00000058	88	_operate_digital_pad1
+00000010	g	O	.data	00000004	4	_oregs
+00000000	g	O	.data	0000000c	12	_pad1
+000000c0	g	F	.text	00000014	20	_is_key_pressed
+000000d4	g	F	.text	00000014	20	_is_key_up
+000000e8	g	F	.text	00000014	20	_is_key_down
+000000fc	g	F	.text	00000014	20	_is_key_change
+00000110	g	F	.text	00000014	20	_is_key_toggle
+00000124	g	F	.text	00000020	32	_is_key_release
+00000144	g	F	.text	00000020	32	_is_key_struck
+0000000c	g	O	.data	00000004	4	_ireg1
+
+
