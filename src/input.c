@@ -7,10 +7,19 @@ int previous_compass_index = 0;
 
 const float turn_angle = 1.5f;	 // 1.5f
 const float x_turn_angle = 0.2f; // 1.5f
-const bool boundary_enabled = false;
-const float boundary = 0.020f;
+
+// Boundary
+const bool boundary_enabled = true;
+const jo_fixed upper_boundary = toFIXED(0.05f);
+const jo_fixed lower_boundary = toFIXED(0.01f);
+const jo_fixed flour_boundary = toFIXED(-0.0001f);
+static bool at_x_boundary = false;
+static bool at_y_boundary = false;
+
 const int movement_incrementor = 5;
 const int movement_max_level = 70;
+
+// boost
 const float boost_gauge_decrementer = 2.5f;
 const float boost_gauge_incrementor = 0.5f;
 const float boost_speed_decrementer = 0.2f;
@@ -96,14 +105,16 @@ void debug_controller(void)
 
 void gamepad_input(void)
 {
-	//Debug settings
+	// Debug settings
 	debug_buttons();
-	if (debug){
+	if (debug)
+	{
 		return debug_controller();
 	}
 
 	//	Poll for gamepad
-	if (!jo_is_pad1_available()){
+	if (!jo_is_pad1_available())
+	{
 		return;
 	}
 
@@ -123,7 +134,8 @@ void gamepad_input(void)
 		if (boost_gauge > 0.0f)
 		{
 			boost_gauge -= boost_gauge_decrementer;
-			if (boost_movement < 1.75){
+			if (boost_movement < 1.75)
+			{
 				boost_movement += (boost_speed_incrementor);
 			}
 		}
@@ -148,7 +160,10 @@ void gamepad_input(void)
 		}
 	}
 
-	//Gradual turning left mechanism
+	rot.rz = angle_increment;
+
+	// Turning with compass setting
+	// Gradual turning left mechanism
 	if (turning_left && turn_left_target <= angle_increment)
 	{
 		angle_increment -= turn_incrementor;
@@ -157,13 +172,25 @@ void gamepad_input(void)
 	{
 		angle_increment = turn_left_target;
 		rot.rz = turn_left_target;
+		turn_left_target = 0;
 		turning_left = false;
-		//trail stuff
+		// trail stuff
 		player1_previous_coordinate.x = pos.x;
 		player1_previous_coordinate.y = pos.y;
 	}
+	else if (is_key_struck(DIGI_LEFT) && !turning_right)
+	{
+		previous_compass_index = compass_index;
+		compass_index -= 1;
+		if (compass_index < 0)
+			compass_index = 3;
+		turn_left_target = angle_increment - degree90_radian;
+		turning_left = true;
+		// trigger trail creation
+		create_trail = true;
+	}
 
-	//Gradual turning right mechanism
+	// Gradual turning right mechanism
 	if (turning_right && turn_right_target >= angle_increment)
 	{
 		angle_increment += turn_incrementor;
@@ -172,23 +199,11 @@ void gamepad_input(void)
 	{
 		angle_increment = turn_right_target;
 		rot.rz = turn_right_target;
+		turn_right_target = 0;
 		turning_right = false;
-		//trail stuff
+		// trail stuff
 		player1_previous_coordinate.x = pos.x;
 		player1_previous_coordinate.y = pos.y;
-	}
-
-	// Turning with compass setting
-	if (is_key_struck(DIGI_LEFT) && !turning_right)
-	{
-		previous_compass_index = compass_index;
-		compass_index -= 1;
-		if (compass_index < 0)
-			compass_index = 3;
-		turn_left_target = angle_increment - degree90_radian;
-		turning_left = true;
-		//trigger trail creation
-		create_trail = true;
 	}
 	else if (is_key_struck(DIGI_RIGHT) && !turning_left)
 	{
@@ -198,11 +213,9 @@ void gamepad_input(void)
 			compass_index = 0;
 		turn_right_target = angle_increment + degree90_radian;
 		turning_right = true;
-		//trigger trail creation
+		// trigger trail creation
 		create_trail = true;
 	}
-
-	rot.rz = angle_increment;
 
 	// Elevation TEST DEBUG ONLY
 	if (jo_is_pad1_key_pressed(JO_KEY_L))
@@ -210,39 +223,58 @@ void gamepad_input(void)
 	else if (jo_is_pad1_key_pressed(JO_KEY_R))
 		pos.z -= 1.0;
 	// Elevation Floor boundary
-	if (pos.z > -6.5536)
+	if (pos.z >= flour_boundary)
 	{
-		pos.z = -6.5536;
+		pos.z = flour_boundary;
 	}
 
 	// Boundary and movement
-	if (pos.x > toFIXED(boundary) && boundary_enabled)
-	{
-		pos.x = toFIXED(boundary);
-	}
-	else if (pos.x < -toFIXED(0.0015) && boundary_enabled)
-	{
-		pos.x = -toFIXED(0.0015);
-	}
-	else
-	{
-		// due to inaccuracies, do not use adjust x when going backwards (y axis only)
-		if (compass_index != 2) // East
+	if (boundary_enabled){
+		if( pos.x >= upper_boundary && !at_x_boundary)
 		{
-			pos.x -= movement_speed * boost_movement * jo_sin_radf(rot.rz) / 10;
+			pos.x = upper_boundary;
+			at_x_boundary = true;
+		}
+		else if (pos.x <= lower_boundary && !at_x_boundary)
+		{
+			pos.x = lower_boundary;
+			at_x_boundary = true;
+		}
+
+		if (pos.y >= upper_boundary && !at_y_boundary)
+		{
+			pos.y = upper_boundary;
+			at_y_boundary = true;
+		}
+		else if (pos.y <= lower_boundary && !at_y_boundary)
+		{
+			pos.y = lower_boundary;
+			at_y_boundary = true;
 		}
 	}
-	if (pos.y > toFIXED(boundary) && boundary_enabled)
+	
+	if (compass_index == 1 || compass_index == 3)
 	{
-		pos.y = toFIXED(boundary);
-	}
-	else if (pos.y < -toFIXED(0.0015) && boundary_enabled)
-	{
-		pos.y = -toFIXED(0.0015);
-	}
-	else
-	{
-		pos.y -= movement_speed * boost_movement * jo_cos_radf(rot.rz) / 10;
-		// os.y -= movement_speed * jo_cos_radf_old(rot.rz) / 10;
+		jo_fixed x = pos.x - movement_speed * boost_movement * jo_sin_radf(rot.rz) / 10;
+		if (!boundary_enabled)
+		{
+			pos.x = x;
+		}
+		else if (x > lower_boundary && x < upper_boundary)
+		{
+			at_x_boundary = false;
+			pos.x = x;
+		}
+	}else {
+		jo_fixed y = pos.y - movement_speed * boost_movement * jo_cos_radf(rot.rz) / 10;
+		if (!boundary_enabled)
+		{
+			pos.y = y;
+		}
+		else if (y > lower_boundary && y < upper_boundary)
+		{
+			at_y_boundary = false;
+			pos.y = y;
+		}
 	}
 }

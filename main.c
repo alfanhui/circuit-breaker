@@ -51,8 +51,8 @@ void initCamera(jo_camera *curCam)
 	// slZdspLevel(0);
 	jo_3d_perspective_angle(90); // FOV 90
 
-	pos.x = 0;
-	pos.y = 0;
+	pos.x = 1500;
+	pos.y = 1500;
 	pos.z = -35.0;
 
 	rot.rx = JO_DEG_TO_RAD(90.0);
@@ -142,11 +142,11 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
-	draw_arena_walls();
+	//draw_arena_walls();
 	debug_3d();
 	// debug_pad1();
 	calculate_player1_trails();
-	draw_player1_trails();
+	//draw_player1_trails();
 }
 
 // //Shoddy attempt at walls with cube
@@ -211,10 +211,7 @@ void jo_main(void)
 	init_arena_walls();
 	//const jo_vertice new_vertice[4] = JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, 0, -125, 60); // North
 	//const jo_vertice new_vertice[4] = JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(jo_fixed2int(pos.x), jo_fixed2int(pos.x), jo_fixed2int(pos.y + toFIXED(125) ), jo_fixed2int(pos.y), 60); // North
-	init_player1_x_trails();
-	init_player1_y_trails();
-
-	// add_player1_y_trails();
+	
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
 

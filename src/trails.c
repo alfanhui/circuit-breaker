@@ -2,6 +2,7 @@
 
 jo_pos2D player1_previous_coordinate = {0, 0};
 bool create_trail = false;
+int turned_compass = 0;
 
 const int plane_divider_length = 125;
 const int plane_divider_length_sub = plane_divider_length + 5; // needs to be slightly bigger to be one
@@ -77,16 +78,18 @@ void calculate_player1_trails(void)
 	if (first_frame)
 	{
 		first_frame = !first_frame;
+		turned_compass = compass_index;
 		player1_trails_x_coordinates[player1_plane_x_count] = (jo_pos2D){pos.x, pos.y}; // TODO only if we start in the y+ (NORTH) direction
 		player1_trails_y_coordinates[player1_plane_y_count] = (jo_pos2D){pos.x, pos.y}; // TODO only if we start in the y+ (NORTH) direction
 		return;
 	}
+
 	// calculate distance
 	jo_pos2D distance;
 
 	if (create_trail) //we've turned, force wall to create
 	{
-		create_trail != create_trail;
+		create_trail = !create_trail;
 		switch (previous_compass_index)
 		{
 		case 0: // north
@@ -141,19 +144,21 @@ void calculate_player1_trails(void)
 	slPrintFX(player1_trails_y_coordinates[player1_plane_y_count].x, slLocate(28, 6));
 	slPrint("prev.y: ", slLocate(20, 7));
 	slPrintFX(player1_trails_y_coordinates[player1_plane_y_count].y, slLocate(28, 7));
-	slPrint("tcount: ", slLocate(20, 8));
-	slPrintFX(player1_plane_y_count << 16, slLocate(28, 8));
+	slPrint("Xcount: ", slLocate(20, 8));
+	slPrintFX(toFIXED(player1_plane_x_count), slLocate(28, 8));
+	slPrint("Ycount: ", slLocate(20, 9));
+	slPrintFX(toFIXED(player1_plane_y_count), slLocate(28, 9));
 
 	if (distance.x == 0 && distance.y == 0)
 	{
 		// have not moved
 		return;
 	}
-	if (player1_plane_x_count >= 10)
+	if (player1_plane_x_count >= 10 || player1_plane_x_count < 0)
 	{
 		player1_plane_x_count = 0;
 	}
-	if (player1_plane_y_count >= 10)
+	if (player1_plane_y_count >= 10 || player1_plane_y_count < 0)
 	{
 		player1_plane_y_count = 0;
 	}
