@@ -10,8 +10,8 @@ const float x_turn_angle = 0.2f; // 1.5f
 
 // Boundary
 const bool boundary_enabled = true;
-const jo_fixed upper_boundary = toFIXED(0.05f);
-const jo_fixed lower_boundary = toFIXED(0.01f);
+const jo_fixed upper_boundary = toFIXED(0.037f); //TODO this correlates to walls
+const jo_fixed lower_boundary = toFIXED(0.01f); //TODO this correlates to walls
 const jo_fixed flour_boundary = toFIXED(-0.0001f);
 static bool at_x_boundary = false;
 static bool at_y_boundary = false;
@@ -101,6 +101,16 @@ void debug_controller(void)
 
 	pos.x -= movement_speed * jo_sin_radf(rot.rz) / 10.0;
 	pos.y -= movement_speed * jo_cos_radf(rot.rz) / 10.0;
+}
+
+void debug_pad1(void)
+{
+	jo_printf(20, 0, "a.pressed %d", is_key_pressed(DIGI_A));
+	jo_printf(20, 1, "a.up %d", is_key_up(DIGI_A));
+	jo_printf(20, 2, "a.down %d", is_key_down(DIGI_A));
+	jo_printf(20, 3, "key changed %d", is_key_change(DIGI_A));
+	jo_printf(20, 4, "a.release %d", is_key_release(DIGI_A));
+	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
 void gamepad_input(void)

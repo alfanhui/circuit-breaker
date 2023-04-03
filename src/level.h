@@ -7,6 +7,7 @@
 
 extern const int wall_width;
 extern const int wall_height;
+extern const int wall_length;
 extern const int wall_half_width;
 extern const int wall_half_height;
 

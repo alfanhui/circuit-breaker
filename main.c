@@ -30,8 +30,8 @@
 
 jo_camera cam;
 jo_palette image_pal;
-jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(1000, 1000, 128); //TODO Remove
-jo_3d_quad cube_quads[6];
+//jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(1000, 1000, 128); //TODO Remove
+//jo_3d_quad cube_quads[6];
 Sint16 draw_distance = 10000;
 
 int floor_texture_id = 0;
@@ -101,16 +101,6 @@ void debug_3d(void)
 	//  slPrint("sgl_tan", slLocate(20,12));
 }
 
-void debug_pad1(void)
-{
-	jo_printf(20, 0, "a.pressed %d", is_key_pressed(DIGI_A));
-	jo_printf(20, 1, "a.up %d", is_key_up(DIGI_A));
-	jo_printf(20, 2, "a.down %d", is_key_down(DIGI_A));
-	jo_printf(20, 3, "key changed %d", is_key_change(DIGI_A));
-	jo_printf(20, 4, "a.release %d", is_key_release(DIGI_A));
-	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
-}
-
 void draw_hud(void)
 {
 	jo_3d_push_matrix();
@@ -142,11 +132,11 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
-	//draw_arena_walls();
+	draw_arena_walls();
 	debug_3d();
 	// debug_pad1();
 	calculate_player1_trails();
-	//draw_player1_trails();
+	draw_player1_trails();
 }
 
 // //Shoddy attempt at walls with cube
@@ -185,6 +175,10 @@ void init_3d_planes(void)
 	jo_tga_8bits_loader(&img, JO_ROOT_DIR, "SKY.TGA", 0);
 	jo_background_3d_plane_b_img(&img, image_pal.id, true, false);
 	jo_free_img(&img);
+
+	// Trails
+	init_player1_x_trails();
+	init_player1_y_trails();
 
 	jo_core_tv_on();
 }

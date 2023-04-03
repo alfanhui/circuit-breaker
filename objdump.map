@@ -751,22 +751,19 @@ SYMBOL TABLE:
 0000007c	l	F	.text	00000006	6	_get_gbr
 00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
 00000000	g	F	.text	0000001c	28	_my_tga_palette_handling
-000000cc	g	O	.bss	00000008	8	_image_pal
+0000000c	g	O	.bss	00000008	8	_image_pal
 00000084	g	F	.text	00000090	144	_initCamera
 00000000	g	O	.data	00000002	2	_draw_distance
 00000114	g	F	.text	00000110	272	_debug_3d
-00000224	g	F	.text	000001e0	480	_draw_3d
-000000d4	g	O	.bss	0000001c	28	_cam
-00000404	g	F	.text	000000e0	224	_debug_pad1
-000004e4	g	F	.text	0000004c	76	_draw_hud
+00000224	g	F	.text	000001f4	500	_draw_3d
+00000014	g	O	.bss	0000001c	28	_cam
+00000418	g	F	.text	0000004c	76	_draw_hud
 00000004	g	O	.bss	00000004	4	_hud1_texture_id
-00000530	g	F	.text	000000a4	164	_init_3d_planes
-000005d4	g	F	.text	00000050	80	_load_textures
+00000464	g	F	.text	000000b8	184	_init_3d_planes
+0000051c	g	F	.text	00000050	80	_load_textures
 00000008	g	O	.bss	00000004	4	_floor_texture_id
 00000000	g	O	.bss	00000004	4	_plane1_texture_id
-00000624	g	F	.text	0000009c	156	_jo_main
-0000000c	g	O	.bss	000000c0	192	_cube_quads
-00000004	g	O	.data	00000120	288	_cube_vertices
+0000056c	g	F	.text	0000009c	156	_jo_main
 
 
 
@@ -805,11 +802,12 @@ SYMBOL TABLE:
 00000000	l	d	.rodata.cst1	00000000	0	.rodata.cst1
 00000068	g	F	.text	000000b0	176	_debug_buttons
 00000004	g	O	.bss	00000004	4	_compass_index
-00000014	g	O	.rodata.str1.4	00000004	4	_compass
+00000064	g	O	.rodata.str1.4	00000004	4	_compass
 00000008	g	O	.bss	0000000c	12	_rot
 00000118	g	F	.text	000003ac	940	_debug_controller
 00000014	g	O	.bss	0000000c	12	_pos
-000004c4	g	F	.text	0000054c	1356	_gamepad_input
+000004c4	g	F	.text	000000e0	224	_debug_pad1
+000005a4	g	F	.text	0000054c	1356	_gamepad_input
 00000000	g	O	.bss	00000004	4	_previous_compass_index
 00000000	g	O	.rodata.cst4	00000004	4	_degree90_radian
 00000004	g	O	.rodata.cst4	00000004	4	_turn_incrementor
@@ -855,21 +853,22 @@ SYMBOL TABLE:
 00000004	g	O	.bss	00000004	4	_box3_texture_id
 00000000	g	O	.bss	00000004	4	_box4_texture_id
 000000c8	g	F	.text	000000c4	196	_init_arena_walls
-00000410	g	O	.bss	00000200	512	_wall2
-00000610	g	O	.bss	00000200	512	_wall1
-00000210	g	O	.bss	00000200	512	_wall3
-00000010	g	O	.bss	00000200	512	_wall4
-00000900	g	O	.data	00000300	768	_wall1_vertices
-00000600	g	O	.data	00000300	768	_wall2_vertices
-00000300	g	O	.data	00000300	768	_wall3_vertices
-00000000	g	O	.data	00000300	768	_wall4_vertices
-0000018c	g	F	.text	00000458	1112	_draw_arena_walls
+00000810	g	O	.bss	00000400	1024	_wall2
+00000c10	g	O	.bss	00000400	1024	_wall1
+00000410	g	O	.bss	00000400	1024	_wall3
+00000010	g	O	.bss	00000400	1024	_wall4
+00001200	g	O	.data	00000600	1536	_wall1_vertices
+00000c00	g	O	.data	00000600	1536	_wall2_vertices
+00000600	g	O	.data	00000600	1536	_wall3_vertices
+00000000	g	O	.data	00000600	1536	_wall4_vertices
+0000018c	g	F	.text	000004b0	1200	_draw_arena_walls
 00000000	g	O	.rodata.cst4	00000004	4	_wall_spacer_modifier
 00000004	g	O	.rodata.cst4	00000004	4	_division_space_modifier
 00000008	g	O	.rodata.cst4	00000004	4	_wall_half_height
 0000000c	g	O	.rodata.cst4	00000004	4	_wall_half_width
 00000010	g	O	.rodata.cst4	00000004	4	_wall_height
 00000014	g	O	.rodata.cst4	00000004	4	_wall_width
+00000018	g	O	.rodata.cst4	00000004	4	_wall_length
 
 
 
@@ -931,31 +930,30 @@ SYMBOL TABLE:
 00000058	l	F	.text	00000006	6	_set_gbr
 00000060	l	F	.text	00000006	6	_get_gbr
 00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
-0000033c	l	O	.bss	00000004	4	_trail_orange_texture_id
-00000338	l	O	.bss	00000004	4	_trail_blue_texture_id
-00000334	l	O	.bss	00000004	4	_player1_plane_x_count
-00000330	l	O	.bss	00000004	4	_player1_plane_y_count
-000002e0	l	O	.bss	00000050	80	_player1_trails_x_coordinates
-00000290	l	O	.bss	00000050	80	_player1_trails_y_coordinates
+00000338	l	O	.bss	00000004	4	_trail_orange_texture_id
+00000334	l	O	.bss	00000004	4	_trail_blue_texture_id
+00000330	l	O	.bss	00000004	4	_player1_plane_x_count
+000002dc	l	O	.bss	00000050	80	_player1_trails_x_axis
+0000032c	l	O	.bss	00000004	4	_player1_plane_y_count
+0000028c	l	O	.bss	00000050	80	_player1_trails_y_axis
 00000000	l	O	.data	00000001	1	_first_frame
 00000000	l	d	.rodata	00000000	0	.rodata
 00000000	l	d	.rodata.cst4	00000000	0	.rodata.cst4
 00000068	g	F	.text	00000038	56	_load_player1_trail_textures
-000000a0	g	F	.text	00000054	84	_init_player1_x_trails
-00000000	g	O	.rodata	000001e0	480	_trail_plain_x
+000000a0	g	F	.text	0000005c	92	_init_player1_x_trails
 00000140	g	O	.bss	00000140	320	_player1_quads_x
-000000f4	g	F	.text	00000054	84	_init_player1_y_trails
-000001e0	g	O	.rodata	000001e0	480	_trail_plain_y
+00000000	g	O	.rodata	000001e0	480	_trail_plain_x
+000000fc	g	F	.text	0000005c	92	_init_player1_y_trails
 00000000	g	O	.bss	00000140	320	_player1_quads_y
-00000148	g	F	.text	00000054	84	_create_trail_x
-0000019c	g	F	.text	00000054	84	_create_trail_y
-000001f0	g	F	.text	0000038c	908	_calculate_player1_trails
-00000284	g	O	.bss	00000001	1	_create_trail
-00000280	g	O	.bss	00000004	4	_turned_compass
-0000057c	g	F	.text	000002dc	732	_draw_player1_trails
+000001e0	g	O	.rodata	000001e0	480	_trail_plain_y
+00000158	g	F	.text	00000058	88	_create_trail_x
+000001b0	g	F	.text	00000058	88	_create_trail_y
+00000208	g	F	.text	00000404	1028	_calculate_player1_trails
+00000280	g	O	.bss	00000001	1	_create_trail
+0000060c	g	F	.text	00000288	648	_draw_player1_trails
 00000000	g	O	.rodata.cst4	00000004	4	_plane_divider_length_sub
 00000004	g	O	.rodata.cst4	00000004	4	_plane_divider_length
-00000288	g	O	.bss	00000008	8	_player1_previous_coordinate
+00000284	g	O	.bss	00000008	8	_player1_previous_coordinate
 
 
 

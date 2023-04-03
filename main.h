@@ -39,8 +39,8 @@ extern jo_pos3Df pos;
 extern jo_rot3Df rot;
 extern float turn_angle;
 extern jo_palette image_pal;
-extern jo_vertice cube_vertices[];
-extern jo_3d_quad cube_quads[6];
+// extern jo_vertice cube_vertices[];
+// extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
 void initCamera(jo_camera *curCam);
