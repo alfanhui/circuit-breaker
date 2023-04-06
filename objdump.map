@@ -751,19 +751,22 @@ SYMBOL TABLE:
 0000007c	l	F	.text	00000006	6	_get_gbr
 00000000	l	d	.rodata.str1.4	00000000	0	.rodata.str1.4
 00000000	g	F	.text	0000001c	28	_my_tga_palette_handling
-0000000c	g	O	.bss	00000008	8	_image_pal
+00000010	g	O	.bss	00000008	8	_image_pal
 00000084	g	F	.text	00000090	144	_initCamera
-00000000	g	O	.data	00000002	2	_draw_distance
-00000114	g	F	.text	00000110	272	_debug_3d
-00000224	g	F	.text	000001f4	500	_draw_3d
-00000014	g	O	.bss	0000001c	28	_cam
-00000418	g	F	.text	0000004c	76	_draw_hud
-00000004	g	O	.bss	00000004	4	_hud1_texture_id
-00000464	g	F	.text	000000b8	184	_init_3d_planes
-0000051c	g	F	.text	00000050	80	_load_textures
-00000008	g	O	.bss	00000004	4	_floor_texture_id
-00000000	g	O	.bss	00000004	4	_plane1_texture_id
-0000056c	g	F	.text	0000009c	156	_jo_main
+00000002	g	O	.data	00000002	2	_draw_distance
+00000114	g	F	.text	0000020c	524	_debug_3d
+00000000	g	O	.bss	00000004	4	_last_ticks
+00000320	g	F	.text	00000230	560	_draw_3d
+00000018	g	O	.bss	0000001c	28	_cam
+00000000	g	O	.data	00000001	1	_enable_walls
+00000001	g	O	.data	00000001	1	_enable_trails
+00000550	g	F	.text	0000004c	76	_draw_hud
+00000008	g	O	.bss	00000004	4	_hud1_texture_id
+0000059c	g	F	.text	000000d8	216	_init_3d_planes
+00000674	g	F	.text	00000050	80	_load_textures
+0000000c	g	O	.bss	00000004	4	_floor_texture_id
+00000004	g	O	.bss	00000004	4	_plane1_texture_id
+000006c4	g	F	.text	000000c0	192	_jo_main
 
 
 

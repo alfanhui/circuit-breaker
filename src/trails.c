@@ -3,7 +3,6 @@
 jo_pos2D player1_previous_coordinate = {0, 0};
 bool create_trail = false;
 
-
 const int plane_divider_length = 125;
 const int plane_divider_length_sub = plane_divider_length + 5; // needs to be slightly bigger to be one
 jo_3d_quad player1_quads_x[10];

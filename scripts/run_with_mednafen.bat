@@ -11,7 +11,7 @@ if not exist %MEDNAFEN_EXECUTABLE_PATH% (
 )
 
 if exist game.cue (
-"%MEDNAFEN_EXECUTABLE_PATH%" "%cd%\..\game.cue" -sound.volume "150"
+"%MEDNAFEN_EXECUTABLE_PATH%" "%cd%\game.cue" -sound.volume "150"
 ) else (
 echo Please compile first !
 )

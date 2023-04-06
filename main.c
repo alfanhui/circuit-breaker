@@ -30,13 +30,15 @@
 
 jo_camera cam;
 jo_palette image_pal;
-//jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(1000, 1000, 128); //TODO Remove
-//jo_3d_quad cube_quads[6];
 Sint16 draw_distance = 10000;
 
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
+int last_ticks = 0;
+
+bool enable_trails = true;
+bool enable_walls = true;
 
 void initCamera(jo_camera *curCam)
 {
@@ -57,7 +59,7 @@ void initCamera(jo_camera *curCam)
 
 	rot.rx = JO_DEG_TO_RAD(90.0);
 	rot.ry = JO_DEG_TO_RAD(0.0);
-	rot.rz = JO_DEG_TO_RAD(1.0); // start a good number
+	rot.rz = JO_DEG_TO_RAD(1.0);
 }
 
 void debug_3d(void)
@@ -99,6 +101,21 @@ void debug_3d(void)
 	//  slPrint("sgl_cos", slLocate(20,11));
 	//  slPrintFX(slTan(jo_DEGtoANG(degree)), slLocate(24,12));
 	//  slPrint("sgl_tan", slLocate(20,12));
+
+	//FPS and 3D counts
+	//This FPS does not work
+	// int ticks       = jo_get_ticks();
+    // int delta_ticks = ticks - last_ticks;
+    // last_ticks  = ticks;
+	// slPrint("fps", slLocate(0,9));
+	//slPrintFX(toFIXED(delta_ticks), slLocate(6, 9));
+	//slPrintFX(delta_time, slLocate(6, 9));
+	slPrint("polygons", slLocate(0,10));
+	slPrintFX(toFIXED(jo_3d_get_polygon_count()), slLocate(6,10));
+	slPrint("disp_quads", slLocate(0,11));
+	slPrintFX(toFIXED(jo_3d_get_displayed_polygon_count()), slLocate(6,11));
+	slPrint("vertices", slLocate(0,12));
+	slPrintFX(toFIXED(jo_3d_get_vertices_count()), slLocate(6,12));
 }
 
 void draw_hud(void)
@@ -132,22 +149,18 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
-	draw_arena_walls();
+	//if(enable_walls){
+	//draw_arena_walls();
+	//}
+
 	debug_3d();
 	// debug_pad1();
-	calculate_player1_trails();
-	draw_player1_trails();
+	//if(enable_trails){
+	//draw_player1_trails();
+	//calculate_player1_trails();
+	//}
 }
 
-// //Shoddy attempt at walls with cube
-// void create_cube(void)
-// {
-// 	jo_3d_create_cube(cube_quads, cube_vertices);
-// 	jo_3d_set_texture(&cube_quads[1], plane1_texture_id); //up-side-down?
-// 	jo_3d_set_texture(&cube_quads[3], plane1_texture_id); //up-side-down?
-// 	jo_3d_set_texture(&cube_quads[4], plane1_texture_id);
-// 	jo_3d_set_texture(&cube_quads[5], plane1_texture_id);
-// }
 
 jo_palette *my_tga_palette_handling(void)
 {
@@ -177,8 +190,10 @@ void init_3d_planes(void)
 	jo_free_img(&img);
 
 	// Trails
-	init_player1_x_trails();
-	init_player1_y_trails();
+	// if(enable_trails){
+	// 	init_player1_x_trails();
+	// 	init_player1_y_trails();
+	// }
 
 	jo_core_tv_on();
 }
@@ -196,15 +211,18 @@ void jo_main(void)
 	jo_set_tga_palette_handling(my_tga_palette_handling);
 
 	load_textures();
-	load_arena_textures();
-	load_player1_trail_textures();
+
+	// if(enable_walls){
+	// 	load_arena_textures();
+	// 	init_arena_walls();
+	// } 
+
+	// if(enable_trails){
+	// 	load_player1_trail_textures();
+	// }
 
 	init_3d_planes();
 	initCamera(&cam);
-
-	init_arena_walls();
-	//const jo_vertice new_vertice[4] = JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, 0, -125, 60); // North
-	//const jo_vertice new_vertice[4] = JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(jo_fixed2int(pos.x), jo_fixed2int(pos.x), jo_fixed2int(pos.y + toFIXED(125) ), jo_fixed2int(pos.y), 60); // North
 	
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);

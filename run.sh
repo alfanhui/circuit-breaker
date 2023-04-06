@@ -17,4 +17,6 @@ find ./ -type f -name "*.o" | \
     objdump.map
 
 ./scripts/run_with_yabaSanshiro.bat
+#./scripts/run_with_mednafen.bat
+#./scripts/run_with_yabause.bat # Artifacts appear in background
 #./scripts/run_with_daemon_tools_and_ssf.bat
