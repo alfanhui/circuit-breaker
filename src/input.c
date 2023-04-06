@@ -16,7 +16,8 @@ const jo_fixed flour_boundary = toFIXED(-0.0001f);
 static bool at_x_boundary = false;
 static bool at_y_boundary = false;
 
-const int movement_incrementor = 5;
+//const int movement_incrementor = 5;
+const int movement_incrementor = 0;
 const int movement_max_level = 70;
 
 // boost

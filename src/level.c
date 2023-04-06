@@ -10,7 +10,7 @@ const float division_space_modifier = 1.981f;
 const float wall_spacer_modifier = 1.91f;
 
 
-jo_vertice wall1_vertices[32][4] = {
+jo_vertice wall1_vertices[16][4] = {
 	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / wall_length, wall_height),
@@ -28,7 +28,7 @@ jo_vertice wall1_vertices[32][4] = {
 	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / wall_length, wall_height)};
 
-jo_vertice wall2_vertices[32][4] = {
+jo_vertice wall2_vertices[16][4] = {
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / wall_length, wall_height),
@@ -46,7 +46,7 @@ jo_vertice wall2_vertices[32][4] = {
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / wall_length, wall_height)};
 
-jo_vertice wall3_vertices[32][4] = {
+jo_vertice wall3_vertices[16][4] = {
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / wall_length, wall_height),
@@ -64,7 +64,7 @@ jo_vertice wall3_vertices[32][4] = {
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / wall_length, wall_height)};
 
-jo_vertice wall4_vertices[32][4] = {
+jo_vertice wall4_vertices[16][4] = {
 	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / wall_length, wall_height),
@@ -82,10 +82,10 @@ jo_vertice wall4_vertices[32][4] = {
 	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / wall_length, wall_height),
 	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / wall_length, wall_height)};
 
-jo_3d_quad wall1[32];
-jo_3d_quad wall2[32];
-jo_3d_quad wall3[32];
-jo_3d_quad wall4[32];
+jo_3d_quad wall1[16];
+jo_3d_quad wall2[16];
+jo_3d_quad wall3[16];
+jo_3d_quad wall4[16];
 
 int box1_texture_id = 0;
 int box2_texture_id = 0;
@@ -118,7 +118,9 @@ void init_arena_walls(void)
 
 void draw_arena_walls(void)
 {
-	jo_pos2D position = (jo_pos2D){pos.x - 1500, pos.y - 1500};
+	//jo_pos2D position = (jo_pos2D){pos.x - 1500, pos.y - 1500};
+	jo_pos2D position = (jo_pos2D){pos.x - 1000, pos.y - 1000};
+	
 	for (int i = 0; i < wall_length; ++i)
 	{
 		// 1

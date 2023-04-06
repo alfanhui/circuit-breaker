@@ -40,6 +40,10 @@ int last_ticks = 0;
 bool enable_trails = true;
 bool enable_walls = true;
 
+//Third person
+jo_3d_quad cube_quads[6];
+jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(5, 5, 5); 
+
 void initCamera(jo_camera *curCam)
 {
 	(*curCam).viewpoint[X] = toFIXED(0.0);
@@ -51,13 +55,13 @@ void initCamera(jo_camera *curCam)
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
 	// slZdspLevel(0);
-	jo_3d_perspective_angle(90); // FOV 90
+	jo_3d_perspective_angle(60); // FOV 90
 
 	pos.x = 1500;
-	pos.y = 1500;
-	pos.z = -35.0;
+	pos.y = 1000;
+	pos.z = -512;//-35.0;
 
-	rot.rx = JO_DEG_TO_RAD(90.0);
+	rot.rx = JO_DEG_TO_RAD(45);//90.0);
 	rot.ry = JO_DEG_TO_RAD(0.0);
 	rot.rz = JO_DEG_TO_RAD(1.0);
 }
@@ -82,26 +86,6 @@ void debug_3d(void)
 	slPrint("rot.rz", slLocate(0, 5));
 	slPrintFX(rot.rz, slLocate(6, 5));
 
-	// slPrint("degree = 45", slLocate(0,9));
-	// slPrintFX(jo_sin_rad(radian), slLocate(4,10));
-	// slPrint("sin", slLocate(4,10));
-	// slPrintFX(jo_cos_rad_old(radian), slLocate(4,11));
-	// slPrint("old_cos", slLocate(0,11));
-	// slPrintFX(jo_cos_rad(radian),slLocate(4,12));
-	// slPrint("new_cos", slLocate(0,12));
-	// slPrintFX(jo_tan_rad_old(radian), slLocate(4,13));
-	// slPrint("old_tan", slLocate(0,13));
-	// slPrintFX(jo_tan_rad(radian), slLocate(4,14));
-	// slPrint("new_tan", slLocate(0,14));
-
-	// SGL
-	//  slPrintFX(slSin(jo_DEGtoANG(degree)), slLocate(24,10));
-	//  slPrint("sgl_sin", slLocate(20,10));
-	//  slPrintFX(slCos(jo_DEGtoANG(degree)), slLocate(24,11));
-	//  slPrint("sgl_cos", slLocate(20,11));
-	//  slPrintFX(slTan(jo_DEGtoANG(degree)), slLocate(24,12));
-	//  slPrint("sgl_tan", slLocate(20,12));
-
 	//FPS and 3D counts
 	//This FPS does not work
 	// int ticks       = jo_get_ticks();
@@ -110,12 +94,12 @@ void debug_3d(void)
 	// slPrint("fps", slLocate(0,9));
 	//slPrintFX(toFIXED(delta_ticks), slLocate(6, 9));
 	//slPrintFX(delta_time, slLocate(6, 9));
-	slPrint("polygons", slLocate(0,10));
-	slPrintFX(toFIXED(jo_3d_get_polygon_count()), slLocate(6,10));
-	slPrint("disp_quads", slLocate(0,11));
-	slPrintFX(toFIXED(jo_3d_get_displayed_polygon_count()), slLocate(6,11));
-	slPrint("vertices", slLocate(0,12));
-	slPrintFX(toFIXED(jo_3d_get_vertices_count()), slLocate(6,12));
+	slPrint("polygons", slLocate(0,7));
+	slPrintFX(toFIXED(jo_3d_get_polygon_count()), slLocate(6,7));
+	slPrint("disp_quads", slLocate(0,8));
+	slPrintFX(toFIXED(jo_3d_get_displayed_polygon_count()), slLocate(6,8));
+	slPrint("vertices", slLocate(0,9));
+	slPrintFX(toFIXED(jo_3d_get_vertices_count()), slLocate(6,9));
 }
 
 void draw_hud(void)
@@ -150,7 +134,7 @@ void draw_3d(void)
 	jo_3d_pop_matrix();
 
 	//if(enable_walls){
-	//draw_arena_walls();
+	draw_arena_walls();
 	//}
 
 	debug_3d();
@@ -159,8 +143,88 @@ void draw_3d(void)
 	//draw_player1_trails();
 	//calculate_player1_trails();
 	//}
+
+	draw_cube();
 }
 
+void create_cube(void)
+{
+	jo_3d_create_cube(cube_quads, cube_vertices);
+	jo_3d_set_texture(&cube_quads[0], plane1_texture_id); //up-side-down?
+	jo_3d_set_texture(&cube_quads[1], plane1_texture_id); //up-side-down?
+	jo_3d_set_texture(&cube_quads[2], plane1_texture_id);
+	jo_3d_set_texture(&cube_quads[3], plane1_texture_id); //up-side-down?
+	jo_3d_set_texture(&cube_quads[4], plane1_texture_id);
+	jo_3d_set_texture(&cube_quads[5], plane1_texture_id);
+}
+
+int counter = 0;
+const int max_counter = 400;
+bool forward = true;
+
+bool first_person = false;
+
+int true_x = 0;
+int true_y = 0;
+int true_z = 0;
+
+void draw_cube(void)
+{
+	if (is_key_struck(DIGI_UP)){
+		if(!first_person){
+			first_person = true;
+		}else{
+			first_person = false;
+		}
+	}else{
+		if(first_person){
+			true_x = pos.x;
+			true_z = -35;
+			pos.x = 1500;
+			pos.y = 100 + counter * 3.5f;
+			true_y = pos.y;
+			pos.z = -35;
+			rot.rx = JO_DEG_TO_RAD(90.0);
+			
+			rot.rz = JO_DEG_TO_RAD(-1.0);
+		}else{
+			true_x = 0;
+			true_y = -counter;
+			true_z = -256;
+			pos.x = 1500;
+			pos.y = 1000;
+			pos.z = -512;
+			rot.rx = JO_DEG_TO_RAD(45.0);
+			rot.rz = JO_DEG_TO_RAD(1.0f);
+		}
+
+
+		for (int i = 0; i < 6; ++i)
+		{
+			jo_3d_push_matrix();
+			{
+				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+				//jo_3d_rotate_matrix_rad(1, 0, 90);
+				jo_3d_translate_matrixf(true_x, true_y, true_z);
+				jo_3d_draw(&cube_quads[i]);
+			}
+			jo_3d_pop_matrix();
+		}
+		if(forward){
+			counter++;
+			if(counter > max_counter){
+				counter = max_counter;
+				forward = false;
+			}
+		}else{
+			counter--;
+			if(counter < 0){
+				counter = 0;
+				forward = true;
+			}
+		}
+	}
+}
 
 jo_palette *my_tga_palette_handling(void)
 {
@@ -203,6 +267,7 @@ void load_textures(void)
 	floor_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "FLOOR.TGA", JO_COLOR_Transparent);  // spirit 5
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
+	create_cube();
 }
 
 void jo_main(void)
@@ -213,8 +278,8 @@ void jo_main(void)
 	load_textures();
 
 	// if(enable_walls){
-	// 	load_arena_textures();
-	// 	init_arena_walls();
+	load_arena_textures();
+	init_arena_walls();
 	// } 
 
 	// if(enable_trails){
