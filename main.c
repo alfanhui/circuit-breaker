@@ -31,6 +31,13 @@
 jo_camera cam;
 jo_palette image_pal;
 Sint16 draw_distance = 10000;
+bool first_person = false;
+
+jo_pos3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
+jo_pos3D position_3rd_person = {0, 0, -724};
+
+jo_pos3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
+jo_pos3D position_1st_person = {1000, 500, -35};
 
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
@@ -42,7 +49,7 @@ bool enable_walls = true;
 
 //Third person
 jo_3d_quad cube_quads[6];
-jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(5, 5, 5); 
+jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(25, 25, 25); 
 
 void initCamera(jo_camera *curCam)
 {
@@ -55,15 +62,23 @@ void initCamera(jo_camera *curCam)
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
 	// slZdspLevel(0);
-	jo_3d_perspective_angle(60); // FOV 90
+	jo_3d_perspective_angle(90); // FOV 60
 
-	pos.x = 1500;
-	pos.y = 1000;
-	pos.z = -512;//-35.0;
-
-	rot.rx = JO_DEG_TO_RAD(45);//90.0);
-	rot.ry = JO_DEG_TO_RAD(0.0);
-	rot.rz = JO_DEG_TO_RAD(1.0);
+	if(first_person){
+		pos.x = position_1st_person.x;
+		pos.y = position_1st_person.y;
+		pos.z = position_1st_person.z;
+		rot.rx = rotation_1st_person.x;
+		rot.ry = rotation_1st_person.y;
+		rot.rz = rotation_1st_person.z;
+	}else {
+		pos.x = position_3rd_person.x;
+		pos.y = position_3rd_person.y;
+		pos.z = position_3rd_person.z;
+		rot.rx = rotation_3rd_person.x;
+		rot.ry = rotation_3rd_person.y;
+		rot.rz = rotation_3rd_person.z;
+	}
 }
 
 void debug_3d(void)
@@ -161,8 +176,7 @@ void create_cube(void)
 int counter = 0;
 const int max_counter = 400;
 bool forward = true;
-
-bool first_person = false;
+float scale_modifier = 3.0f;
 
 int true_x = 0;
 int true_y = 0;
@@ -170,32 +184,33 @@ int true_z = 0;
 
 void draw_cube(void)
 {
-	if (is_key_struck(DIGI_UP)){
+	if (is_key_struck(DIGI_DOWN)){
 		if(!first_person){
 			first_person = true;
 		}else{
 			first_person = false;
 		}
 	}else{
-		if(first_person){
+		if(first_person){			
 			true_x = pos.x;
-			true_z = -35;
-			pos.x = 1500;
-			pos.y = 100 + counter * 3.5f;
+			true_z = position_1st_person.z;
+			pos.x = position_1st_person.x;
+			pos.y = 100 + counter * scale_modifier;
 			true_y = pos.y;
-			pos.z = -35;
-			rot.rx = JO_DEG_TO_RAD(90.0);
-			
-			rot.rz = JO_DEG_TO_RAD(-1.0);
+			pos.z = position_1st_person.z;
+			rot.rx = rotation_1st_person.x;
+			rot.ry = rotation_1st_person.y;
+			rot.rz = rotation_1st_person.z;
 		}else{
 			true_x = 0;
-			true_y = -counter;
-			true_z = -256;
-			pos.x = 1500;
-			pos.y = 1000;
-			pos.z = -512;
-			rot.rx = JO_DEG_TO_RAD(45.0);
-			rot.rz = JO_DEG_TO_RAD(1.0f);
+			true_y = -counter * scale_modifier;			
+			true_z = position_3rd_person.z;
+			pos.x = position_3rd_person.x;
+			pos.y = position_3rd_person.y; //100 + counter * scale_modifier;
+			pos.z = position_3rd_person.z;
+			rot.rx = rotation_3rd_person.x;
+			rot.ry = rotation_3rd_person.y;
+			rot.rz = rotation_3rd_person.z;
 		}
 
 
@@ -204,7 +219,6 @@ void draw_cube(void)
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				//jo_3d_rotate_matrix_rad(1, 0, 90);
 				jo_3d_translate_matrixf(true_x, true_y, true_z);
 				jo_3d_draw(&cube_quads[i]);
 			}

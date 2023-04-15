@@ -6,6 +6,7 @@
 
 extern jo_pos3Df pos;
 extern jo_rot3Df rot;
+extern bool first_person;
 extern int compass_index;
 extern int previous_compass_index;
 

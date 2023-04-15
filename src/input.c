@@ -1,7 +1,9 @@
 #include "input.h"
 
+//Globals
 jo_pos3Df pos;
 jo_rot3Df rot;
+
 int compass_index = 0;
 int previous_compass_index = 0;
 
@@ -171,7 +173,9 @@ void gamepad_input(void)
 		}
 	}
 
-	rot.rz = angle_increment;
+	if(first_person){
+		rot.rz = angle_increment;
+	}
 
 	// Turning with compass setting
 	// Gradual turning left mechanism

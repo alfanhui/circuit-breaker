@@ -37,6 +37,7 @@
 extern jo_camera cam;
 extern jo_pos3Df pos;
 extern jo_rot3Df rot;
+extern bool first_person;
 extern float turn_angle;
 extern jo_palette image_pal;
 // extern jo_vertice cube_vertices[];
