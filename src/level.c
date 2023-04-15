@@ -124,11 +124,12 @@ void draw_arena_walls(void)
 	
 	for (int i = 0; i < wall_length; ++i)
 	{
+		//TODO Clean up maths here
 		// 1
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(position.x - ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width, position.y + (wall_width * wall_spacer_modifier) - wall_width, pos.z + wall_half_height);
+			jo_3d_translate_matrixf(position.x - ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width - (wall_length *3), position.y + (wall_width * wall_spacer_modifier) - wall_width, pos.z + wall_half_height);
 			jo_3d_draw(&wall1[i]);
 		}
 		jo_3d_pop_matrix();
@@ -136,7 +137,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(position.x - wall_width, position.y + ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) - wall_width, pos.z + wall_half_height);
+			jo_3d_translate_matrixf(position.x - wall_width - wall_length, position.y + ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) - wall_width - (wall_length), pos.z + wall_half_height);
 			jo_3d_draw(&wall2[i]);
 		}
 		jo_3d_pop_matrix();
@@ -144,7 +145,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(position.x + ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) - wall_width, position.y - wall_width, pos.z + wall_half_height);
+			jo_3d_translate_matrixf(position.x + ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) - wall_width - (wall_length), position.y - wall_width - wall_length, pos.z + wall_half_height);
 			jo_3d_draw(&wall3[i]);
 		}
 		jo_3d_pop_matrix();
@@ -152,7 +153,7 @@ void draw_arena_walls(void)
 		jo_3d_push_matrix();
 		{
 			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(position.x - wall_width + (wall_width * wall_spacer_modifier), position.y - ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width, pos.z + wall_half_height);
+			jo_3d_translate_matrixf(position.x - wall_width + (wall_width * wall_spacer_modifier), position.y - ((wall_width * (((float)1 / wall_length) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - wall_width - (wall_length *3), pos.z + wall_half_height);
 			jo_3d_draw(&wall4[i]);
 		}
 		jo_3d_pop_matrix();

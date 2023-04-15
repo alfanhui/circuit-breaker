@@ -881,7 +881,7 @@ SYMBOL TABLE:
 00000600	g	O	.data	00000300	768	_wall2_vertices
 00000300	g	O	.data	00000300	768	_wall3_vertices
 00000000	g	O	.data	00000300	768	_wall4_vertices
-0000018c	g	F	.text	000004ac	1196	_draw_arena_walls
+0000018c	g	F	.text	000004c4	1220	_draw_arena_walls
 00000000	g	O	.rodata.cst4	00000004	4	_wall_spacer_modifier
 00000004	g	O	.rodata.cst4	00000004	4	_division_space_modifier
 00000008	g	O	.rodata.cst4	00000004	4	_wall_half_height
