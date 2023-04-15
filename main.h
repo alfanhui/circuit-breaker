@@ -35,18 +35,23 @@
 #include "src/trails.h"
 
 extern jo_camera cam;
-extern jo_pos3Df pos;
+extern jo_pos3D pos;
 extern jo_rot3Df rot;
 extern bool first_person;
+
+extern jo_pos3D true_position;
+extern jo_pos3D position_1st_person;
+extern jo_rot3Df rotation_1st_person;
+extern jo_pos3D position_3rd_person;
+extern jo_rot3Df rotation_3rd_person;
+
 extern float turn_angle;
 extern jo_palette image_pal;
-// extern jo_vertice cube_vertices[];
-// extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
 void initCamera(jo_camera *curCam);
 void debug_3d(void);
-void draw_cube(void);
+void draw_player(void);
 void draw_hud(void);
 void draw_3d(void);
 jo_palette *my_tga_palette_handling(void);

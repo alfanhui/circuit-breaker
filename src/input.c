@@ -1,26 +1,26 @@
 #include "input.h"
 
 //Globals
-jo_pos3Df pos;
+jo_pos3D pos = {1000, 500, -35};
 jo_rot3Df rot;
 
 int compass_index = 0;
 int previous_compass_index = 0;
+const float degree90_radian = 1.570796f;
+const char compass[4] = "NESW";
 
 const float turn_angle = 1.5f;	 // 1.5f
 const float x_turn_angle = 0.2f; // 1.5f
+const float turn_incrementor = 0.15707f;
 
 // Boundary
 const bool boundary_enabled = true;
-const jo_fixed upper_boundary = toFIXED(0.037f); //TODO this correlates to walls
-const jo_fixed lower_boundary = toFIXED(0.01f); //TODO this correlates to walls
+const jo_fixed upper_boundary = toFIXED(0.03f); //TODO this correlates to walls
+const jo_fixed lower_boundary = toFIXED(0.002f); //TODO this correlates to walls
 const jo_fixed flour_boundary = toFIXED(-0.0001f);
 static bool at_x_boundary = false;
 static bool at_y_boundary = false;
 
-//const int movement_incrementor = 5;
-const int movement_incrementor = 0;
-const int movement_max_level = 70;
 
 // boost
 const float boost_gauge_decrementer = 2.5f;
@@ -29,12 +29,11 @@ const float boost_speed_decrementer = 0.2f;
 const float boost_speed_incrementor = 0.5f;
 const int boost_max_level = 100;
 
-const float turn_incrementor = 0.15707f;
-const float degree90_radian = 1.570796f;
-const char compass[4] = "NESW";
 
 static bool debug = false;
-static int movement_speed = 0;
+const int movement_incrementor = 5; //0 to stop
+const int movement_max_level = 70;
+static int movement_speed = 5;
 static float angle_increment = 0.0f;
 static float x_angle_increment = 0.0f;
 static float boost_gauge = 100.0f;
@@ -116,6 +115,13 @@ void debug_pad1(void)
 	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
+
+/*
+TODO
+rot.rz needs to be extracted so determine player's rotation in order to turn around in 3rd person
+boundary needs to account for true position, not pos.x
+turning needs switching when in third person
+*/
 void gamepad_input(void)
 {
 	// Debug settings
@@ -129,6 +135,23 @@ void gamepad_input(void)
 	if (!jo_is_pad1_available())
 	{
 		return;
+	}
+
+	if (is_key_struck(DIGI_DOWN)){
+		if(!first_person){
+			first_person = true;
+			pos.x = true_position.x + 1500;
+			pos.y = true_position.y + 350;
+			pos.z = position_1st_person.z;
+			rot.rx = rotation_1st_person.rx;
+			rot.ry = rotation_1st_person.ry;
+		}else{
+			first_person = false;
+			true_position.z = position_3rd_person.z;
+			pos.z = position_3rd_person.z;
+			rot.rx = rotation_3rd_person.rx;
+			rot.ry = rotation_3rd_person.ry;
+		}
 	}
 
 	// Continuous Movement
@@ -171,10 +194,6 @@ void gamepad_input(void)
 		{
 			boost_gauge += boost_gauge_incrementor;
 		}
-	}
-
-	if(first_person){
-		rot.rz = angle_increment;
 	}
 
 	// Turning with compass setting
@@ -292,4 +311,17 @@ void gamepad_input(void)
 			pos.y = y;
 		}
 	}
+
+	if(first_person){
+		rot.rz = angle_increment;
+	}else{
+		true_position.x = -1000 - pos.x;
+		true_position.y = - 200 - pos.y;
+		true_position.z = position_3rd_person.z;
+		pos.z = position_3rd_person.z;
+		rot.rx = rotation_3rd_person.rx;
+		rot.ry = rotation_3rd_person.ry;
+		rot.rz = rotation_3rd_person.rz;
+	}
+
 }

@@ -33,11 +33,13 @@ jo_palette image_pal;
 Sint16 draw_distance = 10000;
 bool first_person = false;
 
-jo_pos3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
-jo_pos3D position_3rd_person = {0, 0, -724};
+jo_pos3D true_position = {0, 0, 0};
 
-jo_pos3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
 jo_pos3D position_1st_person = {1000, 500, -35};
+jo_rot3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
+
+jo_pos3D position_3rd_person = {0, 0, -724};
+jo_rot3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
 
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
@@ -65,19 +67,23 @@ void initCamera(jo_camera *curCam)
 	jo_3d_perspective_angle(90); // FOV 60
 
 	if(first_person){
+		true_position.x = 3000;
+		true_position.y = 200;
 		pos.x = position_1st_person.x;
 		pos.y = position_1st_person.y;
 		pos.z = position_1st_person.z;
-		rot.rx = rotation_1st_person.x;
-		rot.ry = rotation_1st_person.y;
-		rot.rz = rotation_1st_person.z;
+		rot.rx = rotation_1st_person.rx;
+		rot.ry = rotation_1st_person.ry;
+		rot.rz = rotation_1st_person.rz;
 	}else {
+		true_position.x = 1500;
+		true_position.y = 200;
 		pos.x = position_3rd_person.x;
 		pos.y = position_3rd_person.y;
 		pos.z = position_3rd_person.z;
-		rot.rx = rotation_3rd_person.x;
-		rot.ry = rotation_3rd_person.y;
-		rot.rz = rotation_3rd_person.z;
+		rot.rx = rotation_3rd_person.rx;
+		rot.ry = rotation_3rd_person.ry;
+		rot.rz = rotation_3rd_person.rz;
 	}
 }
 
@@ -159,7 +165,7 @@ void draw_3d(void)
 	//calculate_player1_trails();
 	//}
 
-	draw_cube();
+	draw_player();
 }
 
 void create_cube(void)
@@ -178,66 +184,20 @@ const int max_counter = 400;
 bool forward = true;
 float scale_modifier = 3.0f;
 
-int true_x = 0;
-int true_y = 0;
-int true_z = 0;
-
-void draw_cube(void)
+void draw_player(void)
 {
-	if (is_key_struck(DIGI_DOWN)){
 		if(!first_person){
-			first_person = true;
-		}else{
-			first_person = false;
+				for (int i = 0; i < 6; ++i)
+				{
+					jo_3d_push_matrix();
+					{
+						jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+						jo_3d_translate_matrixf(true_position.x, true_position.y, true_position.z);
+						jo_3d_draw(&cube_quads[i]);
+					}
+					jo_3d_pop_matrix();
+				}
 		}
-	}else{
-		if(first_person){			
-			true_x = pos.x;
-			true_z = position_1st_person.z;
-			pos.x = position_1st_person.x;
-			pos.y = 100 + counter * scale_modifier;
-			true_y = pos.y;
-			pos.z = position_1st_person.z;
-			rot.rx = rotation_1st_person.x;
-			rot.ry = rotation_1st_person.y;
-			rot.rz = rotation_1st_person.z;
-		}else{
-			true_x = 0;
-			true_y = -counter * scale_modifier;			
-			true_z = position_3rd_person.z;
-			pos.x = position_3rd_person.x;
-			pos.y = position_3rd_person.y; //100 + counter * scale_modifier;
-			pos.z = position_3rd_person.z;
-			rot.rx = rotation_3rd_person.x;
-			rot.ry = rotation_3rd_person.y;
-			rot.rz = rotation_3rd_person.z;
-		}
-
-
-		for (int i = 0; i < 6; ++i)
-		{
-			jo_3d_push_matrix();
-			{
-				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				jo_3d_translate_matrixf(true_x, true_y, true_z);
-				jo_3d_draw(&cube_quads[i]);
-			}
-			jo_3d_pop_matrix();
-		}
-		if(forward){
-			counter++;
-			if(counter > max_counter){
-				counter = max_counter;
-				forward = false;
-			}
-		}else{
-			counter--;
-			if(counter < 0){
-				counter = 0;
-				forward = true;
-			}
-		}
-	}
 }
 
 jo_palette *my_tga_palette_handling(void)

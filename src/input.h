@@ -4,9 +4,15 @@
 #include <jo/jo.h>
 #include "utils/low_level_input.h"
 
-extern jo_pos3Df pos;
+extern jo_pos3D pos;
 extern jo_rot3Df rot;
 extern bool first_person;
+extern jo_pos3D true_position;
+extern jo_pos3D position_1st_person;
+extern jo_rot3Df rotation_1st_person;
+extern jo_pos3D position_3rd_person;
+extern jo_rot3Df rotation_3rd_person;
+
 extern int compass_index;
 extern int previous_compass_index;
 

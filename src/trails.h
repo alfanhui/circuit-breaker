@@ -4,7 +4,7 @@
 #include <jo/jo.h>
 #include "utils/3d.h"
 
-extern jo_pos3Df pos;
+extern jo_pos3D pos;
 extern jo_rot3Df rot;
 extern int compass_index;
 extern int previous_compass_index;
