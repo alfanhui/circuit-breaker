@@ -119,8 +119,7 @@ void init_arena_walls(void)
 
 void draw_arena_walls(void)
 {
-	//jo_pos2D position = (jo_pos2D){pos.x - 1500, pos.y - 1500};
-	jo_pos2D position = (jo_pos2D){pos.x - 1000, pos.y - 1000};
+	jo_pos2D position = (jo_pos2D){pos.x - 1500, pos.y - 1500};
 	
 	for (int i = 0; i < wall_length; ++i)
 	{

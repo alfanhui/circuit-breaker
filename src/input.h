@@ -19,9 +19,11 @@ extern int previous_compass_index;
 extern jo_pos2D player1_previous_coordinate;
 extern bool create_trail;
 
+void init_perspective_locations(void);
 void debug_pad1(void);
 void debug_buttons(void);
 void debug_controller(void);
 void gamepad_input(void);
+int linearly_constrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax);
 
 #endif

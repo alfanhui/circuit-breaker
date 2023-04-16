@@ -33,14 +33,6 @@ jo_palette image_pal;
 Sint16 draw_distance = 10000;
 bool first_person = false;
 
-jo_pos3D true_position;
-
-jo_pos3D position_1st_person = {500, 175, -35};
-jo_rot3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
-
-jo_pos3D position_3rd_person = {0, 0, -768};
-jo_rot3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
-
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
@@ -64,38 +56,11 @@ void initCamera(jo_camera *curCam)
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
 	// slZdspLevel(0);
-	
-
-	if(first_person){
-		jo_3d_perspective_angle(90);
-		true_position.x = 1500;
-		true_position.y = 350;
-		true_position.z = 0;
-		pos.x = position_1st_person.x;
-		pos.y = position_1st_person.y;
-		pos.z = position_1st_person.z;
-		rot.rx = rotation_1st_person.rx;
-		rot.ry = rotation_1st_person.ry;
-		rot.rz = rotation_1st_person.rz;
-	}else {
-		jo_3d_perspective_angle(60);
-		true_position.x = 500;
-		true_position.y = 350;
-		true_position.z = 0;
-		pos.x = position_3rd_person.x;
-		pos.y = position_3rd_person.y;
-		pos.z = position_3rd_person.z;
-		rot.rx = rotation_3rd_person.rx;
-		rot.ry = rotation_3rd_person.ry;
-		rot.rz = rotation_3rd_person.rz;
-	}
+	init_perspective_locations();
 }
 
 void debug_3d(void)
 {
-
-	int degree = 45;
-
 	slPrint("pos.x", slLocate(0, 0));
 	slPrintFX(pos.x, slLocate(5, 0));
 	slPrint("pos.y", slLocate(0, 1));
@@ -163,6 +128,7 @@ void draw_3d(void)
 
 	debug_3d();
 	// debug_pad1();
+
 	//if(enable_trails){
 	//draw_player1_trails();
 	//calculate_player1_trails();
@@ -171,21 +137,17 @@ void draw_3d(void)
 	draw_player();
 }
 
-void create_cube(void)
+void load_player_model(void)
 {
 	jo_3d_create_cube(cube_quads, cube_vertices);
-	jo_3d_set_texture(&cube_quads[0], plane1_texture_id); //up-side-down?
-	jo_3d_set_texture(&cube_quads[1], plane1_texture_id); //up-side-down?
+	jo_3d_set_texture(&cube_quads[0], plane1_texture_id);
+	jo_3d_set_texture(&cube_quads[1], plane1_texture_id);
 	jo_3d_set_texture(&cube_quads[2], plane1_texture_id);
-	jo_3d_set_texture(&cube_quads[3], plane1_texture_id); //up-side-down?
+	jo_3d_set_texture(&cube_quads[3], plane1_texture_id);
 	jo_3d_set_texture(&cube_quads[4], plane1_texture_id);
 	jo_3d_set_texture(&cube_quads[5], plane1_texture_id);
-}
 
-int counter = 0;
-const int max_counter = 400;
-bool forward = true;
-float scale_modifier = 3.0f;
+}
 
 void draw_player(void)
 {
@@ -244,7 +206,6 @@ void load_textures(void)
 	floor_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "FLOOR.TGA", JO_COLOR_Transparent);  // spirit 5
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
-	create_cube();
 }
 
 void jo_main(void)
@@ -258,6 +219,9 @@ void jo_main(void)
 	load_arena_textures();
 	init_arena_walls();
 	// } 
+
+	load_player_model();
+
 
 	// if(enable_trails){
 	// 	load_player1_trail_textures();

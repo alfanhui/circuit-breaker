@@ -1,30 +1,36 @@
 #include "input.h"
 
 //Globals
-jo_pos3D pos = {1000, 350, -35};
+jo_pos3D pos = {1500, 850, -35};
+jo_pos3D true_position;
 jo_rot3Df rot;
+
+jo_pos3D position_1st_person = {1000, 675, -35};
+jo_rot3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
+
+jo_pos3D position_3rd_person = {200, 200, -768};
+jo_rot3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
 
 int compass_index = 0;
 int previous_compass_index = 0;
 const float degree90_radian = 1.570796f;
 const char compass[4] = "NESW";
 
-const float turn_angle = 1.5f;	 // 1.5f
-const float x_turn_angle = 0.2f; // 1.5f
+const float turn_angle = 1.5f;
+const float x_turn_angle = 0.2f;
 const float turn_incrementor = 0.15707f;
 
 // Boundary
 const bool boundary_enabled = true;
-jo_fixed upper_boundary = toFIXED(0.03f);
-jo_fixed lower_boundary = toFIXED(0.002f);
+jo_fixed upper_boundary;
+jo_fixed lower_boundary;
 const jo_fixed floor_boundary = toFIXED(-0.0001f);
-const jo_fixed upper_1st_boundary = toFIXED(0.03f);
-const jo_fixed lower_1st_boundary = toFIXED(0.002f);
-const jo_fixed upper_3rd_boundary = toFIXED(0.02f);
-const jo_fixed lower_3rd_boundary = -toFIXED(0.0035f);
+const jo_fixed upper_1st_boundary = toFIXED(0.037f);
+const jo_fixed lower_1st_boundary = toFIXED(0.01f);
+const jo_fixed upper_3rd_boundary = toFIXED(0.026f);
+const jo_fixed lower_3rd_boundary = toFIXED(0.0035f);
 static bool at_x_boundary = false;
 static bool at_y_boundary = false;
-
 
 // boost
 const float boost_gauge_decrementer = 2.5f;
@@ -32,7 +38,6 @@ const float boost_gauge_incrementor = 0.5f;
 const float boost_speed_decrementer = 0.2f;
 const float boost_speed_incrementor = 0.5f;
 const int boost_max_level = 100;
-
 
 static bool debug = false;
 const int movement_incrementor = 5; //0 to stop, 5 go
@@ -49,6 +54,36 @@ static bool turning_right = false;
 
 float rotation_z = 0.0f;
 
+void init_perspective_locations(void){
+	if(first_person){
+		jo_3d_perspective_angle(90);
+		true_position.x = 2000;
+		true_position.y = 850;
+		true_position.z = 0;
+		pos.x = position_1st_person.x;
+		pos.y = position_1st_person.y;
+		pos.z = position_1st_person.z;
+		rot.rx = rotation_1st_person.rx;
+		rot.ry = rotation_1st_person.ry;
+		rot.rz = rotation_1st_person.rz;
+		lower_boundary = lower_1st_boundary;
+		upper_boundary = upper_1st_boundary;
+	}else {
+		jo_3d_perspective_angle(60);
+		true_position.x = 1000;
+		true_position.y = 850;
+		true_position.z = position_3rd_person.z;
+		pos.x = position_3rd_person.x;
+		pos.y = position_3rd_person.y;
+		pos.z = position_3rd_person.z;
+		rot.rx = rotation_3rd_person.rx;
+		rot.ry = rotation_3rd_person.ry;
+		rot.rz = rotation_3rd_person.rz;
+		lower_boundary = lower_3rd_boundary;
+		upper_boundary = upper_3rd_boundary;
+	}
+}
+
 // TEST DEBUG ONLY
 void debug_buttons(void)
 {
@@ -59,6 +94,17 @@ void debug_buttons(void)
 	{
 		debug = !debug;
 		rotation_z = 0.0f;
+	}
+
+	// Elevation TEST DEBUG ONLY
+	if (jo_is_pad1_key_pressed(JO_KEY_L))
+		pos.z += 1.0;
+	else if (jo_is_pad1_key_pressed(JO_KEY_R))
+		pos.z -= 1.0;
+	// Elevation Floor boundary
+	if (pos.z >= floor_boundary)
+	{
+		pos.z = floor_boundary;
 	}
 }
 
@@ -123,10 +169,7 @@ void debug_pad1(void)
 
 
 /*
-TODO
-rot.rz needs to be extracted so determine player's rotation in order to turn around in 3rd person
-boundary needs to account for true position, not pos.x
-turning needs switching when in third person
+When resetting rotation, it jumps (do a 360 to see in 3rd person)
 */
 void gamepad_input(void)
 {
@@ -145,10 +188,11 @@ void gamepad_input(void)
 
 	if (is_key_struck(DIGI_DOWN)){
 		if(!first_person){
-			jo_3d_perspective_angle(90);
 			first_person = true;
-			pos.x = (linearlyConstrain(pos.x, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary));
-			pos.y = (linearlyConstrain(pos.y, lower_3rd_boundary, upper_3rd_boundary,lower_1st_boundary, upper_1st_boundary));
+			jo_3d_perspective_angle(90);
+			// Coordinate map is different scale, adjust accordingly
+			pos.x = linearly_constrain(pos.x, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary);
+			pos.y = linearly_constrain(pos.y, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary);
 			pos.z = position_1st_person.z;
 			rot.rx = rotation_1st_person.rx;
 			rot.ry = rotation_1st_person.ry;
@@ -156,15 +200,18 @@ void gamepad_input(void)
 			lower_boundary = lower_1st_boundary;
 			upper_boundary = upper_1st_boundary;
 		}else{
-			jo_3d_perspective_angle(60);
 			first_person = false;
-			pos.x = (linearlyConstrain(pos.x, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary));
-			pos.y = (linearlyConstrain(pos.y, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary));
+			jo_3d_perspective_angle(60);
+			// Coordinate map is different scale, adjust accordingly
+			pos.x = linearly_constrain(pos.x, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary);
+			pos.y = linearly_constrain(pos.y, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary);
 			pos.z = position_3rd_person.z;
 			rot.rx = rotation_3rd_person.rx;
 			rot.ry = rotation_3rd_person.ry;
 			rot.rz = rotation_3rd_person.rz;
-
+			true_position.z = position_3rd_person.z;
+			lower_boundary = lower_3rd_boundary;
+			upper_boundary = upper_3rd_boundary;
 		}
 	}
 
@@ -265,17 +312,6 @@ void gamepad_input(void)
 		create_trail = true;
 	}
 
-	// Elevation TEST DEBUG ONLY
-	if (jo_is_pad1_key_pressed(JO_KEY_L))
-		pos.z += 1.0;
-	else if (jo_is_pad1_key_pressed(JO_KEY_R))
-		pos.z -= 1.0;
-	// Elevation Floor boundary
-	if (pos.z >= floor_boundary)
-	{
-		pos.z = floor_boundary;
-	}
-
 	// Boundary and movement
 	if (boundary_enabled){
 		if( pos.x >= upper_boundary && !at_x_boundary)
@@ -328,20 +364,17 @@ void gamepad_input(void)
 
 	rotation_z = angle_increment;
 
-	true_position.x = (-pos.x + 10) * .20f;
-	true_position.y = (-pos.y + 10) * .20f;
+	true_position.x = (-pos.x + 10) * .20f; // .20f is scale speed, +10 is to account for player box boundary 
+	true_position.y = (-pos.y + 10) * .20f; // .20f is scale speed, +10 is to account for player box boundary 
+
 	if(first_person){
 		rot.rz = angle_increment;
 	}else{
 		true_position.z = position_3rd_person.z;
-		
-		lower_boundary = lower_3rd_boundary; //This only needs to be done once when switching perspectives
-		upper_boundary = upper_3rd_boundary; //This only needs to be done once when switching perspectives
 	}
-
 }
 
-int linearlyConstrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax) {
+int linearly_constrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax) {
     // Calculate the slope and intercept of the linear function
     float slope = (float)(constrainedMax - constrainedMin) / (maxValue - minValue);
     float intercept = constrainedMin - slope * minValue;
