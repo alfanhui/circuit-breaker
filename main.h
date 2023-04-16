@@ -58,7 +58,7 @@ jo_palette *my_tga_palette_handling(void);
 void init_3d_planes(void);
 void load_textures(void);
 void jo_main(void);
-//void load_player_model(void);
+void load_player_model(void);
 
 #endif
 

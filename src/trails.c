@@ -169,7 +169,7 @@ void calculate_player1_trails(void)
 	slPrintFX(toFIXED(player1_plane_y_count), slLocate(28, 9));
 }
 
-void draw_player1_trails(void)
+void draw_player1_1st_trails(void)
 {
 	if (first_frame)
 		return;
@@ -192,6 +192,36 @@ void draw_player1_trails(void)
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
 				jo_3d_translate_matrixf(pos.x - player1_trails_y_axis[i].x, pos.y - player1_trails_y_axis[i].y, pos.z);
+				jo_3d_draw(&player1_quads_y[i]);
+			}
+			jo_3d_pop_matrix();
+		}
+	}
+}
+
+void draw_player1_3rd_trails(void)
+{
+	if (first_frame)
+		return;
+	for (int i = 0; i < 10; i++)
+	{
+		if(player1_trails_x_axis[i].x != 0){ //NULL
+			jo_3d_push_matrix();
+			{
+				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+				jo_3d_translate_matrixf((pos.x - player1_trails_x_axis[i].x) -450, (pos.y - player1_trails_x_axis[i].y)-450, pos.z);
+				jo_3d_draw(&player1_quads_x[i]);
+			}
+			jo_3d_pop_matrix();
+		}
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		if(player1_trails_y_axis[i].y != 0){ //NULL
+			jo_3d_push_matrix();
+			{
+				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+				jo_3d_translate_matrixf((pos.x - player1_trails_y_axis[i].x)-450, (pos.y - player1_trails_y_axis[i].y)-450, pos.z);
 				jo_3d_draw(&player1_quads_y[i]);
 			}
 			jo_3d_pop_matrix();

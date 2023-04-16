@@ -24,6 +24,7 @@ void debug_pad1(void);
 void debug_buttons(void);
 void debug_controller(void);
 void gamepad_input(void);
-int linearly_constrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax);
+int linearly_constrain_to_1st(int value);
+int linearly_constrain_to_3rd(int value);
 
 #endif

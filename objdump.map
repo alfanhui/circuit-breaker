@@ -827,7 +827,8 @@ SYMBOL TABLE:
 00000668	g	F	.text	000000e0	224	_debug_pad1
 00000748	g	F	.text	00000720	1824	_gamepad_input
 0000000c	g	O	.bss	00000004	4	_previous_compass_index
-00000e68	g	F	.text	000000b8	184	_linearly_constrain
+00000e68	g	F	.text	00000058	88	_linearly_constrain_to_1st
+00000ec0	g	F	.text	00000058	88	_linearly_constrain_to_3rd
 00000000	g	O	.rodata.cst4	00000004	4	_movement_max_level
 00000004	g	O	.rodata.cst4	00000004	4	_movement_incrementor
 00000008	g	O	.rodata.cst4	00000004	4	_boost_max_level
@@ -970,7 +971,8 @@ SYMBOL TABLE:
 0000018c	g	F	.text	00000034	52	_create_trail_y
 000001c0	g	F	.text	0000036c	876	_calculate_player1_trails
 00000280	g	O	.bss	00000001	1	_create_trail
-0000052c	g	F	.text	00000278	632	_draw_player1_trails
+0000052c	g	F	.text	00000278	632	_draw_player1_1st_trails
+000007a4	g	F	.text	00000288	648	_draw_player1_3rd_trails
 00000000	g	O	.rodata.cst4	00000004	4	_plane_divider_length_sub
 00000004	g	O	.rodata.cst4	00000004	4	_plane_divider_length
 00000284	g	O	.bss	00000008	8	_player1_previous_coordinate

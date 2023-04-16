@@ -191,8 +191,8 @@ void gamepad_input(void)
 			first_person = true;
 			jo_3d_perspective_angle(90);
 			// Coordinate map is different scale, adjust accordingly
-			pos.x = linearly_constrain(pos.x, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary);
-			pos.y = linearly_constrain(pos.y, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary);
+			pos.x = linearly_constrain_to_1st(pos.x);
+			pos.y = linearly_constrain_to_1st(pos.y);
 			pos.z = position_1st_person.z;
 			rot.rx = rotation_1st_person.rx;
 			rot.ry = rotation_1st_person.ry;
@@ -203,8 +203,8 @@ void gamepad_input(void)
 			first_person = false;
 			jo_3d_perspective_angle(60);
 			// Coordinate map is different scale, adjust accordingly
-			pos.x = linearly_constrain(pos.x, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary);
-			pos.y = linearly_constrain(pos.y, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary);
+			pos.x = linearly_constrain_to_3rd(pos.x);
+			pos.y = linearly_constrain_to_3rd(pos.y);
 			pos.z = position_3rd_person.z;
 			rot.rx = rotation_3rd_person.rx;
 			rot.ry = rotation_3rd_person.ry;
@@ -364,8 +364,8 @@ void gamepad_input(void)
 
 	rotation_z = angle_increment;
 
-	true_position.x = (-pos.x + 10) * .20f; // .20f is scale speed, +10 is to account for player box boundary 
-	true_position.y = (-pos.y + 10) * .20f; // .20f is scale speed, +10 is to account for player box boundary 
+	true_position.x = (-pos.x + 10) * .2f; // .2f is scale speed, +10 is to account for player box boundary 
+	true_position.y = (-pos.y + 10) * .2f; // .2f is scale speed, +10 is to account for player box boundary 
 
 	if(first_person){
 		rot.rz = angle_increment;
@@ -374,19 +374,37 @@ void gamepad_input(void)
 	}
 }
 
-int linearly_constrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax) {
+int linearly_constrain_to_1st(int value) {
     // Calculate the slope and intercept of the linear function
-    float slope = (float)(constrainedMax - constrainedMin) / (maxValue - minValue);
-    float intercept = constrainedMin - slope * minValue;
+    float slope = (float)(upper_1st_boundary - lower_1st_boundary) / (upper_3rd_boundary - lower_3rd_boundary);
+    float intercept = lower_1st_boundary - slope * lower_3rd_boundary;
 
     // Apply the linear function to constrain the value
     int constrainedValue = (int)(slope * value + intercept);
 
     // Check if the constrained value is outside the constrained range
-    if (constrainedValue < constrainedMin) {
-        constrainedValue = constrainedMin;
-    } else if (constrainedValue > constrainedMax) {
-        constrainedValue = constrainedMax;
+    if (constrainedValue < lower_1st_boundary) {
+        constrainedValue = lower_1st_boundary;
+    } else if (constrainedValue > upper_1st_boundary) {
+        constrainedValue = upper_1st_boundary;
+    }
+
+    return constrainedValue;
+}
+
+int linearly_constrain_to_3rd(int value) {
+    // Calculate the slope and intercept of the linear function
+    float slope = (float)(upper_3rd_boundary - lower_3rd_boundary) / (upper_1st_boundary - lower_1st_boundary);
+    float intercept = lower_3rd_boundary - slope * lower_1st_boundary;
+
+    // Apply the linear function to constrain the value
+    int constrainedValue = (int)(slope * value + intercept);
+
+    // Check if the constrained value is outside the constrained range
+    if (constrainedValue < lower_3rd_boundary) {
+        constrainedValue = lower_3rd_boundary;
+    } else if (constrainedValue > upper_3rd_boundary) {
+        constrainedValue = upper_3rd_boundary;
     }
 
     return constrainedValue;
