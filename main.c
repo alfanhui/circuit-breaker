@@ -33,12 +33,12 @@ jo_palette image_pal;
 Sint16 draw_distance = 10000;
 bool first_person = false;
 
-jo_pos3D true_position = {0, 0, 0};
+jo_pos3D true_position;
 
-jo_pos3D position_1st_person = {1000, 500, -35};
+jo_pos3D position_1st_person = {500, 175, -35};
 jo_rot3Df rotation_1st_person = {JO_DEG_TO_RAD(90), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(-1.0)};
 
-jo_pos3D position_3rd_person = {0, 0, -724};
+jo_pos3D position_3rd_person = {0, 0, -768};
 jo_rot3Df rotation_3rd_person = {JO_DEG_TO_RAD(40), JO_DEG_TO_RAD(0), JO_DEG_TO_RAD(45)};
 
 int floor_texture_id = 0;
@@ -64,11 +64,13 @@ void initCamera(jo_camera *curCam)
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
 	// slZdspLevel(0);
-	jo_3d_perspective_angle(90); // FOV 60
+	
 
 	if(first_person){
-		true_position.x = 3000;
-		true_position.y = 200;
+		jo_3d_perspective_angle(90);
+		true_position.x = 1500;
+		true_position.y = 350;
+		true_position.z = 0;
 		pos.x = position_1st_person.x;
 		pos.y = position_1st_person.y;
 		pos.z = position_1st_person.z;
@@ -76,8 +78,10 @@ void initCamera(jo_camera *curCam)
 		rot.ry = rotation_1st_person.ry;
 		rot.rz = rotation_1st_person.rz;
 	}else {
-		true_position.x = 1500;
-		true_position.y = 200;
+		jo_3d_perspective_angle(60);
+		true_position.x = 500;
+		true_position.y = 350;
+		true_position.z = 0;
 		pos.x = position_3rd_person.x;
 		pos.y = position_3rd_person.y;
 		pos.z = position_3rd_person.z;
@@ -91,7 +95,6 @@ void debug_3d(void)
 {
 
 	int degree = 45;
-	float radian = JO_DEG_TO_RAD(degree);
 
 	slPrint("pos.x", slLocate(0, 0));
 	slPrintFX(pos.x, slLocate(5, 0));
@@ -186,18 +189,18 @@ float scale_modifier = 3.0f;
 
 void draw_player(void)
 {
-		if(!first_person){
-				for (int i = 0; i < 6; ++i)
-				{
-					jo_3d_push_matrix();
-					{
-						jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-						jo_3d_translate_matrixf(true_position.x, true_position.y, true_position.z);
-						jo_3d_draw(&cube_quads[i]);
-					}
-					jo_3d_pop_matrix();
-				}
+	if(!first_person){
+		for (int i = 0; i < 6; ++i)
+		{
+			jo_3d_push_matrix();
+			{
+				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+				jo_3d_translate_matrixf(true_position.x - 400, true_position.y - 400, true_position.z);
+				jo_3d_draw(&cube_quads[i]);
+			}
+			jo_3d_pop_matrix();
 		}
+	}
 }
 
 jo_palette *my_tga_palette_handling(void)

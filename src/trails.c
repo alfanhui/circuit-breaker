@@ -13,10 +13,10 @@ static int trail_blue_texture_id = 0;
 static int player1_plane_x_count = 0;
 static int player1_plane_y_count = 0;
 static bool first_frame = true;
-static jo_pos2D player1_trails_x_axis[10] = {NULL};
-static jo_pos2D player1_trails_y_axis[10] = {NULL};
+static jo_pos2D player1_trails_x_axis[10];
+static jo_pos2D player1_trails_y_axis[10];
 
-const jo_vertice trail_plain_y[10][4] = {
+jo_vertice trail_plain_y[10][4] = {
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60),
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60),
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60),
@@ -28,7 +28,7 @@ const jo_vertice trail_plain_y[10][4] = {
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60),
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60)};
 
-const jo_vertice trail_plain_x[10][4] = {
+jo_vertice trail_plain_x[10][4] = {
 	JO_3D_TRAIL_PLANE_VERTICES_X_NEW(0, plane_divider_length_sub, 0, 0, 60),
 	JO_3D_TRAIL_PLANE_VERTICES_X_NEW(0, plane_divider_length_sub, 0, 0, 60),
 	JO_3D_TRAIL_PLANE_VERTICES_X_NEW(0, plane_divider_length_sub, 0, 0, 60),
@@ -89,7 +89,7 @@ void calculate_player1_trails(void)
 	}
 
 	// calculate distance
-	jo_pos2D distance;
+	jo_pos2D distance = (jo_pos2D){0,0};
 
 	if (create_trail) //we've turned, force wall to create
 	{
@@ -175,7 +175,7 @@ void draw_player1_trails(void)
 		return;
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_x_axis[i].x != NULL){
+		if(player1_trails_x_axis[i].x != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
@@ -187,7 +187,7 @@ void draw_player1_trails(void)
 	}
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_y_axis[i].y != NULL){
+		if(player1_trails_y_axis[i].y != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);

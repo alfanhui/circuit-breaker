@@ -1,7 +1,7 @@
 #include "input.h"
 
 //Globals
-jo_pos3D pos = {1000, 500, -35};
+jo_pos3D pos = {1000, 350, -35};
 jo_rot3Df rot;
 
 int compass_index = 0;
@@ -15,9 +15,13 @@ const float turn_incrementor = 0.15707f;
 
 // Boundary
 const bool boundary_enabled = true;
-const jo_fixed upper_boundary = toFIXED(0.03f); //TODO this correlates to walls
-const jo_fixed lower_boundary = toFIXED(0.002f); //TODO this correlates to walls
-const jo_fixed flour_boundary = toFIXED(-0.0001f);
+jo_fixed upper_boundary = toFIXED(0.03f);
+jo_fixed lower_boundary = toFIXED(0.002f);
+const jo_fixed floor_boundary = toFIXED(-0.0001f);
+const jo_fixed upper_1st_boundary = toFIXED(0.03f);
+const jo_fixed lower_1st_boundary = toFIXED(0.002f);
+const jo_fixed upper_3rd_boundary = toFIXED(0.02f);
+const jo_fixed lower_3rd_boundary = -toFIXED(0.0035f);
 static bool at_x_boundary = false;
 static bool at_y_boundary = false;
 
@@ -31,7 +35,7 @@ const int boost_max_level = 100;
 
 
 static bool debug = false;
-const int movement_incrementor = 5; //0 to stop
+const int movement_incrementor = 5; //0 to stop, 5 go
 const int movement_max_level = 70;
 static int movement_speed = 5;
 static float angle_increment = 0.0f;
@@ -43,6 +47,8 @@ static float turn_right_target = 0.0f;
 static bool turning_left = false;
 static bool turning_right = false;
 
+float rotation_z = 0.0f;
+
 // TEST DEBUG ONLY
 void debug_buttons(void)
 {
@@ -52,7 +58,7 @@ void debug_buttons(void)
 	if (is_key_struck(JO_KEY_START))
 	{
 		debug = !debug;
-		rot.rz = 0.0f;
+		rotation_z = 0.0f;
 	}
 }
 
@@ -98,11 +104,11 @@ void debug_controller(void)
 		rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
 	}
 
-	rot.rz += JO_DEG_TO_RAD(angle_increment) / 2.0;
+	rotation_z += JO_DEG_TO_RAD(angle_increment) / 2.0;
 	angle_increment = angle_increment * 4.0 / 5.0;
 
-	pos.x -= movement_speed * jo_sin_radf(rot.rz) / 10.0;
-	pos.y -= movement_speed * jo_cos_radf(rot.rz) / 10.0;
+	pos.x -= movement_speed * jo_sin_radf(rotation_z) / 10.0;
+	pos.y -= movement_speed * jo_cos_radf(rotation_z) / 10.0;
 }
 
 void debug_pad1(void)
@@ -139,18 +145,26 @@ void gamepad_input(void)
 
 	if (is_key_struck(DIGI_DOWN)){
 		if(!first_person){
+			jo_3d_perspective_angle(90);
 			first_person = true;
-			pos.x = true_position.x + 1500;
-			pos.y = true_position.y + 350;
+			pos.x = (linearlyConstrain(pos.x, lower_3rd_boundary, upper_3rd_boundary, lower_1st_boundary, upper_1st_boundary));
+			pos.y = (linearlyConstrain(pos.y, lower_3rd_boundary, upper_3rd_boundary,lower_1st_boundary, upper_1st_boundary));
 			pos.z = position_1st_person.z;
 			rot.rx = rotation_1st_person.rx;
 			rot.ry = rotation_1st_person.ry;
+			rot.rz = rotation_z;
+			lower_boundary = lower_1st_boundary;
+			upper_boundary = upper_1st_boundary;
 		}else{
+			jo_3d_perspective_angle(60);
 			first_person = false;
-			true_position.z = position_3rd_person.z;
+			pos.x = (linearlyConstrain(pos.x, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary));
+			pos.y = (linearlyConstrain(pos.y, lower_1st_boundary, upper_1st_boundary, lower_3rd_boundary, upper_3rd_boundary));
 			pos.z = position_3rd_person.z;
 			rot.rx = rotation_3rd_person.rx;
 			rot.ry = rotation_3rd_person.ry;
+			rot.rz = rotation_3rd_person.rz;
+
 		}
 	}
 
@@ -205,7 +219,7 @@ void gamepad_input(void)
 	else if (turning_left)
 	{
 		angle_increment = turn_left_target;
-		rot.rz = turn_left_target;
+		rotation_z = turn_left_target;
 		turn_left_target = 0;
 		turning_left = false;
 		// trail stuff
@@ -232,7 +246,7 @@ void gamepad_input(void)
 	else if (turning_right)
 	{
 		angle_increment = turn_right_target;
-		rot.rz = turn_right_target;
+		rotation_z = turn_right_target;
 		turn_right_target = 0;
 		turning_right = false;
 		// trail stuff
@@ -257,9 +271,9 @@ void gamepad_input(void)
 	else if (jo_is_pad1_key_pressed(JO_KEY_R))
 		pos.z -= 1.0;
 	// Elevation Floor boundary
-	if (pos.z >= flour_boundary)
+	if (pos.z >= floor_boundary)
 	{
-		pos.z = flour_boundary;
+		pos.z = floor_boundary;
 	}
 
 	// Boundary and movement
@@ -289,7 +303,7 @@ void gamepad_input(void)
 	
 	if (compass_index == 1 || compass_index == 3)
 	{
-		jo_fixed x = pos.x - movement_speed * boost_movement * jo_sin_radf(rot.rz) / 10;
+		jo_fixed x = pos.x - movement_speed * boost_movement * jo_sin_radf(rotation_z) / 10;
 		if (!boundary_enabled)
 		{
 			pos.x = x;
@@ -300,7 +314,7 @@ void gamepad_input(void)
 			pos.x = x;
 		}
 	}else {
-		jo_fixed y = pos.y - movement_speed * boost_movement * jo_cos_radf(rot.rz) / 10;
+		jo_fixed y = pos.y - movement_speed * boost_movement * jo_cos_radf(rotation_z) / 10;
 		if (!boundary_enabled)
 		{
 			pos.y = y;
@@ -312,16 +326,35 @@ void gamepad_input(void)
 		}
 	}
 
+	rotation_z = angle_increment;
+
+	true_position.x = (-pos.x + 10) * .20f;
+	true_position.y = (-pos.y + 10) * .20f;
 	if(first_person){
 		rot.rz = angle_increment;
 	}else{
-		true_position.x = -1000 - pos.x;
-		true_position.y = - 200 - pos.y;
 		true_position.z = position_3rd_person.z;
-		pos.z = position_3rd_person.z;
-		rot.rx = rotation_3rd_person.rx;
-		rot.ry = rotation_3rd_person.ry;
-		rot.rz = rotation_3rd_person.rz;
+		
+		lower_boundary = lower_3rd_boundary; //This only needs to be done once when switching perspectives
+		upper_boundary = upper_3rd_boundary; //This only needs to be done once when switching perspectives
 	}
 
+}
+
+int linearlyConstrain(int value, int minValue, int maxValue, int constrainedMin, int constrainedMax) {
+    // Calculate the slope and intercept of the linear function
+    float slope = (float)(constrainedMax - constrainedMin) / (maxValue - minValue);
+    float intercept = constrainedMin - slope * minValue;
+
+    // Apply the linear function to constrain the value
+    int constrainedValue = (int)(slope * value + intercept);
+
+    // Check if the constrained value is outside the constrained range
+    if (constrainedValue < constrainedMin) {
+        constrainedValue = constrainedMin;
+    } else if (constrainedValue > constrainedMax) {
+        constrainedValue = constrainedMax;
+    }
+
+    return constrainedValue;
 }
