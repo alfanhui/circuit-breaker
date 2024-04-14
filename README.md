@@ -4,14 +4,15 @@ Sega Saturn homebrew game built with jo-engine.
 
 ## Development Images
 
-![Circuit Breaker Grid](docs\images\01.PNG)
+![Circuit Breaker Grid](./docs/images/01.PNG)
 
-![Circuit Breaker Room](docs\images\02.PNG)
+![Circuit Breaker Room](./docs/images/02.png)
 
-![Circuit Breaker Trails](docs\images\03.PNG)
+![Circuit Breaker Trails](./docs/images/03.png)
 
 **Note: This image is bad quality due to video compression when capturing gameplay.**
-![Circuit Breaker Perspective](docs\images\04.PNG)
+<br/>
+![Circuit Breaker Perspective](./docs/images/04.png)
 
 ## Development Videos
 
