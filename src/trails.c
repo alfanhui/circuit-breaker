@@ -10,11 +10,15 @@ jo_3d_quad player1_quads_y[10];
 
 static int trail_orange_texture_id = 0;
 static int trail_blue_texture_id = 0;
-static int player1_plane_x_count = 0;
-static int player1_plane_y_count = 0;
+static int player1_plane_x_count_1st = 0;
+static int player1_plane_y_count_1st = 0;
+static int player1_plane_x_count_3rd = 0;
+static int player1_plane_y_count_3rd = 0;
 static bool first_frame = true;
-static jo_pos2D player1_trails_x_axis[10];
-static jo_pos2D player1_trails_y_axis[10];
+static jo_pos2D player1_1st_trails_x_axis[10];
+static jo_pos2D player1_1st_trails_y_axis[10];
+static jo_pos2D player1_3rd_trails_x_axis[10];
+static jo_pos2D player1_3rd_trails_y_axis[10];
 
 jo_vertice trail_plain_y[10][4] = {
 	JO_3D_TRAIL_PLANE_VERTICES_Y_NEW(0, 0, plane_divider_length_sub, 0, 60),
@@ -64,45 +68,109 @@ void init_player1_y_trails()
 	}
 }
 
-void create_trail_x()
+void create_trail_x_1st()
 {
-	player1_trails_x_axis[player1_plane_x_count] = (jo_pos2D){pos.x, pos.y};
-	player1_plane_x_count++;
-	player1_trails_x_axis[player1_plane_x_count] = (jo_pos2D){pos.x, pos.y};
+	player1_1st_trails_x_axis[player1_plane_x_count_1st] = (jo_pos2D){pos.x, pos.y};
+	player1_plane_x_count_1st++;
+	player1_1st_trails_x_axis[player1_plane_x_count_1st] = (jo_pos2D){pos.x, pos.y};
 }
 
-void create_trail_y()
+void create_trail_x_1st_turned()
 {
-	player1_trails_y_axis[player1_plane_y_count] = (jo_pos2D){pos.x, pos.y};
-	player1_plane_y_count++;
-	player1_trails_y_axis[player1_plane_y_count] = (jo_pos2D){pos.x, pos.y};
+	player1_1st_trails_y_axis[player1_plane_y_count_1st] = (jo_pos2D){pos.x, pos.y};//Finish previous trail
+	player1_plane_y_count_1st++;
+	player1_plane_x_count_1st++;
+	player1_1st_trails_x_axis[player1_plane_x_count_1st] = (jo_pos2D){pos.x, pos.y};
+}
+
+void create_trail_y_1st()
+{
+	player1_1st_trails_y_axis[player1_plane_y_count_1st] = (jo_pos2D){pos.x, pos.y};
+	player1_plane_y_count_1st++;
+	player1_1st_trails_y_axis[player1_plane_y_count_1st] = (jo_pos2D){pos.x, pos.y};
+}
+
+void create_trail_y_1st_turned()
+{
+	player1_1st_trails_x_axis[player1_plane_x_count_1st] = (jo_pos2D){pos.x, pos.y};//Finish previous trail
+	player1_plane_x_count_1st++;
+	player1_plane_y_count_1st++;
+	player1_1st_trails_y_axis[player1_plane_y_count_1st] = (jo_pos2D){pos.x, pos.y};
+}
+
+void create_trail_x_3rd()
+{
+	player1_3rd_trails_x_axis[player1_plane_x_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+	player1_plane_x_count_3rd++;
+	player1_3rd_trails_x_axis[player1_plane_x_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+}
+
+void create_trail_x_3rd_turned()
+{
+	player1_1st_trails_y_axis[player1_plane_y_count_3rd] = (jo_pos2D){true_position.x, true_position.y};//Finish previous trail
+	player1_plane_x_count_3rd++;
+	player1_plane_y_count_3rd++;
+	player1_1st_trails_x_axis[player1_plane_x_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+}
+
+
+void create_trail_y_3rd()
+{
+	player1_3rd_trails_y_axis[player1_plane_y_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+	player1_plane_y_count_3rd++;
+	player1_3rd_trails_y_axis[player1_plane_y_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+}
+
+void create_trail_y_3rd_turned()
+{
+	player1_1st_trails_x_axis[player1_plane_x_count_3rd] = (jo_pos2D){true_position.x, true_position.y};//Finish previous trail
+	player1_plane_x_count_3rd++;
+	player1_plane_y_count_3rd++;
+	player1_1st_trails_y_axis[player1_plane_y_count_3rd] = (jo_pos2D){true_position.x, true_position.y};
+}
+
+void debug_trails(jo_pos2D distance){
+	slPrint("dist.x: ", slLocate(0, 6));
+	slPrintFX(distance.x, slLocate(8, 6));
+	slPrint("dist.y: ", slLocate(0, 7));
+	slPrintFX(distance.y, slLocate(8, 7));
+	slPrint("prev.x: ", slLocate(20, 6));
+	slPrintFX(player1_1st_trails_x_axis[player1_plane_x_count_1st].x, slLocate(28, 6));
+	slPrint("prev.y: ", slLocate(20, 7));
+	slPrintFX(player1_1st_trails_y_axis[player1_plane_y_count_1st].y, slLocate(28, 7));
+	slPrint("Xcount: ", slLocate(20, 8));
+	slPrintFX(toFIXED(player1_plane_x_count_1st), slLocate(28, 8));
+	slPrint("Ycount: ", slLocate(20, 9));
+	slPrintFX(toFIXED(player1_plane_y_count_1st), slLocate(28, 9));
 }
 
 void calculate_player1_trails(void)
 {
+	//Skip first frame as no values are ready
 	if (first_frame)
 	{
 		first_frame = !first_frame;
-		player1_trails_x_axis[player1_plane_x_count] = (jo_pos2D){pos.x, pos.y}; // TODO only if we start in the y+ (NORTH) direction
-		player1_trails_y_axis[player1_plane_y_count] = (jo_pos2D){pos.x, pos.y}; // TODO only if we start in the y+ (NORTH) direction
 		return;
 	}
 
 	// calculate distance
-	jo_pos2D distance = (jo_pos2D){0,0};
+	jo_pos2D distance_1st = (jo_pos2D){0,0};
+	jo_pos2D distance_3rd = (jo_pos2D){0,0};
 
-	if (create_trail) //we've turned, force wall to create
+	if (create_trail) //Triggered on turn, force trail create based on previous location
 	{
 		create_trail = false;
 		switch (compass_index)
 		{
 		case 0: // north
 		case 2: // south
-			create_trail_y();
+			create_trail_y_1st_turned(); //Use x_trail coordinates
+			create_trail_y_3rd_turned(); //Use x_trail coordinates
 			break;
 		case 1: // east
 		case 3: // west
-			create_trail_x();
+			create_trail_x_1st_turned(); //Use y_trail coordinates
+			create_trail_x_3rd_turned(); //Use y_trail coordinates
 			break;
 		}
 	}
@@ -111,62 +179,80 @@ void calculate_player1_trails(void)
 		switch (compass_index)
 		{
 		case 0: // north
-			distance = (jo_pos2D){0, pos.y - player1_trails_y_axis[player1_plane_y_count].y};
-			if (distance.y > plane_divider_length)
+			distance_1st = (jo_pos2D){0, pos.y - player1_1st_trails_y_axis[player1_plane_y_count_1st].y};
+			if (distance_1st.y > plane_divider_length)
 			{
-				create_trail_y();
+				create_trail_y_1st();
+			}
+			distance_3rd = (jo_pos2D){0, true_position.y - player1_3rd_trails_y_axis[player1_plane_y_count_3rd].y};
+			if (distance_3rd.y > plane_divider_length)
+			{
+				create_trail_y_3rd();
 			}
 			break;
 		case 1: // east
-			distance = (jo_pos2D){pos.x - player1_trails_x_axis[player1_plane_x_count].x, 0};
-			if (distance.x > plane_divider_length)
+			distance_1st = (jo_pos2D){pos.x - player1_1st_trails_x_axis[player1_plane_x_count_1st].x, 0};
+			if (distance_1st.x > plane_divider_length)
 			{
-				create_trail_x();
+				create_trail_x_1st();
+			}
+			distance_3rd = (jo_pos2D){true_position.x - player1_3rd_trails_x_axis[player1_plane_x_count_3rd].x, 0};
+			if (distance_3rd.x > plane_divider_length)
+			{
+				create_trail_x_3rd();
 			}
 			break;
 		case 2: // south
-			distance = (jo_pos2D){0, player1_trails_y_axis[player1_plane_y_count].y - pos.y} ;
-			if (distance.y > plane_divider_length)
+			distance_1st = (jo_pos2D){0, player1_1st_trails_y_axis[player1_plane_y_count_1st].y - pos.y} ;
+			if (distance_1st.y > plane_divider_length)
 			{
-				create_trail_y();
+				create_trail_y_1st();
+			}
+			distance_3rd = (jo_pos2D){0, player1_3rd_trails_y_axis[player1_plane_y_count_3rd].y - true_position.y} ;
+			if (distance_3rd.y > plane_divider_length)
+			{
+				create_trail_y_3rd();
 			}
 			break;
 		case 3: // west
-			distance = (jo_pos2D){player1_trails_x_axis[player1_plane_x_count].x - pos.x, 0};
-			if (distance.x > plane_divider_length)
+			distance_1st = (jo_pos2D){player1_1st_trails_x_axis[player1_plane_x_count_1st].x - pos.x, 0};
+			if (distance_1st.x > plane_divider_length)
 			{
-				create_trail_x();
+				create_trail_x_1st();
+			}
+			distance_3rd = (jo_pos2D){player1_3rd_trails_x_axis[player1_plane_x_count_3rd].x - true_position.x, 0};
+			if (distance_3rd.x > plane_divider_length)
+			{
+				create_trail_x_3rd();
 			}
 			break;
 		}
 	}
 
-	if (distance.x == 0 && distance.y == 0)
+	if (player1_plane_x_count_1st >= 10 )
+	{
+		player1_plane_x_count_1st = 0;
+	}
+	if (player1_plane_y_count_1st >= 10 )
+	{
+		player1_plane_y_count_1st = 0;
+	}
+	//3rd player
+	if (player1_plane_x_count_3rd >= 10 )
+	{
+		player1_plane_x_count_3rd = 0;
+	}
+	if (player1_plane_y_count_3rd >= 10 )
+	{
+		player1_plane_y_count_3rd = 0;
+	}
+	if (distance_1st.x == 0 && distance_1st.y == 0)
 	{
 		// have not moved
 		return;
 	}
-	if (player1_plane_x_count >= 10 )
-	{
-		player1_plane_x_count = 0;
-	}
-	if (player1_plane_y_count >= 10 )
-	{
-		player1_plane_y_count = 0;
-	}
 
-	slPrint("dist.x: ", slLocate(0, 6));
-	slPrintFX(distance.x, slLocate(8, 6));
-	slPrint("dist.y: ", slLocate(0, 7));
-	slPrintFX(distance.y, slLocate(8, 7));
-	slPrint("prev.x: ", slLocate(20, 6));
-	slPrintFX(player1_trails_x_axis[player1_plane_x_count].x, slLocate(28, 6));
-	slPrint("prev.y: ", slLocate(20, 7));
-	slPrintFX(player1_trails_y_axis[player1_plane_y_count].y, slLocate(28, 7));
-	slPrint("Xcount: ", slLocate(20, 8));
-	slPrintFX(toFIXED(player1_plane_x_count), slLocate(28, 8));
-	slPrint("Ycount: ", slLocate(20, 9));
-	slPrintFX(toFIXED(player1_plane_y_count), slLocate(28, 9));
+	debug_trails(distance_1st);
 }
 
 void draw_player1_1st_trails(void)
@@ -175,11 +261,11 @@ void draw_player1_1st_trails(void)
 		return;
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_x_axis[i].x != 0){ //NULL
+		if(player1_1st_trails_x_axis[i].x != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				jo_3d_translate_matrixf(pos.x - player1_trails_x_axis[i].x, pos.y - player1_trails_x_axis[i].y, pos.z);
+				jo_3d_translate_matrixf(pos.x - player1_1st_trails_x_axis[i].x, pos.y - player1_1st_trails_x_axis[i].y, pos.z);
 				jo_3d_draw(&player1_quads_x[i]);
 			}
 			jo_3d_pop_matrix();
@@ -187,11 +273,11 @@ void draw_player1_1st_trails(void)
 	}
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_y_axis[i].y != 0){ //NULL
+		if(player1_1st_trails_y_axis[i].y != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				jo_3d_translate_matrixf(pos.x - player1_trails_y_axis[i].x, pos.y - player1_trails_y_axis[i].y, pos.z);
+				jo_3d_translate_matrixf(pos.x - player1_1st_trails_y_axis[i].x, pos.y - player1_1st_trails_y_axis[i].y, pos.z);
 				jo_3d_draw(&player1_quads_y[i]);
 			}
 			jo_3d_pop_matrix();
@@ -199,17 +285,18 @@ void draw_player1_1st_trails(void)
 	}
 }
 
+
 void draw_player1_3rd_trails(void)
 {
 	if (first_frame)
 		return;
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_x_axis[i].x != 0){ //NULL
+		if(player1_1st_trails_x_axis[i].x != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				jo_3d_translate_matrixf((pos.x - player1_trails_x_axis[i].x) -450, (pos.y - player1_trails_x_axis[i].y)-450, pos.z);
+				jo_3d_translate_matrixf((true_position.x - player1_3rd_trails_x_axis[i].x)-400, (true_position.y - player1_3rd_trails_x_axis[i].y)-400, true_position.z);
 				jo_3d_draw(&player1_quads_x[i]);
 			}
 			jo_3d_pop_matrix();
@@ -217,11 +304,11 @@ void draw_player1_3rd_trails(void)
 	}
 	for (int i = 0; i < 10; i++)
 	{
-		if(player1_trails_y_axis[i].y != 0){ //NULL
+		if(player1_1st_trails_y_axis[i].y != 0){ //NULL
 			jo_3d_push_matrix();
 			{
 				jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-				jo_3d_translate_matrixf((pos.x - player1_trails_y_axis[i].x)-450, (pos.y - player1_trails_y_axis[i].y)-450, pos.z);
+				jo_3d_translate_matrixf((true_position.x - player1_3rd_trails_y_axis[i].x)-400, (true_position.y - player1_3rd_trails_y_axis[i].y)-400, true_position.z);
 				jo_3d_draw(&player1_quads_y[i]);
 			}
 			jo_3d_pop_matrix();

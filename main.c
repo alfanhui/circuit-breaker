@@ -104,7 +104,10 @@ void draw_hud(void)
 void draw_3d(void)
 {
 	jo_3d_camera_look_at(&cam);
-	// draw_hud();
+	
+	//HUD
+	//draw_hud();
+	
 	//  FLOOR
 	jo_3d_push_matrix();
 	{
@@ -130,12 +133,12 @@ void draw_3d(void)
 	// debug_pad1();
 
 	//if(enable_trails){
-	// if(first_person){
-	// 	draw_player1_1st_trails();
-	// }else{
-	// 	draw_player1_3rd_trails();
-	// }
-	// calculate_player1_trails();
+	if(first_person){
+		draw_player1_1st_trails();
+	}else{
+		draw_player1_3rd_trails();
+	}
+	calculate_player1_trails();
 	//}
 
 	draw_player();
@@ -197,8 +200,8 @@ void init_3d_planes(void)
 
 	// Trails
 	// if(enable_trails){
-	// init_player1_x_trails();
-	// init_player1_y_trails();
+	init_player1_x_trails();
+	init_player1_y_trails();
 	// }
 
 	jo_core_tv_on();
@@ -227,7 +230,7 @@ void jo_main(void)
 
 
 	// if(enable_trails){
-	// load_player1_trail_textures();
+	load_player1_trail_textures();
 	// }
 
 	init_3d_planes();
