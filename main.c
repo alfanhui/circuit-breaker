@@ -38,7 +38,7 @@ int hud1_texture_id = 0;
 int plane1_texture_id = 0;
 int last_ticks = 0;
 
-bool enable_trails = true;
+bool enable_trails = false;
 bool enable_walls = true;
 
 //Third person
@@ -132,14 +132,14 @@ void draw_3d(void)
 	debug_3d();
 	// debug_pad1();
 
-	//if(enable_trails){
-	if(first_person){
-		draw_player1_1st_trails();
-	}else{
-		draw_player1_3rd_trails();
+	if(enable_trails){
+		if(first_person){
+			draw_player1_1st_trails();
+		}else{
+			draw_player1_3rd_trails();
+		}
+		calculate_player1_trails();
 	}
-	calculate_player1_trails();
-	//}
 
 	draw_player();
 }
@@ -199,10 +199,10 @@ void init_3d_planes(void)
 	jo_free_img(&img);
 
 	// Trails
-	// if(enable_trails){
-	init_player1_x_trails();
-	init_player1_y_trails();
-	// }
+	if(enable_trails){
+		init_player1_x_trails();
+		init_player1_y_trails();
+	}
 
 	jo_core_tv_on();
 }
@@ -229,9 +229,9 @@ void jo_main(void)
 	load_player_model();
 
 
-	// if(enable_trails){
-	load_player1_trail_textures();
-	// }
+	if(enable_trails){
+		load_player1_trail_textures();
+	}
 
 	init_3d_planes();
 	initCamera(&cam);
