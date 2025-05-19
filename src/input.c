@@ -1,7 +1,12 @@
 #include "input.h"
 
-jo_pos3Df pos;
-jo_rot3Df rot;
+
+typedef struct {
+    jo_pos3Df pos;
+	jo_rot3Df rot;
+} GameObject;
+
+GameObject lightcycle;
 
 const float turn_angle = 1.5f;	 // 1.5f
 const float x_turn_angle = 0.2f; // 1.5f
@@ -40,7 +45,7 @@ void debug_buttons(void)
 	if (is_key_struck(JO_KEY_START))
 	{
 		debug = !debug;
-		rot.rz = 0.0f;
+		lightcycle.rot.rz = 0.0f;
 	}
 }
 
@@ -70,27 +75,27 @@ void debug_controller(void)
 		angle_increment -= 1.5;
 
 	if (jo_is_pad1_key_pressed(JO_KEY_L))
-		pos.z += 1.0;
+		lightcycle.pos.z += 1.0;
 	else if (jo_is_pad1_key_pressed(JO_KEY_R))
-		pos.z -= 1.0;
+		lightcycle.pos.z -= 1.0;
 
 	// Pitch
 	if (jo_is_pad1_key_pressed(JO_KEY_B))
 	{
 		x_angle_increment += x_turn_angle;
-		rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
+		lightcycle.rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
 	}
-	if (jo_is_pad1_key_pressed(JO_KEY_C) && rot.rx < 1073277126)
+	if (jo_is_pad1_key_pressed(JO_KEY_C) && lightcycle.rot.rx < 1073277126)
 	{
 		x_angle_increment -= x_turn_angle;
-		rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
+		lightcycle.rot.rx = -JO_DEG_TO_RAD(x_angle_increment);
 	}
 
-	rot.rz += JO_DEG_TO_RAD(angle_increment) / 2.0;
+	lightcycle.rot.rz += JO_DEG_TO_RAD(angle_increment) / 2.0;
 	angle_increment = angle_increment * 4.0 / 5.0;
 
-	pos.x -= movement_speed * jo_sin_radf(rot.rz) / 10.0;
-	pos.y -= movement_speed * jo_cos_radf(rot.rz) / 10.0;
+	lightcycle.pos.x -= movement_speed * jo_sin_radf(lightcycle.rot.rz) / 10.0;
+	lightcycle.pos.y -= movement_speed * jo_cos_radf(lightcycle.rot.rz) / 10.0;
 }
 
 void gamepad_input(void)
@@ -155,7 +160,7 @@ void gamepad_input(void)
 	else if (turning_left)
 	{
 		angle_increment = turn_left_target;
-		rot.rz = turn_left_target;
+		lightcycle.rot.rz = turn_left_target;
 		turning_left = false;
 	}
 
@@ -167,7 +172,7 @@ void gamepad_input(void)
 	else if (turning_right)
 	{
 		angle_increment = turn_right_target;
-		rot.rz = turn_right_target;
+		lightcycle.rot.rz = turn_right_target;
 		turning_right = false;
 	}
 
@@ -189,47 +194,47 @@ void gamepad_input(void)
 		turning_right = true;
 	}
 
-	rot.rz = angle_increment;
+	lightcycle.rot.rz = angle_increment;
 
 	// Elevation TEST DEBUG ONLY
 	if (jo_is_pad1_key_pressed(JO_KEY_L))
-		pos.z += 1.0;
+		lightcycle.pos.z += 1.0;
 	else if (jo_is_pad1_key_pressed(JO_KEY_R))
-		pos.z -= 1.0;
+		lightcycle.pos.z -= 1.0;
 	// Elevation Floor boundary
-	if (pos.z > -6.5536)
+	if (lightcycle.pos.z > -6.5536)
 	{
-		pos.z = -6.5536;
+		lightcycle.pos.z = -6.5536;
 	}
 
 	// Boundary and movement
-	if (pos.x > toFIXED(boundary) && boundary_enabled)
+	if (lightcycle.pos.x > toFIXED(boundary) && boundary_enabled)
 	{
-		pos.x = toFIXED(boundary);
+		lightcycle.pos.x = toFIXED(boundary);
 	}
-	else if (pos.x < -toFIXED(0.0015) && boundary_enabled)
+	else if (lightcycle.pos.x < -toFIXED(0.0015) && boundary_enabled)
 	{
-		pos.x = -toFIXED(0.0015);
+		lightcycle.pos.x = -toFIXED(0.0015);
 	}
 	else
 	{
 		// due to inaccuracies, do not use adjust x when going backwards (y axis only)
 		if (compass_index != 2) // East
 		{
-			pos.x -= movement_speed * boost_movement * jo_sin_radf(rot.rz) / 10;
+			lightcycle.pos.x -= movement_speed * boost_movement * jo_sin_radf(lightcycle.rot.rz) / 10;
 		}
 	}
-	if (pos.y > toFIXED(boundary) && boundary_enabled)
+	if (lightcycle.pos.y > toFIXED(boundary) && boundary_enabled)
 	{
-		pos.y = toFIXED(boundary);
+		lightcycle.pos.y = toFIXED(boundary);
 	}
-	else if (pos.y < -toFIXED(0.0015) && boundary_enabled)
+	else if (lightcycle.pos.y < -toFIXED(0.0015) && boundary_enabled)
 	{
-		pos.y = -toFIXED(0.0015);
+		lightcycle.pos.y = -toFIXED(0.0015);
 	}
 	else
 	{
-		pos.y -= movement_speed * boost_movement * jo_cos_radf(rot.rz) / 10;
+		lightcycle.pos.y -= movement_speed * boost_movement * jo_cos_radf(lightcycle.rot.rz) / 10;
 		// os.y -= movement_speed * jo_cos_radf_old(rot.rz) / 10;
 	}
 }

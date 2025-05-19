@@ -31,21 +31,31 @@
 
 #include <jo/jo.h>
 #include "src/input.h"
-#include "src/level.h"
+#include "src/utils/3d.h"
+//#include "src/level.h"
 
+
+typedef struct {
+    jo_pos3Df pos;
+	jo_rot3Df rot;
+} GameObject;
+
+extern GameObject lightcycle;
 extern jo_camera cam;
-extern jo_pos3Df pos;
-extern jo_rot3Df rot;
 extern float turn_angle;
 extern jo_palette image_pal;
 extern jo_vertice cube_vertices[];
 extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
-void initCamera(jo_camera *curCam);
+void initCamera(jo_camera *curCam, GameObject* obj);
+void init_start_player_location(GameObject* obj);
+void render_object(GameObject* obj);
+
 void debug_3d(void);
 void draw_cube(void);
 void draw_hud(void);
+void game_loop(void);
 void draw_3d(void);
 jo_palette *my_tga_palette_handling(void);
 void init_3d_planes(void);

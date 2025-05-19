@@ -32,53 +32,68 @@ jo_camera cam;
 jo_palette image_pal;
 jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(1000, 1000, 128);
 jo_3d_quad cube_quads[6];
-Sint16 draw_distance = 10000;
+Sint16 draw_distance = 500;
 
+jo_pos3Df floorPos = { 0, 0, -35};
+float player_start_pos_x = 0.0;
+float player_start_pos_y = 0.0;
 int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
 
-void initCamera(jo_camera *curCam)
+void initCamera(jo_camera *curCam, GameObject* obj)
 {
-	(*curCam).viewpoint[X] = toFIXED(0.0);
-	(*curCam).viewpoint[Y] = toFIXED(0.0);
-	(*curCam).viewpoint[Z] = toFIXED(5.0); // 5.0
-	(*curCam).z_angle = DEGtoANG(0.0);	   // orientation
-	(*curCam).target[X] = toFIXED(0.0);
-	(*curCam).target[Y] = toFIXED(0.0);
-	(*curCam).target[Z] = toFIXED(0.0);
-	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
-	// slZdspLevel(0);
-	jo_3d_perspective_angle(90); // FOV 90
+	jo_3d_camera_set_viewpoint(curCam, obj->pos.x, obj->pos.y, obj->pos.z);
+	jo_3d_camera_set_target(curCam, obj->rot.rx, obj->rot.ry, obj->rot.rz);
+	jo_3d_camera_set_z_angle(curCam, 0); // orientation
+	jo_3d_perspective_angle(45); // FOV 90
+	jo_3d_display_level(3); // ?
 
-	pos.x = player_start_pos_x;
-	pos.y = player_start_pos_y;
-	pos.z = -35.0;
+	bool window_init = jo_3d_window(0, 0, JO_TV_WIDTH, JO_TV_HEIGHT, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
+	if( window_init == false){
+		jo_core_error("values incorrect for 3d_window");
+		return;
+	}
+}
 
-	rot.rx = JO_DEG_TO_RAD(90.0);
-	rot.ry = JO_DEG_TO_RAD(0.0);
-	rot.rz = JO_DEG_TO_RAD(1.0); // start a good number
+void init_start_player_location(GameObject* obj){
+	obj->pos.x = player_start_pos_x;
+	obj->pos.y = player_start_pos_y;
+	obj->pos.z = 35;
+
+	obj->rot.rx = JO_DEG_TO_RAD(90.0);
+	obj->rot.ry = JO_DEG_TO_RAD(0.0);
+	obj->rot.rz = JO_DEG_TO_RAD(1.0); // start a good number
+}
+
+void render_object(GameObject* obj) {
+    jo_3d_push_matrix();
+    // Apply object's world space transformation
+    jo_3d_translate_matrix(obj->pos.x, obj->pos.y, obj->pos.z);
+    jo_3d_rotate_matrix(obj->rot.rx, obj->rot.ry, obj->rot.rz);
+    // Render the object (e.g., a 3D model)
+    jo_3d_pop_matrix();
 }
 
 void debug_3d(void)
 {
 
-	int degree = 45;
-	float radian = JO_DEG_TO_RAD(degree);
+	//int degree = 45;
+	//float radian = JO_DEG_TO_RAD(degree);
 
-	slPrint("pos.x", slLocate(0, 0));
-	slPrintFX(pos.x, slLocate(5, 0));
-	slPrint("pos.y", slLocate(0, 1));
-	slPrintFX(pos.y, slLocate(5, 1));
-	slPrint("pos.z", slLocate(0, 2));
-	slPrintFX(pos.z, slLocate(5, 2));
+	slPrint("pos.x", slLocate(0, 1));
+	slPrintFX(lightcycle.pos.x, slLocate(5, 1));
+	slPrint("pos.y", slLocate(0, 2));
+	slPrintFX(lightcycle.pos.y, slLocate(5, 2));
+	slPrint("pos.z", slLocate(0, 3));
+	slPrintFX(lightcycle.pos.z, slLocate(5, 3));
 
-	slPrint("rot.rx", slLocate(0, 3));
-	slPrintFX(rot.rx, slLocate(6, 3));
-	slPrint("rot.ry", slLocate(0, 4));
-	slPrintFX(rot.ry, slLocate(6, 4));
-	slPrint("rot.rz", slLocate(0, 5));
-	slPrintFX(rot.rz, slLocate(6, 5));
+	slPrint("rot.rx", slLocate(0, 4));
+	slPrintFX(lightcycle.rot.rx, slLocate(6, 4));
+	slPrint("rot.ry", slLocate(0, 5));
+	slPrintFX(lightcycle.rot.ry, slLocate(6, 5));
+	slPrint("rot.rz", slLocate(0, 6));
+	slPrintFX(lightcycle.rot.rz, slLocate(6, 6));
 
 	// slPrint("degree = 45", slLocate(0,9));
 	// slPrintFX(jo_sin_rad(radian), slLocate(4,10));
@@ -121,15 +136,15 @@ void draw_hud(void)
 	jo_3d_pop_matrix();
 }
 
-void draw_3d(void)
+void game_loop(void)
 {
-	jo_3d_camera_look_at(&cam);
-	// draw_hud();
+	initCamera(&cam, &lightcycle);
+	
 	//  FLOOR
 	jo_3d_push_matrix();
 	{
-		jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-		jo_3d_translate_matrixf(pos.x - 50, pos.y - 5, pos.z);
+		jo_3d_rotate_matrix_rad(0, 0, 0);
+		jo_3d_translate_matrixf(floorPos.x, floorPos.y, floorPos.z);
 		jo_background_3d_plane_a_draw(true);
 	}
 	jo_3d_pop_matrix();
@@ -137,15 +152,42 @@ void draw_3d(void)
 	// SKY
 	jo_3d_push_matrix();
 	{
-		jo_3d_translate_matrix(rot.rz * 100, 110 - 112 * jo_cos_radf(0), 100); // rot.rx
+		jo_3d_translate_matrix(100, 110 - 112 * jo_cos_radf(0), 100); // rot.rx
 		jo_background_3d_plane_b_draw(false);
 	}
 	jo_3d_pop_matrix();
 
-	draw_arena_walls();
+
 	debug_3d();
-	// debug_pad1();
+	// Walls
+	//draw_arena_walls();
 }
+
+// void draw_3d(void)
+// {
+// 	jo_3d_camera_look_at(&cam);
+// 	// draw_hud();
+// 	//  FLOOR
+// 	jo_3d_push_matrix();
+// 	{
+// 		jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
+// 		jo_3d_translate_matrixf(pos.x - 50, pos.y - 5, pos.z);
+// 		jo_background_3d_plane_a_draw(true);
+// 	}
+// 	jo_3d_pop_matrix();
+
+// 	// SKY
+// 	jo_3d_push_matrix();
+// 	{
+// 		jo_3d_translate_matrix(rot.rz * 100, 110 - 112 * jo_cos_radf(0), 100); // rot.rx
+// 		jo_background_3d_plane_b_draw(false);
+// 	}
+// 	jo_3d_pop_matrix();
+
+// 	//draw_arena_walls();
+// 	debug_3d();
+// 	// debug_pad1();
+// }
 
 // //Shoddy attempt at walls with cube
 // void create_cube(void)
@@ -200,17 +242,21 @@ void jo_main(void)
 	jo_set_tga_palette_handling(my_tga_palette_handling);
 
 	load_textures();
-	load_arena_textures();
+	
+	//load_arena_textures();
 
 	init_3d_planes();
-	initCamera(&cam);
+	init_start_player_location(&lightcycle);
+	initCamera(&cam, &lightcycle);
 
-	create_arena_walls();
+	//create_arena_walls();
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
 
-	jo_core_add_callback(gamepad_input);
-	jo_core_add_callback(draw_3d);
+	//jo_core_add_callback(gamepad_input);
+	jo_core_add_callback(game_loop);
+	
+	//jo_core_add_callback(draw_3d);
 
 	jo_core_run();
 }
