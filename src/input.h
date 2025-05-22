@@ -9,6 +9,9 @@ extern jo_rot3Df rot;
 
 void debug_buttons(void);
 void debug_controller(void);
+void gamepad_input3(void);
+void gamepad_input2(void);
 void gamepad_input(void);
+
 
 #endif

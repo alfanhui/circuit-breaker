@@ -12,8 +12,8 @@ const float turn_angle = 1.5f;	 // 1.5f
 const float x_turn_angle = 0.2f; // 1.5f
 const bool boundary_enabled = false;
 const float boundary = 0.020f;
-const int movement_incrementor = 5;
-const int movement_max_level = 70;
+const int movement_incrementor = 1;//5;
+const int movement_max_level = 7;//70;
 const float boost_gauge_decrementer = 2.5f;
 const float boost_gauge_incrementor = 0.5f;
 const float boost_speed_decrementer = 0.2f;
@@ -35,6 +35,14 @@ static float turn_left_target = 0.0f;
 static float turn_right_target = 0.0f;
 static bool turning_left = false;
 static bool turning_right = false;
+
+//
+float speed_forward = 0.0f;     // Current forward/backward speed
+float speed_strafe = 0.0f;      // Current left/right strafe speed
+#define MAX_SPEED 5.0f        // Maximum movement speed
+#define ACCELERATION 0.01f     // Speed increase per frame
+#define DECELERATION 0.15f    // Speed decrease per frame
+#define ROTATION_SPEED 2      // Rotation speed (degrees per frame)
 
 // TEST DEBUG ONLY
 void debug_buttons(void)
@@ -96,6 +104,86 @@ void debug_controller(void)
 
 	lightcycle.pos.x -= movement_speed * jo_sin_radf(lightcycle.rot.rz) / 10.0;
 	lightcycle.pos.y -= movement_speed * jo_cos_radf(lightcycle.rot.rz) / 10.0;
+}
+
+float clamp(float value, float min, float max)
+{
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+
+void gamepad_input3(void){
+	float movement_speed = 0.0f;
+	if (jo_is_pad1_key_pressed(JO_KEY_LEFT)){
+		lightcycle.rot.rz += 1;
+	}
+ 	if (jo_is_pad1_key_pressed(JO_KEY_RIGHT)){
+		lightcycle.rot.rz -= 1;
+	}
+	if (jo_is_pad1_key_pressed(JO_KEY_UP)){
+		movement_speed -= 0.1f;
+	}
+	else if (jo_is_pad1_key_pressed(JO_KEY_DOWN)){
+		movement_speed += 0.1f;
+	}
+
+	lightcycle.pos.x -= movement_speed * jo_sin_radf(lightcycle.rot.rz) / 10.0;
+	lightcycle.pos.y -= movement_speed * jo_cos_radf(lightcycle.rot.rz) / 10.0;
+}
+
+void gamepad_input2(void){
+	 // Handle rotation (yaw)
+	if (jo_is_pad1_key_pressed(JO_KEY_LEFT))
+		lightcycle.rot.ry += ROTATION_SPEED;
+ 	if (jo_is_pad1_key_pressed(JO_KEY_RIGHT))
+ 		lightcycle.rot.ry -= ROTATION_SPEED;
+
+ // Normalize angle (0–360 degrees)
+ if (lightcycle.rot.ry >= 360) lightcycle.rot.ry -= 360;
+ if (lightcycle.rot.ry < 0) lightcycle.rot.ry += 360;
+
+ // Handle acceleration for forward/backward
+ if (jo_is_pad1_key_pressed(JO_KEY_UP))
+	 speed_forward += ACCELERATION; // Accelerate forward
+ else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
+	 speed_forward -= ACCELERATION; // Accelerate backward
+ else
+ {
+	 // Decelerate forward/backward
+	 if (speed_forward > 0)
+		 speed_forward = JO_MAX(0, speed_forward - DECELERATION);
+	 else if (speed_forward < 0)
+		 speed_forward = JO_MIN(0, speed_forward + DECELERATION);
+ }
+
+ // Handle acceleration for strafing
+ if (jo_is_pad1_key_pressed(JO_KEY_L))
+	 speed_strafe -= ACCELERATION; // Accelerate left
+ else if (jo_is_pad1_key_pressed(JO_KEY_R))
+	 speed_strafe += ACCELERATION; // Accelerate right
+ else
+ {
+	 // Decelerate strafing
+	 if (speed_strafe > 0)
+		 speed_strafe = JO_MIN(0, speed_strafe - DECELERATION);
+	 else if (speed_strafe < 0)
+		 speed_strafe = JO_MAX(0, speed_strafe + DECELERATION);
+ }
+
+ // Clamp speeds to max
+ speed_forward = clamp(speed_forward, -MAX_SPEED, MAX_SPEED);
+ speed_strafe = clamp(speed_strafe, -MAX_SPEED, MAX_SPEED);
+
+ // Calculate movement vector using trigonometry (Jo Engine uses fixed-point)
+ int angle_rad = toFIXED(lightcycle.rot.ry); // Convert degrees to Jo Engine's fixed-point angle
+ float cos_val = jo_cos(angle_rad) / 4096.0f; // Cosine for forward/backward
+ float sin_val = jo_sin(angle_rad) / 4096.0f; // Sine for strafing
+
+ // Update player position
+ lightcycle.pos.x += speed_forward * cos_val + speed_strafe * sin_val; // Forward + strafe (X)
+ lightcycle.pos.y += speed_forward * -sin_val + speed_strafe * cos_val; // Forward + strafe (Z)
+
 }
 
 void gamepad_input(void)

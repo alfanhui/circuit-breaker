@@ -48,11 +48,14 @@ extern jo_vertice cube_vertices[];
 extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
-void initCamera(jo_camera *curCam, GameObject* obj);
+void initCamera();
+void updateCamera(GameObject* obj);
 void init_start_player_location(GameObject* obj);
 void render_object(GameObject* obj);
 
-void debug_3d(void);
+void debug_3d(jo_pos3D *pos, jo_rot3D *rot);
+void debug_3df(jo_pos3Df *pos, jo_rot3Df *rot);
+
 void draw_cube(void);
 void draw_hud(void);
 void game_loop(void);
