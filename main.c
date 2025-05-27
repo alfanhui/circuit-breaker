@@ -42,7 +42,8 @@ int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
 
-float rotate = 0.0f;
+int increment = 0;
+float incrementf = 0.0f;
 
 void initCamera(){
 
@@ -154,18 +155,28 @@ void draw_hud(void)
 
 void game_loop(void)
 {
+	increment -= 1;
+	incrementf += 0.1f;
 	// Attach camera to new object location
 	//updateCamera(&lightcycle);
-	//jo_3d_camera_set_viewpoint(&cam, 0, 0, 0);
-    //jo_3d_camera_set_target(&cam, 0, 0, 0);
-    //jo_3d_camera_set_z_angle(&cam, 0);
+	/*
+	* x moves x position
+	*/
+	jo_3d_camera_set_viewpoint(&cam, 0, 0, 0);
+
+	/*
+	* Rx yaw left- right but only on 180 degress
+	* Ry pitches top-down but only on 180 degress
+	* Rz... not really doing anything
+	*/ 
+    jo_3d_camera_set_target(&cam, 0, 10, toFIXED(320));
+    jo_3d_camera_set_z_angle(&cam, DEGtoANG(0));
 	// Apply camera transformation
 	jo_3d_camera_look_at(&cam);
 
 	//  FLOOR
 	jo_3d_push_matrix();
 	{
-		rotate+= 0.001f;
 		jo_3d_rotate_matrix_rad(JO_DEG_TO_RAD(90), 0, 0);
 		jo_3d_translate_matrixf(floorPos.x, floorPos.y, floorPos.z - 100);
 		jo_background_3d_plane_a_draw(true);
@@ -173,13 +184,13 @@ void game_loop(void)
 	jo_3d_pop_matrix();
 
 	// SKY
-	jo_3d_push_matrix();
-	{
-		jo_3d_rotate_matrix_rad(0,0, 0);
-		jo_3d_translate_matrix(floorPos.x, floorPos.y, floorPos.z + 50); // rot.rx
-		jo_background_3d_plane_b_draw(true);
-	}
-	jo_3d_pop_matrix();
+	// jo_3d_push_matrix();
+	// {
+	// 	jo_3d_rotate_matrix_rad(0, 0, 0);
+	// 	jo_3d_translate_matrix(floorPos.x, floorPos.y, floorPos.z); // rot.rx
+	// 	jo_background_3d_plane_b_draw(true);
+	// }
+	// jo_3d_pop_matrix();
 
 	debug_3d(&cam.viewpoint_pos, &zero_rot);
 	//debug_3df(&lightcycle.pos, &lightcycle.rot);
