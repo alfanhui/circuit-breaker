@@ -32,20 +32,9 @@
 #include <jo/jo.h>
 #include "src/input.h"
 #include "src/level.h"
-#include "src/trails.h"
+#include "src/view.h"
+#include "src/trail_render.h"
 
-extern jo_camera cam;
-extern jo_pos3D pos;
-extern jo_rot3Df rot;
-extern bool first_person;
-
-extern jo_pos3D true_position;
-extern jo_pos3D position_1st_person;
-extern jo_rot3Df rotation_1st_person;
-extern jo_pos3D position_3rd_person;
-extern jo_rot3Df rotation_3rd_person;
-
-extern float turn_angle;
 extern jo_palette image_pal;
 extern Sint16 draw_distance;
 

@@ -14,9 +14,12 @@ JO_COMPILE_USING_SGL=1
 SRCS=main.c \
 	src/utils/3d.c \
 	src/utils/low_level_input.c \
+	src/game/cycle.c \
+	src/game/trail.c \
+	src/view.c \
 	src/input.c \
 	src/level.c \
-	src/trails.c
+	src/trail_render.c
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler
 include $(COMPILER_DIR)/COMMON/jo_engine_makefile
