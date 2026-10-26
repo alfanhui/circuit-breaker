@@ -8,13 +8,35 @@ cycle player1;
 trail player1_trail;
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 
-static const char compass[4] = {'N', 'E', 'S', 'W'};
+// Debug: fills the trail with a full-length serpentine across the arena, the worst case for drawing
+static void stress_fill_trail(void)
+{
+	world_point p;
+	const short edge = WORLD_PLAYER_LIMIT - 50;
+	const short row_spacing = (2 * edge) / (TRAIL_MAX_CORNERS / 2);
+
+	p.x = -edge;
+	p.y = -edge;
+	trail_reset(&player1_trail, p);
+	for (int i = 1; i < TRAIL_MAX_CORNERS; ++i)
+	{
+		if (i & 1)
+			p.x = -p.x;
+		else
+			p.y += row_spacing;
+		trail_set_head(&player1_trail, p);
+		trail_add_corner(&player1_trail);
+	}
+}
 
 void init_players(void)
 {
 	cycle_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	trail_reset(&player1_trail, player1.position);
 	view_init(&player1);
+#ifdef PERF_STRESS_TRAIL
+	stress_fill_trail();
+#endif
 }
 
 void debug_pad1(void)
@@ -55,9 +77,6 @@ static void debug_camera_input(void)
 
 void gamepad_input(void)
 {
-	jo_printf(20, 0, "Compass: %c", compass[player1.heading]);
-	jo_printf(20, 1, "Boost: %d  ", player1.gauge);
-
 	if (is_key_struck(DIGI_START))
 	{
 		debug_camera = !debug_camera;
@@ -96,6 +115,9 @@ void gamepad_input(void)
 	// A: clear the wall and start a fresh one here
 	if (is_key_struck(DIGI_A))
 		trail_reset(&player1_trail, player1.position);
+	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
+	if (is_key_struck(DIGI_X))
+		stress_fill_trail();
 
 	view_follow(&player1);
 }

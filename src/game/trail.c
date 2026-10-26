@@ -14,6 +14,7 @@ void trail_reset(trail *t, world_point start)
 {
 	t->corners[0] = start;
 	t->corner_count = 1;
+	t->version++;
 	t->head = start;
 }
 
@@ -37,6 +38,7 @@ void trail_add_corner(trail *t)
 		t->corner_count--;
 	}
 	t->corners[t->corner_count++] = t->head;
+	t->version++;
 }
 
 int trail_segment_count(const trail *t)
@@ -61,6 +63,18 @@ static void pull_back(world_point from, world_point *to, int gap)
 		to->y = (short)(to->y - ((dy > 0) ? gap : -gap));
 }
 
+int trail_get_drawn_head(const trail *t, int head_gap, world_point *head)
+{
+	world_point last;
+
+	if (!live_segment_exists(t))
+		return 0;
+	last = t->corners[t->corner_count - 1];
+	*head = t->head;
+	pull_back(last, head, head_gap);
+	return !points_equal(last, *head);
+}
+
 int trail_get_segment(const trail *t, int index, int head_gap, world_point *from, world_point *to)
 {
 	if (index < 0 || index >= trail_segment_count(t))
@@ -72,8 +86,5 @@ int trail_get_segment(const trail *t, int index, int head_gap, world_point *from
 		*to = t->corners[index + 1];
 		return 1;
 	}
-
-	*to = t->head;
-	pull_back(*from, to, head_gap);
-	return !points_equal(*from, *to);
+	return trail_get_drawn_head(t, head_gap, to);
 }

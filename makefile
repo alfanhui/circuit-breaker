@@ -14,6 +14,8 @@ JO_COMPILE_USING_SGL=1
 SRCS=main.c \
 	src/utils/3d.c \
 	src/utils/low_level_input.c \
+	src/utils/perf.c \
+	src/utils/static_mesh.c \
 	src/game/cycle.c \
 	src/game/trail.c \
 	src/view.c \

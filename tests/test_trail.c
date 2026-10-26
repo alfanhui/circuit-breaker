@@ -159,8 +159,70 @@ static void full_trail_drops_oldest_corner(void)
 	CHECK_EQ(5000, to.x);
 }
 
+static void version_changes_only_when_corners_change(void)
+{
+	trail t;
+	unsigned short version;
+
+	trail_reset(&t, pt(0, 0));
+	version = t.version;
+	trail_set_head(&t, pt(0, -40));
+	CHECK_EQ(version, t.version);
+
+	trail_add_corner(&t);
+	CHECK(t.version != version);
+	version = t.version;
+
+	trail_add_corner(&t); // head has not moved: ignored
+	CHECK_EQ(version, t.version);
+
+	trail_reset(&t, pt(0, 0));
+	CHECK(t.version != version);
+}
+
+static void version_changes_when_full_trail_drops_a_corner(void)
+{
+	trail t;
+	unsigned short version;
+	int i;
+
+	trail_reset(&t, pt(0, 0));
+	for (i = 1; i < TRAIL_MAX_CORNERS; ++i)
+	{
+		trail_set_head(&t, pt((short)(i * 10), (short)((i & 1) * 10)));
+		trail_add_corner(&t);
+	}
+	version = t.version;
+	trail_set_head(&t, pt(5000, 0));
+	trail_add_corner(&t);
+	CHECK_EQ(TRAIL_MAX_CORNERS, t.corner_count);
+	CHECK(t.version != version);
+}
+
+static void drawn_head_matches_live_segment_end(void)
+{
+	trail t;
+	world_point from, to, head;
+
+	trail_reset(&t, pt(0, 0));
+	CHECK(!trail_get_drawn_head(&t, 0, &head));
+
+	trail_set_head(&t, pt(0, -100));
+	CHECK(trail_get_drawn_head(&t, 25, &head));
+	CHECK(trail_get_segment(&t, 0, 25, &from, &to));
+	CHECK_EQ(to.x, head.x);
+	CHECK_EQ(to.y, head.y);
+	CHECK_EQ(-75, head.y);
+
+	trail_set_head(&t, pt(0, -20));
+	CHECK(!trail_get_drawn_head(&t, 25, &head));
+}
+
 void run_trail_tests(void)
 {
+	RUN(version_changes_only_when_corners_change);
+	RUN(version_changes_when_full_trail_drops_a_corner);
+	RUN(drawn_head_matches_live_segment_end);
 	RUN(reset_starts_with_no_segments);
 	RUN(live_segment_grows_from_last_corner_to_head);
 	RUN(turn_pins_corner_and_starts_new_segment);

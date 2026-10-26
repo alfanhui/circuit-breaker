@@ -34,6 +34,8 @@
 #include "src/level.h"
 #include "src/view.h"
 #include "src/trail_render.h"
+#include "src/utils/perf.h"
+#include "src/utils/static_mesh.h"
 
 extern jo_palette image_pal;
 extern Sint16 draw_distance;

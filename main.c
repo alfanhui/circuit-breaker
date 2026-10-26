@@ -42,28 +42,14 @@ int plane1_texture_id = 0;
 
 bool enable_trails = true;
 
-static int frame_count = 0;		   // Frames drawn since last_time
-static unsigned int last_time = 0; // Last time FPS was calculated (ms)
-static int fps = 0;
-
 static trail_mesh player1_trail_mesh;
 
 //Third person
-jo_3d_quad cube_quads[6];
-jo_vertice cube_vertices[] = JO_3D_CUBE_CUSTOM_VERTICES(PLAYER_HALF, PLAYER_HALF, PLAYER_HALF);
-
-// Called once per drawn frame, so slowdown shows up (vblank always runs at 50/60)
-void update_fps(void)
-{
-	unsigned int current_time = jo_get_ticks();
-	frame_count++;
-	if (current_time - last_time >= 1000)
-	{
-		fps = frame_count;
-		frame_count = 0;
-		last_time = current_time;
-	}
-}
+// Cycle: one 8 point mesh drawn with a single slPutPolygon
+static POINT cube_points[8];
+static POLYGON cube_polygons[6];
+static ATTR cube_attributes[6];
+static static_mesh cube;
 
 void initCamera(jo_camera *curCam)
 {
@@ -78,10 +64,20 @@ void initCamera(jo_camera *curCam)
 	slZdspLevel(0);
 }
 
+// The text layer keeps its contents, and jo_printf formatting is costly, so refresh 5 times a second
+#define DEBUG_TEXT_INTERVAL 10
+
 void debug_3d(void)
 {
-	update_fps();
+	static const char compass[4] = {'N', 'E', 'S', 'W'};
+	static int frames_until_refresh = 0;
 
+	if (--frames_until_refresh > 0)
+		return;
+	frames_until_refresh = DEBUG_TEXT_INTERVAL;
+
+	jo_printf(20, 0, "Compass: %c", compass[player1.heading]);
+	jo_printf(20, 1, "Boost: %d  ", player1.gauge);
 	jo_printf(0, 0, "x %d    ", player1.position.x);
 	jo_printf(0, 1, "y %d    ", player1.position.y);
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
@@ -92,7 +88,7 @@ void debug_3d(void)
 	jo_printf(0, 7, "polygons %d   ", jo_3d_get_polygon_count());
 	jo_printf(0, 8, "disp_quads %d   ", jo_3d_get_displayed_polygon_count());
 	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
-	jo_printf(0, 10, "fps %d  ", fps);
+	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
 }
 
 void draw_hud(void)
@@ -141,13 +137,20 @@ void draw_3d(void)
 
 	debug_3d();
 	// debug_pad1();
+	perf_frame_end(); // includes the debug text
 }
 
 void load_player_model(void)
 {
-	jo_3d_create_cube(cube_quads, cube_vertices);
+	jo_vertice faces[24] = JO_3D_CUBE_CUSTOM_VERTICES(PLAYER_HALF, PLAYER_HALF, PLAYER_HALF);
+
+	static_mesh_init(&cube, cube_points, 8, cube_polygons, cube_attributes, 6);
 	for (int i = 0; i < 6; ++i)
-		jo_3d_set_texture(&cube_quads[i], plane1_texture_id);
+	{
+		int polygon = static_mesh_add_quad(&cube, &faces[i * 4]);
+		if (polygon >= 0)
+			jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
+	}
 }
 
 void draw_player(void)
@@ -157,8 +160,7 @@ void draw_player(void)
 	jo_3d_push_matrix();
 	{
 		jo_3d_translate_matrix(player1.position.x, player1.position.y, PLAYER_HALF);
-		for (int i = 0; i < 6; ++i)
-			jo_3d_draw(&cube_quads[i]);
+		jo_3d_mesh_draw(&cube.mesh);
 	}
 	jo_3d_pop_matrix();
 }
@@ -219,6 +221,8 @@ void jo_main(void)
 
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
+	jo_core_add_vblank_callback(perf_vblank);
+	jo_core_add_callback(perf_frame_start);
 	jo_core_add_callback(gamepad_input);
 	jo_core_add_callback(draw_3d);
 

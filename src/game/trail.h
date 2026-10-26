@@ -18,6 +18,7 @@ typedef struct
 {
 	world_point corners[TRAIL_MAX_CORNERS]; // corners[0] is the oldest end of the wall
 	unsigned short corner_count;
+	unsigned short version; // changes whenever the corners change, so renderers can cache them
 	world_point head;
 } trail;
 
@@ -36,5 +37,9 @@ int trail_segment_count(const trail *t);
 // Gets segment index (0 = oldest). The live segment is shortened by head_gap so the wall
 // can start behind the cycle. Returns 0 when the index is out of range or the segment is empty.
 int trail_get_segment(const trail *t, int index, int head_gap, world_point *from, world_point *to);
+
+// Gets the end of the live segment shortened by head_gap. Returns 0 when there is no live
+// segment to draw (no length, or shorter than head_gap).
+int trail_get_drawn_head(const trail *t, int head_gap, world_point *head);
 
 #endif

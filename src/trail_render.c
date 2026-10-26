@@ -5,20 +5,20 @@
 void trail_mesh_init(trail_mesh *m, jo_color color)
 {
 	m->mesh.data.pntbl = m->points;
-	m->mesh.data.nbPoint = TRAIL_MAX_SEGMENTS * 4;
 	m->mesh.data.pltbl = m->polygons;
-	m->mesh.data.nbPolygon = TRAIL_MAX_SEGMENTS;
+	m->mesh.data.nbPolygon = TRAIL_MAX_SEGMENTS; // for jo's index check while colouring
 	m->mesh.data.attbl = m->attributes;
 
+	// Segment i runs from corner i to corner i + 1 (the head counts as the corner after the last)
 	for (int i = 0; i < TRAIL_MAX_SEGMENTS; ++i)
 	{
 		m->polygons[i].norm[X] = JO_FIXED_0;
 		m->polygons[i].norm[Y] = JO_FIXED_1;
 		m->polygons[i].norm[Z] = JO_FIXED_0;
-		m->polygons[i].Vertices[0] = i * 4;
-		m->polygons[i].Vertices[1] = i * 4 + 1;
-		m->polygons[i].Vertices[2] = i * 4 + 2;
-		m->polygons[i].Vertices[3] = i * 4 + 3;
+		m->polygons[i].Vertices[0] = i * 2;			  // from, bottom
+		m->polygons[i].Vertices[1] = i * 2 + 1;		  // from, top
+		m->polygons[i].Vertices[2] = (i + 1) * 2 + 1; // to, top
+		m->polygons[i].Vertices[3] = (i + 1) * 2;	  // to, bottom
 
 		JO_ZERO(m->attributes[i].sort);
 		JO_ZERO(m->attributes[i].atrb);
@@ -28,37 +28,49 @@ void trail_mesh_init(trail_mesh *m, jo_color color)
 	}
 	m->mesh.data.nbPoint = 0;
 	m->mesh.data.nbPolygon = 0;
+	m->built = false;
 }
 
-static void set_point(POINT p, int x, int y, int z)
+static void set_column(trail_mesh *m, int index, world_point p)
 {
-	p[X] = jo_int2fixed(x);
-	p[Y] = jo_int2fixed(y);
-	p[Z] = jo_int2fixed(z);
+	FIXED x = jo_int2fixed(p.x);
+	FIXED y = jo_int2fixed(p.y);
+
+	m->points[index * 2][X] = x;
+	m->points[index * 2][Y] = y;
+	m->points[index * 2][Z] = JO_FIXED_0;
+	m->points[index * 2 + 1][X] = x;
+	m->points[index * 2 + 1][Y] = y;
+	m->points[index * 2 + 1][Z] = jo_int2fixed(TRAIL_HEIGHT);
 }
 
 void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap)
 {
-	world_point from;
-	world_point to;
-	int count = 0;
-	int segments = trail_segment_count(t);
+	world_point head;
+	int corners = t->corner_count;
+	int segments = corners > 0 ? corners - 1 : 0;
 
-	for (int i = 0; i < segments; ++i)
+	if (!m->built || m->built_version != t->version)
 	{
-		if (!trail_get_segment(t, i, head_gap, &from, &to))
-			continue;
-		POINT *quad = m->points + count * 4;
-		set_point(quad[0], from.x, from.y, 0);
-		set_point(quad[1], from.x, from.y, TRAIL_HEIGHT);
-		set_point(quad[2], to.x, to.y, TRAIL_HEIGHT);
-		set_point(quad[3], to.x, to.y, 0);
-		++count;
+		for (int i = 0; i < corners; ++i)
+			set_column(m, i, t->corners[i]);
+		m->built_version = t->version;
+		m->built = true;
 	}
 
-	if (count == 0)
+	if (trail_get_drawn_head(t, head_gap, &head))
+	{
+		set_column(m, corners, head);
+		++segments;
+		m->mesh.data.nbPoint = (corners + 1) * 2;
+	}
+	else
+	{
+		m->mesh.data.nbPoint = corners * 2;
+	}
+
+	if (segments == 0)
 		return;
-	m->mesh.data.nbPoint = count * 4;
-	m->mesh.data.nbPolygon = count;
+	m->mesh.data.nbPolygon = segments;
 	jo_3d_mesh_draw(&m->mesh);
 }
