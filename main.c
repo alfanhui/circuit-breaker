@@ -202,8 +202,28 @@ void load_textures(void)
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
 }
 
+#ifdef SIMULATE_DIRTY_RAM
+// Emulators power on with zeroed RAM; real hardware (and SAROO's menu) leaves old data behind.
+// Fill the part of BSS that jo's startup fails to clear with junk, to reproduce that here.
+extern unsigned char _bstart;
+extern unsigned char _bend;
+
+static void simulate_dirty_ram(void)
+{
+	unsigned char *p = &_bstart + (&_bend - &_bstart) / 4; // jo's main() only clears up to here
+	while (p < &_bend)
+		*p++ = 0xA5;
+#ifdef SIMULATE_FIXED_CLEAR
+	jo_memset(&_bstart, 0, &_bend - &_bstart); // byte count: what main() should have done
+#endif
+}
+#endif
+
 void jo_main(void)
 {
+#ifdef SIMULATE_DIRTY_RAM
+	simulate_dirty_ram();
+#endif
 	jo_core_init(JO_COLOR_Black);
 	jo_set_tga_palette_handling(my_tga_palette_handling);
 

@@ -63,3 +63,4 @@ dkms.conf
 !objdump.map
 # Host unit test output
 tests/build/
+game.raw

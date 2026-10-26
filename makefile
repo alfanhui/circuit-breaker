@@ -9,7 +9,8 @@ JO_PSEUDO_SATURN_KAI_SUPPORT = 1
 JO_COMPILE_WITH_DUAL_CPU_MODULE = 0
 JO_DEBUG = 1
 JO_FRAMERATE = 1
-JO_NTSC = 0
+# 60Hz NTSC output: the target console is a Japanese Saturn (0 = 50Hz PAL)
+JO_NTSC = 1
 JO_COMPILE_USING_SGL=1
 SRCS=main.c \
 	src/utils/3d.c \
