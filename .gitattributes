@@ -1,0 +1,4 @@
+# Files run inside the Linux E2E container must keep LF line endings on every OS checkout
+*.sh text eol=lf
+*.steps text eol=lf
+tests/e2e/Dockerfile text eol=lf

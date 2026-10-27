@@ -28,7 +28,7 @@ mednafen -sound 0 -video.driver softfb -video.fs 0 \
 	/game/game.cue >/out/mednafen.log 2>&1 &
 
 # SDL only reads the keyboard of the focused window
-window=$(timeout 20 xdotool search --sync --class mednafen | head -1) # the title is the disc name
+window=$(timeout 20 xdotool search --sync --onlyvisible --class mednafen | head -1) # the title is the disc name
 [ -n "$window" ] || { echo "Mednafen window not found" >&2; exit 1; }
 xdotool windowfocus "$window"
 
