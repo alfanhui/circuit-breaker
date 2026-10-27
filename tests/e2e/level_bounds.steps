@@ -1,0 +1,21 @@
+# alfanhui/circuit-breaker#6: centred start, boundary toggle, debug camera Z limits.
+# The BIOS intro and Sega licence screen take ~13 s; the game starts moving straight away
+wait 13.5
+shot 01_start
+# Cruise north (-y) from the centre: the boundary stops it at y -896
+wait 4
+shot 02_stopped_at_edge
+# Y: boundary off, the cycle carries on through the wall
+press y
+wait 1
+shot 03_unbounded
+# Y again: snaps back to the edge
+press y
+wait 0.5
+shot 04_rebounded
+# Debug camera: R climbs until the ceiling (view z -4000), L drops to the floor (view z 0)
+press start
+hold r 15
+shot 05_ceiling
+hold l 18
+shot 06_floor

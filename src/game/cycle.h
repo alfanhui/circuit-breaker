@@ -21,6 +21,7 @@ typedef struct
 	unsigned char heading;
 	unsigned char speed; // cruise speed, ramps up from a standing start
 	unsigned char boost;
+	unsigned char bounded; // 1: stopped at the arena edge, 0: free to leave (debug). Fills a padding byte, so free
 	short gauge;
 } cycle;
 
@@ -28,7 +29,8 @@ void cycle_init(cycle *c, short x, short y, unsigned char heading);
 void cycle_turn_left(cycle *c);
 void cycle_turn_right(cycle *c);
 
-// Advances one frame. Returns 1 when the arena boundary stopped the cycle.
+// Advances one frame. Returns 1 when a limit stopped the cycle: the arena edge when bounded,
+// otherwise WORLD_COORD_LIMIT.
 int cycle_update(cycle *c, int boosting);
 
 #endif

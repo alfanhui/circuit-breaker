@@ -107,6 +107,47 @@ static void stops_at_arena_limit(void)
 	CHECK_EQ(-WORLD_PLAYER_LIMIT, c.position.x);
 }
 
+static void bounded_by_default(void)
+{
+	cycle c;
+	cycle_init(&c, 0, 0, HEADING_NORTH);
+	CHECK_EQ(1, c.bounded);
+}
+
+static void unbounded_cycle_leaves_the_arena(void)
+{
+	cycle c;
+	cycle_init(&c, 0, WORLD_PLAYER_LIMIT - 3, HEADING_SOUTH);
+	c.bounded = 0;
+	run_frames(&c, 10, 0);
+	CHECK(c.position.y > WORLD_PLAYER_LIMIT);
+	CHECK_EQ(0, cycle_update(&c, 0)); // nothing stopped it
+}
+
+static void unbounded_cycle_stops_before_short_overflow(void)
+{
+	cycle c;
+	cycle_init(&c, WORLD_COORD_LIMIT - 3, 0, HEADING_WEST); // west is +x
+	c.bounded = 0;
+	run_frames(&c, 10, 1);
+	CHECK_EQ(WORLD_COORD_LIMIT, c.position.x); // not wrapped round to a negative
+	CHECK_EQ(1, cycle_update(&c, 0));
+}
+
+static void rebounding_snaps_back_to_the_edge(void)
+{
+	cycle c;
+	cycle_init(&c, 0, WORLD_PLAYER_LIMIT + 500, HEADING_SOUTH); // outside, as if the boundary was off
+	cycle_update(&c, 0);
+	CHECK_EQ(WORLD_PLAYER_LIMIT, c.position.y);
+}
+
+static void bounded_flag_costs_no_memory(void)
+{
+	// position (4) + heading, speed, boost, bounded (4) + gauge (2): the flag took a padding byte
+	CHECK_EQ(10, sizeof(cycle));
+}
+
 // Integration: drive a cycle with turns and check the wall follows it exactly.
 static void trail_follows_cycle_through_turns(void)
 {
@@ -155,5 +196,10 @@ void run_cycle_tests(void)
 	RUN(boost_stops_when_gauge_empty);
 	RUN(boost_decays_and_gauge_refills_after_release);
 	RUN(stops_at_arena_limit);
+	RUN(bounded_by_default);
+	RUN(unbounded_cycle_leaves_the_arena);
+	RUN(unbounded_cycle_stops_before_short_overflow);
+	RUN(rebounding_snaps_back_to_the_edge);
+	RUN(bounded_flag_costs_no_memory);
 	RUN(trail_follows_cycle_through_turns);
 }

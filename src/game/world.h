@@ -14,6 +14,15 @@
 #define WORLD_ARENA_HALF (WORLD_WALL_SEGMENTS * WORLD_WALL_SEGMENT_HALF) // 992
 #define WORLD_PLAYER_LIMIT (WORLD_ARENA_HALF - 96)						  // keeps the 1st person camera clear of the walls
 
+// With the boundary off a cycle can leave the arena, but positions are shorts (max 32767):
+// going past that would wrap to -32768 and teleport across the map, so stop well before it.
+#define WORLD_COORD_LIMIT 30000
+
+// Vertical limits, as heights above the floor (+z up). Only cameras move vertically:
+// the cycle always sits on the floor.
+#define WORLD_FLOOR_Z 0
+#define WORLD_CEILING_Z 4000
+
 #define HEADING_NORTH 0
 #define HEADING_EAST 1
 #define HEADING_SOUTH 2

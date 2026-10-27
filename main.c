@@ -83,6 +83,7 @@ void debug_3d(void)
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
 	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1_trail));
 	jo_printf(0, 4, "%s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"));
+	jo_printf(0, 5, "bounds %s ", player1.bounded ? "ON" : "OFF");
 
 	//FPS and 3D counts
 	jo_printf(0, 7, "polygons %d   ", jo_3d_get_polygon_count());

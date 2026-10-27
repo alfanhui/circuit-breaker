@@ -7,6 +7,7 @@ void cycle_init(cycle *c, short x, short y, unsigned char heading)
 	c->heading = heading & 3;
 	c->speed = 1;
 	c->boost = 0;
+	c->bounded = 1;
 	c->gauge = CYCLE_GAUGE_MAX;
 }
 
@@ -20,16 +21,17 @@ void cycle_turn_right(cycle *c)
 	c->heading = (c->heading + 1) & 3;
 }
 
-static int clamp_to_arena(short *value)
+// Keeps one coordinate within -limit..limit. Returns 1 if it had to be moved back.
+static int clamp_coordinate(short *value, short limit)
 {
-	if (*value > WORLD_PLAYER_LIMIT)
+	if (*value > limit)
 	{
-		*value = WORLD_PLAYER_LIMIT;
+		*value = limit;
 		return 1;
 	}
-	if (*value < -WORLD_PLAYER_LIMIT)
+	if (*value < -limit)
 	{
-		*value = -WORLD_PLAYER_LIMIT;
+		*value = -limit;
 		return 1;
 	}
 	return 0;
@@ -39,6 +41,7 @@ int cycle_update(cycle *c, int boosting)
 {
 	int distance;
 	int clamped;
+	short limit;
 
 	if (c->speed < CYCLE_BASE_SPEED)
 		c->speed++;
@@ -59,7 +62,9 @@ int cycle_update(cycle *c, int boosting)
 	c->position.x = (short)(c->position.x + WORLD_HEADING_DX(c->heading) * distance);
 	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * distance);
 
-	clamped = clamp_to_arena(&c->position.x);
-	clamped |= clamp_to_arena(&c->position.y);
+	// The clamp happens in the same frame as the move, so the cycle never draws past the edge
+	limit = c->bounded ? WORLD_PLAYER_LIMIT : WORLD_COORD_LIMIT;
+	clamped = clamp_coordinate(&c->position.x, limit);
+	clamped |= clamp_coordinate(&c->position.y, limit);
 	return clamped;
 }

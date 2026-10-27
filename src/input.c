@@ -1,7 +1,7 @@
 #include "input.h"
 
-#define PLAYER1_START_X 0
-#define PLAYER1_START_Y 700
+#define PLAYER1_START_X 0 // the arena centre is the world origin
+#define PLAYER1_START_Y 0
 #define DEBUG_CAMERA_SPEED 8
 
 cycle player1;
@@ -60,13 +60,15 @@ static void debug_camera_input(void)
 	else if (jo_is_pad1_key_pressed(JO_KEY_RIGHT))
 		view_x -= DEBUG_CAMERA_SPEED;
 
-	// Elevation
+	// Elevation. view_z moves the world, so the camera's height is -view_z
 	if (jo_is_pad1_key_pressed(JO_KEY_L))
 		view_z += 4;
-	else if (jo_is_pad1_key_pressed(JO_KEY_R) && view_z > -4000)
+	else if (jo_is_pad1_key_pressed(JO_KEY_R))
 		view_z -= 4;
-	if (view_z > 0)
-		view_z = 0;
+	if (view_z > -WORLD_FLOOR_Z) // not through the floor
+		view_z = -WORLD_FLOOR_Z;
+	if (view_z < -WORLD_CEILING_Z) // not too high
+		view_z = -WORLD_CEILING_Z;
 
 	// Pitch
 	if (jo_is_pad1_key_pressed(JO_KEY_B))
@@ -118,6 +120,9 @@ void gamepad_input(void)
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (is_key_struck(DIGI_X))
 		stress_fill_trail();
+	// Y: arena boundary on/off. Turning it back on outside the arena snaps the cycle to the edge next frame
+	if (is_key_struck(DIGI_Y))
+		player1.bounded = !player1.bounded;
 
 	view_follow(&player1);
 }
