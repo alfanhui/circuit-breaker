@@ -5,7 +5,7 @@ SETLOCAL
 CD /D "%~dp0"
 IF NOT EXIST build MKDIR build
 
-SET SOURCES=test_main.c test_trail.c test_cycle.c ..\src\game\trail.c ..\src\game\cycle.c
+SET SOURCES=test_main.c test_trail.c test_cycle.c test_press_latch.c ..\src\game\trail.c ..\src\game\cycle.c ..\src\game\press_latch.c
 
 WHERE gcc >NUL 2>&1
 IF %ERRORLEVEL%==0 (

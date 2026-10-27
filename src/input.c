@@ -79,7 +79,11 @@ static void debug_camera_input(void)
 
 void gamepad_input(void)
 {
-	if (is_key_struck(DIGI_START))
+	// Every press since the last game frame, even if this frame spanned several vblanks.
+	// Taken first and on every frame, so presses can't pile up while the debug camera is on.
+	const unsigned short struck = press_latch_take(&pad1_presses);
+
+	if (struck & DIGI_START)
 	{
 		debug_camera = !debug_camera;
 		if (!debug_camera)
@@ -94,17 +98,17 @@ void gamepad_input(void)
 	if (!jo_is_pad1_available())
 		return;
 
-	if (is_key_struck(DIGI_DOWN))
+	if (struck & DIGI_DOWN)
 		view_toggle(&player1);
 
 	// Turns are instant for the cycle and the wall; only the 1st person camera eases round
-	if (is_key_struck(DIGI_LEFT))
+	if (struck & DIGI_LEFT)
 	{
 		trail_add_corner(&player1_trail);
 		cycle_turn_left(&player1);
 		view_turn_left();
 	}
-	else if (is_key_struck(DIGI_RIGHT))
+	else if (struck & DIGI_RIGHT)
 	{
 		trail_add_corner(&player1_trail);
 		cycle_turn_right(&player1);
@@ -115,13 +119,13 @@ void gamepad_input(void)
 	trail_set_head(&player1_trail, player1.position);
 
 	// A: clear the wall and start a fresh one here
-	if (is_key_struck(DIGI_A))
+	if (struck & DIGI_A)
 		trail_reset(&player1_trail, player1.position);
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
-	if (is_key_struck(DIGI_X))
+	if (struck & DIGI_X)
 		stress_fill_trail();
 	// Y: arena boundary on/off. Turning it back on outside the arena snaps the cycle to the edge next frame
-	if (is_key_struck(DIGI_Y))
+	if (struck & DIGI_Y)
 		player1.bounded = !player1.bounded;
 
 	view_follow(&player1);

@@ -1,0 +1,11 @@
+# Turn presses reach the game (through the press latch): one press, one turn.
+# The BIOS intro, licence screen and loading take ~15 s; the cycle starts north
+wait 15.5
+press left
+wait 0.5
+shot turn_1_west
+press right
+wait 0.3
+press right
+wait 0.5
+shot turn_2_east

@@ -21,9 +21,13 @@ digital_pad pad1 = {.pressed = 0xFFFF,
 					.change = 0xFFFF,
 					.toggle = 0xFFFF};
 
+// Presses kept until the game frame takes them (see src/game/press_latch.h)
+press_latch pad1_presses;
+
 void operate_digital_pad1(void)
 {
 	pad1.pressed = oregs[6] | (oregs[4] << 8); // Holds current frame data
+	press_latch_sample(&pad1_presses, (unsigned short)~pad1.pressed); // the pad reports 0 = pressed
 
 	pad1.change = pad1.pressed ^ pad1.prevPressed;
 

@@ -2,6 +2,8 @@
 #ifndef __LOW_LEVEL_INPUT_H__
 #define __LOW_LEVEL_INPUT_H__
 
+#include "../game/press_latch.h"
+
 #define TYPE_DIGITAL 0x00
 
 #define DIGI_L 0x0008
@@ -33,6 +35,7 @@ typedef struct
 } digital_pad;
 
 extern digital_pad pad1;
+extern press_latch pad1_presses; // use press_latch_take(&pad1_presses) once per game frame
 
 int is_key_pressed(int keyPattern);
 int is_key_up(int keyPattern);

@@ -19,6 +19,7 @@ SRCS=main.c \
 	src/utils/static_mesh.c \
 	src/game/cycle.c \
 	src/game/trail.c \
+	src/game/press_latch.c \
 	src/view.c \
 	src/input.c \
 	src/level.c \
