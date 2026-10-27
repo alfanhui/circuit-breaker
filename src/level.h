@@ -3,17 +3,12 @@
 
 #include <jo/jo.h>
 #include "utils/3d.h"
-#include "input.h"
-
-extern const int wall_width;
-extern const int wall_height;
-extern const int wall_half_width;
-extern const int wall_half_height;
-extern const float player_start_pos_x;
-extern const float player_start_pos_y;
+#include "game/world.h"
 
 void load_arena_textures(void);
-void create_arena_walls(void);
+void init_arena_walls(void);
+
+// Call inside view_push_world_matrix()
 void draw_arena_walls(void);
 
 #endif

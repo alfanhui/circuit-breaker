@@ -3,12 +3,16 @@
 
 #include <jo/jo.h>
 #include "utils/low_level_input.h"
+#include "game/cycle.h"
+#include "game/trail.h"
+#include "view.h"
 
-extern jo_pos3Df pos;
-extern jo_rot3Df rot;
+extern cycle player1;
+extern trail player1_trail;
+extern bool debug_camera;
 
-void debug_buttons(void);
-void debug_controller(void);
+void init_players(void);
+void debug_pad1(void);
 void gamepad_input(void);
 
 #endif

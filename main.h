@@ -32,25 +32,24 @@
 #include <jo/jo.h>
 #include "src/input.h"
 #include "src/level.h"
+#include "src/view.h"
+#include "src/trail_render.h"
+#include "src/utils/perf.h"
+#include "src/utils/static_mesh.h"
 
-extern jo_camera cam;
-extern jo_pos3Df pos;
-extern jo_rot3Df rot;
-extern float turn_angle;
 extern jo_palette image_pal;
-extern jo_vertice cube_vertices[];
-extern jo_3d_quad cube_quads[6];
 extern Sint16 draw_distance;
 
 void initCamera(jo_camera *curCam);
 void debug_3d(void);
-void draw_cube(void);
+void draw_player(void);
 void draw_hud(void);
 void draw_3d(void);
 jo_palette *my_tga_palette_handling(void);
 void init_3d_planes(void);
 void load_textures(void);
 void jo_main(void);
+void load_player_model(void);
 
 #endif
 

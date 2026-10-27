@@ -1,157 +1,72 @@
 #include "level.h"
+#include "utils/static_mesh.h"
 
-const int wall_width = 1000;
-const int wall_height = 128;
-const int wall_half_width = 500;
-const int wall_half_height = 120; // This is used to riase the wall to the ground
+#define WALL_HALF_HEIGHT 128
+#define WALL_CENTRE_Z 120 // walls stand on the floor (z = 0), sinking 8 units below it to hide the seam
 
-const float player_start_pos_x = 500.0f;
-const float player_start_pos_y = 500.0f;
+#define WALL_QUADS (4 * WORLD_WALL_SEGMENTS)
+#define WALL_POINTS (WALL_QUADS * 2) // neighbouring segments share their edges
 
-const float division_space_modifier = 1.981f;
-const float wall_spacer_modifier = 1.91f;
+// All four sides are one polygon list in world space: a single slPutPolygon, no per-segment matrices
+static POINT wall_points[WALL_POINTS];
+static POLYGON wall_polygons[WALL_QUADS];
+static ATTR wall_attributes[WALL_QUADS];
+static static_mesh walls;
 
-jo_vertice wall1_vertices[16][4] = {
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_X(wall_width / 16, wall_height)};
-
-jo_vertice wall2_vertices[16][4] = {
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(wall_width / 16, wall_height)};
-
-jo_vertice wall3_vertices[16][4] = {
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(wall_width / 16, wall_height)};
-
-jo_vertice wall4_vertices[16][4] = {
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height),
-	JO_3D_PLANE_RECTANGLE_VERTICES_Y(wall_width / 16, wall_height)};
-
-jo_3d_quad wall1[16];
-jo_3d_quad wall2[16];
-jo_3d_quad wall3[16];
-jo_3d_quad wall4[16];
-
-int box1_texture_id = 0;
-int box2_texture_id = 0;
-int box3_texture_id = 0;
-int box4_texture_id = 0;
+static int box1_texture_id = 0;
+static int box2_texture_id = 0;
+static int box3_texture_id = 0;
+static int box4_texture_id = 0;
 
 void load_arena_textures(void)
 {
-	box1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX1.TGA", JO_COLOR_Transparent); // spirit 1
-	box2_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX2.TGA", JO_COLOR_Transparent); // spirit 2
-	box3_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX3.TGA", JO_COLOR_Transparent); // spirit 3
-	box4_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX4.TGA", JO_COLOR_Transparent); // spirit 4
+	box1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX1.TGA", JO_COLOR_Transparent);
+	box2_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX2.TGA", JO_COLOR_Transparent);
+	box3_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX3.TGA", JO_COLOR_Transparent);
+	box4_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "BOX4.TGA", JO_COLOR_Transparent);
 }
 
-// Arena walls
-void create_arena_walls(void)
+// shape is one of jo's plane vertex macros, whose corner order sets the texture orientation.
+// fixed is the coordinate shared by the whole side, step runs along it (+1 or -1).
+static void add_wall_side(jo_vertice shape[4], int texture_id, bool along_x, int fixed, int step)
 {
-	for (int i = 0; i < 16; ++i)
+	int first = -step * (WORLD_ARENA_HALF - WORLD_WALL_SEGMENT_HALF);
+	jo_pos3D corners[4];
+
+	for (int i = 0; i < WORLD_WALL_SEGMENTS; ++i)
 	{
-		jo_3d_create_plane(&wall1[i], wall1_vertices[i]);
-		jo_3d_set_texture(&wall1[i], box1_texture_id);
-		jo_3d_create_plane(&wall2[i], wall2_vertices[i]);
-		jo_3d_set_texture(&wall2[i], box2_texture_id);
-		jo_3d_create_plane(&wall3[i], wall3_vertices[i]);
-		jo_3d_set_texture(&wall3[i], box3_texture_id);
-		jo_3d_create_plane(&wall4[i], wall4_vertices[i]);
-		jo_3d_set_texture(&wall4[i], box4_texture_id);
+		int along = first + step * i * 2 * WORLD_WALL_SEGMENT_HALF;
+		int centre_x = along_x ? along : fixed;
+		int centre_y = along_x ? fixed : along;
+
+		for (int c = 0; c < 4; ++c)
+		{
+			corners[c].x = centre_x + shape[c].x;
+			corners[c].y = centre_y + shape[c].y;
+			corners[c].z = WALL_CENTRE_Z + shape[c].z;
+		}
+		int polygon = static_mesh_add_quad(&walls, corners);
+		if (polygon >= 0)
+			jo_3d_set_mesh_polygon_texture(&walls.mesh, texture_id, polygon);
 	}
+}
+
+void init_arena_walls(void)
+{
+	// World north is -y and east is -x (see world.h)
+	jo_vertice south[4] = JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_X(WORLD_WALL_SEGMENT_HALF, WALL_HALF_HEIGHT);
+	jo_vertice east[4] = JO_3D_PLANE_RECTANGLE_FLIPPED_VERTICES_Y(WORLD_WALL_SEGMENT_HALF, WALL_HALF_HEIGHT);
+	jo_vertice north[4] = JO_3D_PLANE_RECTANGLE_VERTICES_X(WORLD_WALL_SEGMENT_HALF, WALL_HALF_HEIGHT);
+	jo_vertice west[4] = JO_3D_PLANE_RECTANGLE_VERTICES_Y(WORLD_WALL_SEGMENT_HALF, WALL_HALF_HEIGHT);
+
+	static_mesh_init(&walls, wall_points, WALL_POINTS, wall_polygons, wall_attributes, WALL_QUADS);
+	add_wall_side(south, box1_texture_id, true, WORLD_ARENA_HALF, -1);
+	add_wall_side(east, box2_texture_id, false, -WORLD_ARENA_HALF, 1);
+	add_wall_side(north, box3_texture_id, true, -WORLD_ARENA_HALF, 1);
+	add_wall_side(west, box4_texture_id, false, WORLD_ARENA_HALF, -1);
 }
 
 void draw_arena_walls(void)
 {
-	for (int i = 0; i < 16; ++i)
-	{
-		// 1
-		jo_3d_push_matrix();
-		{
-			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - (player_start_pos_x * 3), pos.y - (player_start_pos_y * 3), pos.z + wall_half_height);
-			jo_3d_draw(&wall1[i]);
-		}
-		jo_3d_pop_matrix();
-		// 2
-		jo_3d_push_matrix();
-		{
-			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - (player_start_pos_x * 3) + (wall_width * wall_spacer_modifier), pos.y - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - (player_start_pos_y * 3), pos.z + wall_half_height);
-			jo_3d_draw(&wall2[i]);
-		}
-		jo_3d_pop_matrix();
-		// 3
-		jo_3d_push_matrix();
-		{
-			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) + (wall_width * wall_spacer_modifier) - (player_start_pos_x * 3), pos.y + (wall_width * wall_spacer_modifier) - (player_start_pos_y * 3), pos.z + wall_half_height);
-			jo_3d_draw(&wall3[i]);
-		}
-		jo_3d_pop_matrix();
-		// 4
-		jo_3d_push_matrix();
-		{
-			jo_3d_rotate_matrix_rad(rot.rx, rot.ry, rot.rz);
-			jo_3d_translate_matrixf(pos.x - (player_start_pos_x * 3), pos.y + ((wall_width * (((float)1 / 16) * i) * division_space_modifier)) - (player_start_pos_y * 3), pos.z + wall_half_height);
-			jo_3d_draw(&wall4[i]);
-		}
-		jo_3d_pop_matrix();
-	}
+	jo_3d_mesh_draw(&walls.mesh);
 }

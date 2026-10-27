@@ -59,3 +59,8 @@ dkms.conf
 *.map
 
 .vscode/
+
+!objdump.map
+# Host unit test output
+tests/build/
+game.raw
