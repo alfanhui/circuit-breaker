@@ -1,0 +1,11 @@
+# After drawing the world at 1/4 scale: near trail, far south wall, close-up wall, iso view
+wait 17
+press down
+press right
+press right
+wait 2.5
+shot scale_south
+# Iso: should look as before
+press down
+wait 1
+shot scale_iso

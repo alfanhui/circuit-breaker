@@ -1,0 +1,20 @@
+# Arena scale (16000 across) and pad tuning. Checks walls are drawn near the player only,
+# textures read left to right from inside, and speed/size tuning reach the game.
+wait 15.5
+shot scale_1_centre
+# C x13: cruise 7 -> 20 units/frame (1200/s), then drive north to the wall (~6.6 s)
+press c 13
+wait 7.5
+shot scale_2_north_wall_iso
+# Down: 1st person, facing the north wall up close
+press down
+wait 0.5
+shot scale_3_north_wall_1st
+# Right: face east, looking along the north wall towards the corner
+press right
+wait 1
+shot scale_4_along_wall_1st
+# L x7: shrink to the smallest arena (2000 across); the cycle is pulled inside
+press l 7
+wait 1
+shot scale_5_shrunk

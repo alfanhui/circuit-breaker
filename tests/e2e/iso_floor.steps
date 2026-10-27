@@ -1,0 +1,7 @@
+# Isometric floor: the upper half is where far grid lines can merge into moire.
+wait 15.5
+shot iso_floor_1
+# A quarter turn, so the lines are seen from the other diagonal
+press right
+wait 1.5
+shot iso_floor_2

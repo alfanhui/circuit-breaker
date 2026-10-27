@@ -1,0 +1,16 @@
+# Culling must not cut walls you can see in iso. Shrinking the arena (L x7: 2000 across) puts
+# every wall within 1000 of the cycle; heading south pins it against the south wall, which
+# then stands between the camera and the cycle (walls are taller than the camera).
+wait 17
+press l 7
+press right
+press right
+wait 3
+shot wall_iso_south
+# Turn to run west along it, then north to the far wall
+press right
+wait 2
+shot wall_iso_corner
+press right
+wait 3
+shot wall_iso_north

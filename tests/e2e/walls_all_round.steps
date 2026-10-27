@@ -1,0 +1,15 @@
+# From near the arena centre the walls are ~8000 away: they should show in every direction.
+wait 17
+press down
+# cpu is a one-second average: let it settle before each shot
+wait 2.5
+shot round_1_north
+press right
+wait 2.5
+shot round_2_east
+press right
+wait 2.5
+shot round_3_south
+press right
+wait 2.5
+shot round_4_west

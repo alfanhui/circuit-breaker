@@ -4,6 +4,7 @@
 #include <jo/jo.h>
 #include "utils/low_level_input.h"
 #include "game/cycle.h"
+#include "game/arena.h"
 #include "game/trail.h"
 #include "view.h"
 

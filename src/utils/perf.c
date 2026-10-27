@@ -13,8 +13,12 @@
 int perf_fps = 0;
 int perf_cpu_average = 0;
 int perf_cpu_peak = 0;
+int perf_late_frames = 0;
+int perf_displayed_polygons = 0;
 
 static volatile int vblanks = 0;
+static volatile int vblank_total = 0; // since boot, for late frame detection
+static int last_frame_vblank = 0;
 static int frames = 0;
 static int cpu_total = 0;
 static int cpu_peak = 0;
@@ -22,16 +26,24 @@ static int cpu_peak = 0;
 void perf_vblank(void)
 {
 	vblanks++;
+	vblank_total++;
 }
 
 void perf_frame_start(void)
 {
+	perf_displayed_polygons = jo_3d_get_displayed_polygon_count();
 	jo_time_set_frc(0);
 }
 
 void perf_frame_end(void)
 {
 	int cpu = jo_time_get_frc() * 100 / FRC_COUNTS_PER_VBLANK;
+	int now = vblank_total;
+
+	// One vblank per frame is on time; each extra one is a frame the screen showed twice
+	if (last_frame_vblank != 0 && now - last_frame_vblank > 1)
+		perf_late_frames += now - last_frame_vblank - 1;
+	last_frame_vblank = now;
 
 	frames++;
 	cpu_total += cpu;

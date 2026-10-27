@@ -1,0 +1,15 @@
+# Trails close to the 1st person camera must not bend: your own trail after a U-turn runs
+# alongside, starting behind you; the zig-zag's diagonal head passes right beside the camera.
+wait 17
+press down
+wait 2
+# U-turn: two rights about 0.3 s apart, so the old leg runs ~130 to the right
+press right
+wait 0.3
+press right
+wait 1
+shot trail_near_uturn
+press x
+# cpu is a one-second average: give it two seconds to settle on the zig-zag
+wait 2.5
+shot trail_near_zigzag

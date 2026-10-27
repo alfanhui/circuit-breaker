@@ -27,16 +27,26 @@
  */
 
 #include "main.h"
+#include "src/floor_fade_vdp2.h"
 
-#define FLOOR_ORIGIN 1553 // floor texture phase, matches the old world offset
+// The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
+// Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
+// near the low 1st person camera stay small.
+// The grid is the player's ruler for speed and distance, so it's the same in every view.
+// 125 divides the arena (8000 / 125 = 64 tiles) and the 250 wide wall pieces, so grid lines
+// meet the walls cleanly.
+#define FLOOR_TEXELS 256
+#define FLOOR_TILE_UNITS 125
+#define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
 #define PLAYER_HALF 25
 #define TRAIL_HEAD_GAP PLAYER_HALF // the wall starts at the back of the cycle
 
 jo_camera cam;
 jo_palette image_pal;
-Sint16 draw_distance = 10000;
+// Far clip, in SGL's units: the world reaches SGL at 1/VIEW_WORLD_SCALE size (view.c), so this is
+// 30000 world units: the far walls of the largest arena (28000 across) stay visible
+Sint16 draw_distance = 30000 / VIEW_WORLD_SCALE;
 
-int floor_texture_id = 0;
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
 
@@ -61,7 +71,11 @@ void initCamera(jo_camera *curCam)
 	(*curCam).target[Y] = toFIXED(0.0);
 	(*curCam).target[Z] = toFIXED(0.0);
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
-	slZdspLevel(0);
+	// How close polygons may be drawn: SGL drops anything nearer than its screen distance / 2^level.
+	// The world reaches SGL at 1/4 size (view.c), so the 20-40 unit safety distances that
+	// wall_clip and trail_clip_columns keep are only 5-10 SGL units: level 7 (the closest, 1/128)
+	// allows them. (It was 0, outside the valid 1-7.)
+	slZdspLevel(7);
 }
 
 // The text layer keeps its contents, and jo_printf formatting is costly, so refresh 5 times a second
@@ -84,12 +98,14 @@ void debug_3d(void)
 	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1_trail));
 	jo_printf(0, 4, "%s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"));
 	jo_printf(0, 5, "bounds %s ", player1.bounded ? "ON" : "OFF");
+	jo_printf(0, 6, "speed %d  arena %d   ", cycle_cruise_speed(), 2 * arena_half()); // tuning: B/C and L/R
 
 	//FPS and 3D counts
 	jo_printf(0, 7, "polygons %d   ", jo_3d_get_polygon_count());
-	jo_printf(0, 8, "disp_quads %d   ", jo_3d_get_displayed_polygon_count());
+	jo_printf(0, 8, "displayed %d   ", perf_displayed_polygons); // after SGL drops off-screen ones
 	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
 	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
+	jo_printf(0, 11, "late %d  ", perf_late_frames);
 }
 
 void draw_hud(void)
@@ -117,20 +133,28 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
+	// What the camera can see this frame: walls and trails outside it aren't sent to SGL.
+	// Walls are seen across the whole arena; trails only nearby
+	world_rect visible_walls = view_visible_rect(&player1, debug_camera, WORLD_WALL_VIEW_RANGE);
+	world_rect visible_trails = view_visible_rect(&player1, debug_camera, WORLD_VIEW_RANGE);
+	// 1st person: wall and trail corners are kept in front of the camera and inside VDP1's range
+	wall_clip_camera clip_camera;
+	const wall_clip_camera *clip = view_wall_clip_camera(&player1, debug_camera, &clip_camera) ? &clip_camera : JO_NULL;
+
 	view_push_world_matrix();
 	{
 		//  FLOOR
 		jo_3d_push_matrix();
 		{
-			jo_3d_translate_matrix(FLOOR_ORIGIN, FLOOR_ORIGIN, 0);
+			slScale(FLOOR_SCALE, FLOOR_SCALE, JO_FIXED_1); // only x and y: the plane is flat
 			jo_background_3d_plane_a_draw(true);
 		}
 		jo_3d_pop_matrix();
 
-		draw_arena_walls();
+		draw_arena_walls(&visible_walls, &player1.position, clip, !first_person && !debug_camera);
 
 		if (enable_trails)
-			trail_mesh_draw(&player1_trail_mesh, &player1_trail, TRAIL_HEAD_GAP);
+			trail_mesh_draw(&player1_trail_mesh, &player1_trail, TRAIL_HEAD_GAP, player1.position, &visible_trails, clip);
 
 		draw_player();
 	}
@@ -193,12 +217,14 @@ void init_3d_planes(void)
 	jo_background_3d_plane_b_img(&img, image_pal.id, true, false);
 	jo_free_img(&img);
 
+	floor_fade_init(); // far floor fades into a horizon haze (1st person)
+
 	jo_core_tv_on();
 }
 
 void load_textures(void)
 {
-	floor_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "FLOOR.TGA", JO_COLOR_Transparent);  // spirit 5
+	// FLOOR.TGA is only used by the VDP2 floor (init_3d_planes); as a VDP1 sprite it would waste 64 KB
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
 }

@@ -1,0 +1,16 @@
+# Do the walls sit on the floor? Close-ups of the north wall's base in both views.
+wait 17
+press c 13
+wait 8
+shot ground_1_iso_north
+# Run east along the wall (it's on the left), iso then 1st person
+press right
+wait 1
+shot ground_2_iso_along
+press down
+wait 0.5
+shot ground_3_1st_along
+# Face the wall
+press left
+wait 0.5
+shot ground_4_1st_facing

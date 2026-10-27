@@ -12,7 +12,7 @@ bool debug_camera = false; // START: freeze the cycle and fly the camera around
 static void stress_fill_trail(void)
 {
 	world_point p;
-	const short edge = WORLD_PLAYER_LIMIT - 50;
+	const short edge = (short)(arena_player_limit() - 50);
 	const short row_spacing = (2 * edge) / (TRAIL_MAX_CORNERS / 2);
 
 	p.x = -edge;
@@ -127,6 +127,18 @@ void gamepad_input(void)
 	// Y: arena boundary on/off. Turning it back on outside the arena snaps the cycle to the edge next frame
 	if (struck & DIGI_Y)
 		player1.bounded = !player1.bounded;
+
+	// Tuning, to find the balance of speed and scale by feel. The debug text shows both.
+	// L / R: arena smaller / larger. A cycle left outside a shrunk arena is pulled to the edge next frame
+	if (struck & DIGI_L)
+		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
+	if (struck & DIGI_R)
+		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
+	// B / C: cruise speed down / up
+	if (struck & DIGI_B)
+		cycle_set_cruise_speed(cycle_cruise_speed() - 1);
+	if (struck & DIGI_C)
+		cycle_set_cruise_speed(cycle_cruise_speed() + 1);
 
 	view_follow(&player1);
 }

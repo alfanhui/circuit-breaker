@@ -1,0 +1,25 @@
+# Long trail segments: do they stay straight? Also shows the taller walls.
+wait 15.5
+# Speed 20 (1200 units/s), 3 s north, then west for 3 s: legs about 3600 long
+press c 13
+wait 3
+press left
+wait 3
+shot trails_1_iso
+press right
+wait 2
+shot trails_2_iso_after_turn
+# 1st person, looking along the trail behind? Turn back on ourselves to look down the legs
+press down
+wait 0.3
+shot trails_3_1st
+press right
+wait 1.5
+shot trails_4_1st_turned
+# X: full-length serpentine across the arena (rows about 15600 long)
+press x
+wait 0.5
+shot trails_5_1st_serpentine
+press down
+wait 0.3
+shot trails_6_iso_serpentine

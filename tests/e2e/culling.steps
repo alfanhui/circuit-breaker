@@ -1,0 +1,20 @@
+# Culling: what's sent (polygons, vertices) vs what SGL shows (displayed), per view.
+wait 15.5
+# Speed 20, drive north to the wall (~6.6 s), turn east to run along it
+press c 13
+wait 7
+press right
+wait 1.5
+# Iso, running along the north wall: walls ahead and behind, trail behind
+shot cull_1_iso
+# 1st person: the wall on the left, the trail behind (out of view)
+press down
+wait 1
+shot cull_2_1st
+# Full zig-zag trail: the worst case, in 1st person then iso
+press x
+wait 0.5
+shot cull_3_1st_zigzag
+press down
+wait 0.5
+shot cull_4_iso_zigzag

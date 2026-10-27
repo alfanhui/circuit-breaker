@@ -1,0 +1,7 @@
+# Iso cutaway: at the south wall (between the camera and the cycle) only the low strip is drawn.
+wait 17
+press c 13
+press right
+press right
+wait 13
+shot cutaway_south

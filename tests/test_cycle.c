@@ -1,5 +1,6 @@
 #include "test.h"
 #include "../src/game/cycle.h"
+#include "../src/game/arena.h"
 #include "../src/game/trail.h"
 
 static void run_frames(cycle *c, int frames, int boosting)
@@ -97,14 +98,14 @@ static void boost_decays_and_gauge_refills_after_release(void)
 static void stops_at_arena_limit(void)
 {
 	cycle c;
-	cycle_init(&c, 0, WORLD_PLAYER_LIMIT - 3, HEADING_SOUTH);
+	cycle_init(&c, 0, (short)(arena_player_limit() - 3), HEADING_SOUTH);
 	run_frames(&c, 10, 0);
-	CHECK_EQ(WORLD_PLAYER_LIMIT, c.position.y);
+	CHECK_EQ(arena_player_limit(), c.position.y);
 	CHECK_EQ(1, cycle_update(&c, 0));
 
-	cycle_init(&c, -WORLD_PLAYER_LIMIT + 3, 0, HEADING_EAST);
+	cycle_init(&c, (short)(-arena_player_limit() + 3), 0, HEADING_EAST);
 	run_frames(&c, 10, 0);
-	CHECK_EQ(-WORLD_PLAYER_LIMIT, c.position.x);
+	CHECK_EQ(-arena_player_limit(), c.position.x);
 }
 
 static void bounded_by_default(void)
@@ -117,10 +118,10 @@ static void bounded_by_default(void)
 static void unbounded_cycle_leaves_the_arena(void)
 {
 	cycle c;
-	cycle_init(&c, 0, WORLD_PLAYER_LIMIT - 3, HEADING_SOUTH);
+	cycle_init(&c, 0, (short)(arena_player_limit() - 3), HEADING_SOUTH);
 	c.bounded = 0;
 	run_frames(&c, 10, 0);
-	CHECK(c.position.y > WORLD_PLAYER_LIMIT);
+	CHECK(c.position.y > arena_player_limit());
 	CHECK_EQ(0, cycle_update(&c, 0)); // nothing stopped it
 }
 
@@ -137,9 +138,9 @@ static void unbounded_cycle_stops_before_short_overflow(void)
 static void rebounding_snaps_back_to_the_edge(void)
 {
 	cycle c;
-	cycle_init(&c, 0, WORLD_PLAYER_LIMIT + 500, HEADING_SOUTH); // outside, as if the boundary was off
+	cycle_init(&c, 0, (short)(arena_player_limit() + 500), HEADING_SOUTH); // outside, as if the boundary was off
 	cycle_update(&c, 0);
-	CHECK_EQ(WORLD_PLAYER_LIMIT, c.position.y);
+	CHECK_EQ(arena_player_limit(), c.position.y);
 }
 
 static void bounded_flag_costs_no_memory(void)

@@ -3,6 +3,11 @@
 
 #include <jo/jo.h>
 #include "game/cycle.h"
+#include "game/view_cull.h"
+#include "game/wall_clip.h"
+
+// SGL sees the world this many times smaller than world units (see view_push_world_matrix)
+#define VIEW_WORLD_SCALE 4
 
 /*
  * Camera for both views. Everything in the world is drawn inside view_push_world_matrix(),
@@ -22,6 +27,14 @@ extern ANGLE view_rz;
 
 void view_init(const cycle *c);
 void view_toggle(const cycle *c);
+// The part of the floor the camera can see out to range, for culling walls and trails.
+// free_camera: the debug camera, which can look anywhere.
+world_rect view_visible_rect(const cycle *c, bool free_camera, int range);
+
+// The 1st person camera on the floor, for keeping wall corners in front of it.
+// Returns false (nothing written) in other views.
+bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out);
+
 void view_turn_left(void);
 void view_turn_right(void);
 void view_follow(const cycle *c);

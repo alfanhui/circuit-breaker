@@ -1,0 +1,91 @@
+#include "test.h"
+#include "../src/game/wall_clip.h"
+
+#define LOW_MIN 40	 // the low strip's minimum distance in front (as level.c)
+#define HIGH_MIN 240 // the high strip's
+
+// The north wall (y = -8000) as columns every 250, from x = from_x towards -x (east)
+#define COLUMNS 49
+static world_point columns[COLUMNS];
+
+static void north_wall_columns(int from_x)
+{
+	for (int k = 0; k < COLUMNS; ++k)
+	{
+		columns[k].x = (short)(from_x - 250 * k);
+		columns[k].y = -8000;
+	}
+}
+
+static wall_clip_camera camera(int x, int y, int forward_x, int forward_y)
+{
+	wall_clip_camera c;
+	c.eye.x = (short)x;
+	c.eye.y = (short)y;
+	c.forward_x = forward_x;
+	c.forward_y = forward_y;
+	return c;
+}
+
+// The screenshot case: hugging the north wall (96 away), running east (-x)
+static void running_along_a_wall_starts_it_in_front(void)
+{
+	wall_clip_camera c = camera(0, -7904, -1024, 0);
+	wall_clip_run low, high;
+
+	north_wall_columns(1000); // x = 1000 (behind) .. -11000 (ahead)
+	low = wall_clip_strip(columns, COLUMNS - 1, &c, LOW_MIN);
+	high = wall_clip_strip(columns, COLUMNS - 1, &c, HIGH_MIN);
+
+	CHECK_EQ(4, low.first);	 // the piece x = 0 .. -250 straddles the camera
+	CHECK_EQ(-40, low.start.x); // slid to 40 in front instead of starting beside the camera
+	CHECK_EQ(-8000, low.start.y); // still on the wall
+	CHECK_EQ(COLUMNS - 1 - 4, low.count); // everything ahead is kept
+	CHECK_EQ(-240, high.start.x);  // the tall strip starts further out
+}
+
+// Facing the wall from 96 away: the tall strip would overflow VDP1, and is off screen anyway
+static void facing_a_wall_up_close_keeps_only_the_low_strip(void)
+{
+	wall_clip_camera c = camera(0, -7904, 0, -1024); // north
+	wall_clip_run low, high;
+
+	north_wall_columns(6000);
+	low = wall_clip_strip(columns, COLUMNS - 1, &c, LOW_MIN);
+	high = wall_clip_strip(columns, COLUMNS - 1, &c, HIGH_MIN);
+
+	CHECK_EQ(0, high.count);
+	CHECK(low.count > 0);
+	CHECK(low.count <= 4); // only the pieces inside the 90 degree view (x within about +-200)
+}
+
+static void wall_behind_draws_nothing(void)
+{
+	wall_clip_camera c = camera(0, -7904, 1024, 0); // west (+x): the wall columns are all at -x
+	north_wall_columns(-1000);
+	CHECK_EQ(0, wall_clip_strip(columns, COLUMNS - 1, &c, LOW_MIN).count);
+}
+
+// Mid turn: looking north-east, the wall ahead-left is in view, nothing starts behind
+static void diagonal_view_never_starts_behind(void)
+{
+	wall_clip_camera c = camera(0, -7000, -724, -724); // north-east (45 degrees), 1000 from the wall
+	wall_clip_run low;
+	int forward;
+
+	north_wall_columns(4000);
+	low = wall_clip_strip(columns, COLUMNS - 1, &c, LOW_MIN);
+	CHECK(low.count > 0);
+	forward = ((low.start.x - c.eye.x) * c.forward_x + (low.start.y - c.eye.y) * c.forward_y) / 1024;
+	CHECK(forward >= LOW_MIN - 1);
+	forward = ((low.end.x - c.eye.x) * c.forward_x + (low.end.y - c.eye.y) * c.forward_y) / 1024;
+	CHECK(forward >= LOW_MIN - 1);
+}
+
+void run_wall_clip_tests(void)
+{
+	RUN(running_along_a_wall_starts_it_in_front);
+	RUN(facing_a_wall_up_close_keeps_only_the_low_strip);
+	RUN(wall_behind_draws_nothing);
+	RUN(diagonal_view_never_starts_behind);
+}

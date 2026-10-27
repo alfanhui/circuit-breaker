@@ -20,6 +20,12 @@ SRCS=main.c \
 	src/game/cycle.c \
 	src/game/trail.c \
 	src/game/press_latch.c \
+	src/game/arena.c \
+	src/game/trail_pieces.c \
+	src/game/floor_fade.c \
+	src/game/view_cull.c \
+	src/game/wall_clip.c \
+	src/floor_fade_vdp2.c \
 	src/view.c \
 	src/input.c \
 	src/level.c \

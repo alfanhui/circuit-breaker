@@ -1,0 +1,14 @@
+# Floor distance fade: 1st person looking along the arena, and iso (no fade).
+wait 15.5
+# 1st person straight away, facing north across the whole arena
+press down
+wait 1
+shot fade_1_1st_north
+# Turn east: the grid now runs across the view
+press right
+wait 1
+shot fade_2_1st_east
+# Back to iso: the fade switches off
+press down
+wait 0.5
+shot fade_3_iso

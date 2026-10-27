@@ -2,7 +2,8 @@
 # Runs inside the container. Boots /game/game.cue in Mednafen on a virtual screen (Xvfb),
 # then follows a step script (one command per line, # for comments):
 #   wait SECONDS        let the game run
-#   press BUTTON        tap a Saturn pad button (held ~4 frames so the game sees it)
+#   press BUTTON [N]    tap a Saturn pad button N times (default 1), each held ~4 frames
+#                       then released ~4 frames, so the game sees every press
 #   hold BUTTON SECONDS hold a button down
 #   shot NAME           save the screen to /out/NAME.png
 # Buttons: up down left right a b c x y z l r start  (Mednafen's default keyboard mapping)
@@ -25,6 +26,7 @@ Xvfb :99 -screen 0 1024x768x24 >/dev/null 2>&1 &
 sleep 1
 mednafen -sound 0 -video.driver softfb -video.fs 0 \
 	-ss.bios_jp /bios/bios.bin -ss.bios_na_eu /bios/bios.bin -ss.bios_sanity 0 \
+	-ss.region_autodetect 0 -ss.region_default jp \
 	/game/game.cue >/out/mednafen.log 2>&1 &
 
 # SDL only reads the keyboard of the focused window
@@ -36,7 +38,14 @@ while read -r command arg1 arg2; do
 	case "$command" in
 	'' | '#'*) ;;
 	wait) sleep "$arg1" ;;
-	press) k=$(key_for "$arg1"); xdotool keydown "$k"; sleep 0.07; xdotool keyup "$k" ;;
+	press)
+		k=$(key_for "$arg1")
+		i=0
+		while [ "$i" -lt "${arg2:-1}" ]; do
+			xdotool keydown "$k"; sleep 0.07; xdotool keyup "$k"; sleep 0.07
+			i=$((i + 1))
+		done
+		;;
 	hold) k=$(key_for "$arg1"); xdotool keydown "$k"; sleep "$arg2"; xdotool keyup "$k" ;;
 	shot) import -window root -crop 906x720+0+0 "/out/$arg1.png"; echo "shot $arg1" ;;
 	*) echo "unknown step: $command" >&2; exit 1 ;;

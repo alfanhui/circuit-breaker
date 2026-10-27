@@ -9,10 +9,7 @@
  * Headings follow the original controls: turning right goes N -> E -> S -> W.
  */
 
-#define WORLD_WALL_SEGMENTS 16
-#define WORLD_WALL_SEGMENT_HALF 62
-#define WORLD_ARENA_HALF (WORLD_WALL_SEGMENTS * WORLD_WALL_SEGMENT_HALF) // 992
-#define WORLD_PLAYER_LIMIT (WORLD_ARENA_HALF - 96)						  // keeps the 1st person camera clear of the walls
+// The arena's size is runtime state (tunable from the pad): see arena.h
 
 // With the boundary off a cycle can leave the arena, but positions are shorts (max 32767):
 // going past that would wrap to -32768 and teleport across the map, so stop well before it.
@@ -36,5 +33,21 @@ typedef struct
 	short x;
 	short y;
 } world_point;
+
+// An axis-aligned area of the floor, min to max inclusive. Used for culling: only what's inside
+// the camera's visible rectangle (view_cull.h) is sent to SGL.
+typedef struct
+{
+	short x_min;
+	short y_min;
+	short x_max;
+	short y_max;
+} world_rect;
+
+// Furthest trails are drawn from the player: far trails would be a pixel or two
+#define WORLD_VIEW_RANGE 6000
+// Walls are drawn across the whole arena (the largest is 28000 across), so they're visible in
+// every direction for the sense of scale; far ones are drawn as fewer, longer pieces (arena.h)
+#define WORLD_WALL_VIEW_RANGE 28000
 
 #endif

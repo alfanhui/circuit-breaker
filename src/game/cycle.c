@@ -1,4 +1,23 @@
 #include "cycle.h"
+#include "arena.h"
+
+// Shared by every cycle: speed is a rule of the race, not a property of one bike
+static int cruise_speed = CYCLE_BASE_SPEED;
+
+int cycle_set_cruise_speed(int speed)
+{
+	if (speed < 1)
+		speed = 1;
+	if (speed > CYCLE_CRUISE_MAX)
+		speed = CYCLE_CRUISE_MAX;
+	cruise_speed = speed;
+	return speed;
+}
+
+int cycle_cruise_speed(void)
+{
+	return cruise_speed;
+}
 
 void cycle_init(cycle *c, short x, short y, unsigned char heading)
 {
@@ -43,8 +62,11 @@ int cycle_update(cycle *c, int boosting)
 	int clamped;
 	short limit;
 
-	if (c->speed < CYCLE_BASE_SPEED)
+	// Ramp up to cruise from a standing start; drop straight to it if cruise was tuned down
+	if (c->speed < cruise_speed)
 		c->speed++;
+	else if (c->speed > cruise_speed)
+		c->speed = (unsigned char)cruise_speed;
 
 	if (boosting && c->gauge >= CYCLE_GAUGE_DRAIN)
 	{
@@ -63,7 +85,7 @@ int cycle_update(cycle *c, int boosting)
 	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * distance);
 
 	// The clamp happens in the same frame as the move, so the cycle never draws past the edge
-	limit = c->bounded ? WORLD_PLAYER_LIMIT : WORLD_COORD_LIMIT;
+	limit = (short)(c->bounded ? arena_player_limit() : WORLD_COORD_LIMIT);
 	clamped = clamp_coordinate(&c->position.x, limit);
 	clamped |= clamp_coordinate(&c->position.y, limit);
 	return clamped;
