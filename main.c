@@ -71,6 +71,9 @@ int plane1_texture_id = 0;
 bool enable_trails = true;
 
 static trail_mesh player1_trail_mesh;
+// Every trail the 1st person radar shows. Other players' and bots' trails go here too
+static const trail *const map_trails[] = {&player1_trail};
+#define MAP_TRAIL_COUNT (sizeof(map_trails) / sizeof(map_trails[0])) // worked out by the compiler
 
 //Third person
 // Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
@@ -199,6 +202,8 @@ void draw_3d(void)
 	jo_3d_pop_matrix();
 
 	hud_draw_boost(&player1); // on top of the world: screen pixels, no perspective
+	if (first_person && !debug_camera)
+		hud_draw_minimap(player1.position, map_trails, MAP_TRAIL_COUNT);
 	debug_3d();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text

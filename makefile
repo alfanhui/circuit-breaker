@@ -29,6 +29,7 @@ SRCS=main.c \
 	src/game/depth_fog.c \
 	src/game/turn_gate.c \
 	src/game/collision.c \
+	src/game/minimap.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \

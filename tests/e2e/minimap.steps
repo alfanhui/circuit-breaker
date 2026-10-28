@@ -1,0 +1,30 @@
+# 1st person radar (bottom right): the trail behind runs straight down from the chevron; turning,
+# the map swings round with the view (slow-motion shots ~a game frame apart), then the trail
+# just laid points down again and the older one runs off to the side.
+wait 17
+press c 3
+wait 2
+shot map_straight
+press right
+wait 0.5
+shot map_after_1_turn
+press right
+wait 0.4
+press z
+wait 0.5
+press right
+shot map_turn_01
+shot map_turn_02
+shot map_turn_03
+shot map_turn_04
+shot map_turn_05
+shot map_turn_06
+shot map_turn_07
+shot map_turn_08
+shot map_turn_09
+shot map_turn_10
+shot map_turn_11
+shot map_turn_12
+press z 3
+wait 0.6
+shot map_box

@@ -59,6 +59,8 @@ reads memory 4 bytes at a time. If any of them differs on the real console, it s
 
 - [ ] 1st person, facing a far wall: the floor darkens smoothly to black where it meets the
       wall's base. Rows near the bottom of the screen are clear, with no banding.
+- [ ] 1st person radar (bottom right): is it round, not an oval, and fully on screen (CRTs crop
+      the edges)? Readable at a glance? It should turn smoothly with the view on every turn.
 - [ ] Iso (Down): the top of the floor fades to black; the area round the cycle is clear.
 - [ ] Iso: crash into your trail and slide along it with the trail on the camera's side. The cube
       should stay behind the trail (only its top showing) all along, no flicker at any spot. The

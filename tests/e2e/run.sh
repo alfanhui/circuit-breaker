@@ -51,7 +51,7 @@ while read -r command arg1 arg2; do
 	hold) k=$(key_for "$arg1"); xdotool keydown "$k"; sleep "$arg2"; xdotool keyup "$k" ;;
 	keydown) xdotool keydown "$(key_for "$arg1")" ;;
 	keyup) xdotool keyup "$(key_for "$arg1")" ;;
-	shot) import -window root -crop 906x720+0+0 "/out/$arg1.png"; echo "shot $arg1" ;;
+	shot) import -window "$window" "/out/$arg1.png"; echo "shot $arg1" ;;
 	*) echo "unknown step: $command" >&2; exit 1 ;;
 	esac
 done <"$1"
