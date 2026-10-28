@@ -23,7 +23,7 @@
  */
 
 #define TRAIL_NEAR_RANGE 2000 // inside this, pieces are short
-#define TRAIL_NEAR_PIECE 250
+#define TRAIL_NEAR_PIECE 256 // a power of two: pieces are lined up on the player with a mask (trail_pieces.c)
 #define TRAIL_FAR_PIECE 1000
 #define TRAIL_DRAW_COLUMNS_MAX 200
 

@@ -49,10 +49,41 @@ static void short_trail_is_cut_into_near_pieces(void)
 	world_rect view = square(pt(0, 0));
 	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
 
-	CHECK_EQ(1000 / TRAIL_NEAR_PIECE + 1, n); // 4 pieces, 5 columns
+	// Near pieces are cut on a grid centred on the player (one piece straddles it): boundaries
+	// at y = -128, -384, -640, -896, so the ends make 5 pieces, 6 columns
+	CHECK_EQ(6, n);
+	CHECK_EQ(-128, columns[1].p.y);
+	CHECK_EQ(-384, columns[2].p.y);
 	CHECK_EQ(0, columns[0].joined);
 	CHECK_EQ(1, columns[n - 1].joined);
 	CHECK_EQ(-1000, columns[n - 1].p.y); // ends exactly at the head
+}
+
+// SGL sorts each piece by its centre (VDP1 has no depth buffer). The piece beside the player
+// has its centre level with it, so the cycle and that piece are judged at the same point along
+// the trail: drawn in the right order whichever side of the trail the camera is (iso_slide.steps)
+static void piece_beside_the_player_is_centred_on_it(void)
+{
+	trail t;
+	int n;
+	int found = 0;
+
+	make_line(&t, pt(0, 1000), pt(0, -1000));
+	world_rect view = square(pt(25, 300));
+	n = trail_build_columns(&t, 0, pt(25, 300), &view, columns, TRAIL_DRAW_COLUMNS_MAX); // 25 beside it
+	for (int i = 1; i < n; ++i)
+		if (columns[i - 1].p.y == 300 + TRAIL_NEAR_PIECE / 2 && columns[i].p.y == 300 - TRAIL_NEAR_PIECE / 2)
+			found = 1;
+	CHECK(found);
+
+	// Running the other way along it: still centred
+	make_line(&t, pt(0, -1000), pt(0, 1000));
+	n = trail_build_columns(&t, 0, pt(25, 300), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	found = 0;
+	for (int i = 1; i < n; ++i)
+		if (columns[i - 1].p.y == 300 - TRAIL_NEAR_PIECE / 2 && columns[i].p.y == 300 + TRAIL_NEAR_PIECE / 2)
+			found = 1;
+	CHECK(found);
 }
 
 static void long_trail_is_clipped_to_the_draw_window(void)
@@ -235,6 +266,7 @@ static void strips_stay_separate_after_clipping(void)
 void run_trail_pieces_tests(void)
 {
 	RUN(short_trail_is_cut_into_near_pieces);
+	RUN(piece_beside_the_player_is_centred_on_it);
 	RUN(long_trail_is_clipped_to_the_draw_window);
 	RUN(pieces_are_short_near_and_longer_far);
 	RUN(trail_out_of_range_draws_nothing);

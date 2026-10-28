@@ -73,10 +73,11 @@ bool enable_trails = true;
 static trail_mesh player1_trail_mesh;
 
 //Third person
-// Cycle: one 8 point mesh drawn with a single slPutPolygon
-static POINT cube_points[8];
-static POLYGON cube_polygons[6];
-static ATTR cube_attributes[6];
+// Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
+// the 6 faces (load_player_model)
+static POINT cube_points[12];
+static POLYGON cube_polygons[7];
+static ATTR cube_attributes[7];
 static static_mesh cube;
 
 void initCamera(jo_camera *curCam)
@@ -203,16 +204,57 @@ void draw_3d(void)
 	perf_frame_end(); // includes the debug text
 }
 
+// A face of the cube points out along the one axis on which its 4 corners all agree: that
+// value's sign is which way. SGL needs it to tell front faces from back (Single_Plane)
+static void set_outward_normal(POLYGON *polygon, const jo_vertice corners[4])
+{
+	polygon->norm[X] = JO_FIXED_0;
+	polygon->norm[Y] = JO_FIXED_0;
+	polygon->norm[Z] = JO_FIXED_0;
+	if (corners[0].x == corners[1].x && corners[0].x == corners[2].x)
+		polygon->norm[X] = corners[0].x > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+	else if (corners[0].y == corners[1].y && corners[0].y == corners[2].y)
+		polygon->norm[Y] = corners[0].y > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+	else
+		polygon->norm[Z] = corners[0].z > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+}
+
+/*
+ * The cycle is drawn as one object at one depth: its centre's.
+ * VDP1 has no depth buffer, so SGL draws polygons back to front, each judged by its own centre
+ * (SORT_CEN). Judged face by face, the cube's top (50 up) counted as nearer than a trail right
+ * beside it on the camera's side, and was drawn over the trail that should hide it.
+ * So: first an anchor, a square across the middle of the cube whose centre is the cube's
+ * centre, sorted as usual. Then the 6 faces with SORT_BFR, "where the last polygon was": all
+ * drawn just after the anchor, at its depth. The anchor is inside the cube, so its own faces
+ * always cover it. With every face at the same depth their order no longer sorts itself out, so
+ * the faces are single-sided: back faces are skipped, and the 3 front ones never overlap.
+ */
 void load_player_model(void)
 {
 	jo_vertice faces[24] = JO_3D_CUBE_CUSTOM_VERTICES(PLAYER_HALF, PLAYER_HALF, PLAYER_HALF);
+	jo_vertice anchor[4] = {
+		{-PLAYER_HALF, -PLAYER_HALF, 0},
+		{PLAYER_HALF, -PLAYER_HALF, 0},
+		{PLAYER_HALF, PLAYER_HALF, 0},
+		{-PLAYER_HALF, PLAYER_HALF, 0},
+	};
+	int polygon;
 
-	static_mesh_init(&cube, cube_points, 8, cube_polygons, cube_attributes, 6);
+	static_mesh_init(&cube, cube_points, 12, cube_polygons, cube_attributes, 7);
+	polygon = static_mesh_add_quad(&cube, anchor);
+	if (polygon >= 0)
+		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon); // sorted by its centre (SORT_CEN)
 	for (int i = 0; i < 6; ++i)
 	{
-		int polygon = static_mesh_add_quad(&cube, &faces[i * 4]);
-		if (polygon >= 0)
-			jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
+		polygon = static_mesh_add_quad(&cube, &faces[i * 4]);
+		if (polygon < 0)
+			continue;
+		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
+		set_outward_normal(&cube_polygons[polygon], &faces[i * 4]);
+		cube_attributes[polygon].flag = Single_Plane;
+		// The texture setter wrote SORT_CEN into the low 2 bits: swap it for SORT_BFR
+		cube_attributes[polygon].sort = (cube_attributes[polygon].sort & ~3) | SORT_BFR;
 	}
 }
 

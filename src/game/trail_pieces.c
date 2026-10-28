@@ -85,10 +85,37 @@ static int clip_axis(int start, int delta, int length, int min, int max, int *s0
 	return *s0 < *s1;
 }
 
+// How far along the segment (in steps from `from`) the focus is level with. It can be off the
+// segment's ends, or negative: only its position on the grid of near pieces matters
+static int focus_step(world_point from, world_point to, world_point focus)
+{
+	if (from.y == to.y)
+		return to.x > from.x ? focus.x - from.x : from.x - focus.x;
+	if (from.x == to.x)
+		return to.y > from.y ? focus.y - from.y : from.y - focus.y;
+	return 0; // diagonal (the debug zig-zag's head): no grid
+}
+
+/*
+ * The end of the near piece starting at s. Near pieces are cut on a grid centred on the player:
+ * boundaries at f +- 128, f +- 384, ... (f: focus_step), so one piece is centred level with it.
+ * Why: VDP1 has no depth buffer, so SGL draws polygons back to front, judging each by its
+ * centre. A 256-long piece beside the cycle whose centre was up to 128 further along could be
+ * judged nearer or further than the cycle wrongly, and the cycle flickered in front of the
+ * trail it should be hidden behind, at one spot (iso view, running right beside the trail).
+ * The grid is 256 so that "how far past a boundary" is a mask (& 255) rather than a division.
+ * (& on a negative int is still the right remainder: ints are two's complement on the SH-2 and PC.)
+ */
+static int next_near_boundary(int s, int f)
+{
+	return s + TRAIL_NEAR_PIECE - ((s - f - (TRAIL_NEAR_PIECE >> 1)) & (TRAIL_NEAR_PIECE - 1));
+}
+
 static int add_segment(world_point from, world_point to, world_point focus, const world_rect *view,
 					   trail_column *out, int count, int max_columns)
 {
 	const int length = max_int(abs_int(to.x - from.x), abs_int(to.y - from.y));
+	const int f = focus_step(from, to, focus);
 	int s0 = 0;
 	int s1 = length;
 	int s;
@@ -112,7 +139,7 @@ static int add_segment(world_point from, world_point to, world_point focus, cons
 		int near = square_distance(point_at(from, to, length, s), focus) < TRAIL_NEAR_RANGE ||
 				   square_distance(point_at(from, to, length, far_end), focus) < TRAIL_NEAR_RANGE;
 
-		s = min_int(s + (near ? TRAIL_NEAR_PIECE : TRAIL_FAR_PIECE), s1);
+		s = min_int(near ? next_near_boundary(s, f) : s + TRAIL_FAR_PIECE, s1);
 		out[count].p = point_at(from, to, length, s);
 		out[count].joined = 1;
 	}
