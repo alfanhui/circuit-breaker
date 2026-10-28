@@ -32,7 +32,8 @@ SRCS=main.c \
 	src/view.c \
 	src/input.c \
 	src/level.c \
-	src/trail_render.c
+	src/trail_render.c \
+	src/hud.c
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler
 include $(COMPILER_DIR)/COMMON/jo_engine_makefile

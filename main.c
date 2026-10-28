@@ -29,6 +29,7 @@
 #include "main.h"
 #include "src/floor_fade_vdp2.h"
 #include "src/object_fog_vdp1.h"
+#include "src/hud.h"
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
 // Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
@@ -191,6 +192,7 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
+	hud_draw_boost(&player1); // on top of the world: screen pixels, no perspective
 	debug_3d();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text
@@ -294,6 +296,7 @@ void jo_main(void)
 	load_textures();
 
 	load_arena_textures();
+	hud_init();
 	// After the textures (it checks they leave room for its tables), before the walls and trails
 	// (they set their quads up for fog only if it's on)
 	if (WALL_TRAIL_FOG)
