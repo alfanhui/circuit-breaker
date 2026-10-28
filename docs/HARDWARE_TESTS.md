@@ -60,6 +60,9 @@ reads memory 4 bytes at a time. If any of them differs on the real console, it s
 - [ ] 1st person, facing a far wall: the floor darkens smoothly to black where it meets the
       wall's base. Rows near the bottom of the screen are clear, with no banding.
 - [ ] Iso (Down): the top of the floor fades to black; the area round the cycle is clear.
+- [ ] Iso: crash into your trail and slide along it with the trail on the camera's side. The cube
+      should stay behind the trail (only its top showing) all along, no flicker at any spot. The
+      cube on its own should show 3 faces, none missing.
 - [ ] Switch views several times: the fade changes to match each time.
 - [ ] The sky over the wall tops (1st person) is its normal purple-to-pink: no darkening or
       stripes from the fog, which shares its VDP2 screen.
@@ -197,6 +200,14 @@ Result: ________
 
 - [ ] **Double tap for a U-turn**: does the short wait for the 50-unit gap feel like the turn
       you asked for, or like lag? Running back beside your trail, it should look solid.
+- [ ] **Crash into a trail**: drive a box and steer back into your own trail. The cycle should
+      stop dead with the trail filling the view (no hole, no flicker), stay stopped while facing
+      it, and pull away from a standing start after turning. Same against the arena edge.
+      Crash, jink left a little, right into the trail again, then right once more: the cycle
+      must stay put, not drive back over the bit it just laid.
+      Then turn to run along the trail: it should reach the screen's edge, nothing showing past
+      it. The trail is now cut 10 in front of the camera (and the camera moved 20 forward, onto the cycle): watch for its near corners jumping
+      or tearing (VDP1 coordinate overflow), right beside a trail and stopped facing one.
 - [ ] **Rapid taps**: tap Left five times fast. Every tap should turn (presses are latched so a
       slow frame can't lose one).
 - [ ] **Boost** (hold Up): does +75% feel like a kick at every cruise speed (B/C)? Is 1.5 s
