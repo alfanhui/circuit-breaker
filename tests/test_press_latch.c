@@ -4,6 +4,23 @@
 // Same bits as DIGI_LEFT / DIGI_RIGHT, but this file can't include the Saturn headers
 #define LEFT 0x4000
 #define RIGHT 0x8000
+#define UP 0x1000
+
+// Boost reads held buttons from the same sample the turns come from
+static void held_and_struck_come_from_the_same_sample(void)
+{
+	press_latch l;
+
+	press_latch_init(&l);
+	press_latch_sample(&l, (unsigned short)(UP | LEFT)); // boost and turn pressed together...
+	CHECK_EQ(LEFT | UP, press_latch_take(&l));
+	CHECK_EQ(UP | LEFT, press_latch_held(&l)); // ...and both seen in the same game frame
+	press_latch_sample(&l, UP);
+	CHECK_EQ(0, press_latch_take(&l)); // still holding: not a new press...
+	CHECK_EQ(UP, press_latch_held(&l)); // ...but held, so the boost carries on
+	press_latch_sample(&l, 0);
+	CHECK_EQ(0, press_latch_held(&l)); // let go
+}
 
 static void press_is_reported_once(void)
 {
@@ -110,4 +127,5 @@ void run_press_latch_tests(void)
 	RUN(buttons_are_independent);
 	RUN(press_during_take_is_kept_for_next_frame);
 	RUN(double_tap_inside_one_frame_is_the_known_limit);
+	RUN(held_and_struck_come_from_the_same_sample);
 }

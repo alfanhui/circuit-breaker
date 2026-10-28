@@ -1,0 +1,55 @@
+# Tight U-turn (double tap) in slow motion: the presses land about a game frame apart, so the
+# turn gate holds the second until the 50-unit gap. Shots every ~game frame as the camera
+# swings round, then back at full speed running beside the trail.
+wait 17
+press c 3
+wait 3
+press z
+wait 0.5
+press left
+press left
+shot ut_01
+shot ut_02
+shot ut_03
+shot ut_04
+shot ut_05
+shot ut_06
+shot ut_07
+shot ut_08
+shot ut_09
+shot ut_10
+shot ut_11
+shot ut_12
+shot ut_13
+shot ut_14
+shot ut_15
+shot ut_16
+shot ut_17
+shot ut_18
+shot ut_19
+shot ut_20
+shot ut_21
+shot ut_22
+shot ut_23
+shot ut_24
+shot ut_25
+shot ut_26
+shot ut_27
+shot ut_28
+shot ut_29
+shot ut_30
+shot ut_31
+shot ut_32
+shot ut_33
+shot ut_34
+shot ut_35
+shot ut_36
+shot ut_37
+shot ut_38
+shot ut_39
+shot ut_40
+press z 3
+wait 1
+shot ut_run_1
+wait 1
+shot ut_run_2

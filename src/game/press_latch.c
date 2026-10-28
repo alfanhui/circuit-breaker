@@ -24,3 +24,8 @@ unsigned short press_latch_take(press_latch *l)
 	l->seen = toggles;
 	return struck;
 }
+
+unsigned short press_latch_held(const press_latch *l)
+{
+	return l->held;
+}

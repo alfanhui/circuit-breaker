@@ -23,10 +23,8 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 | Tune the boost by feel | Numbers in cycle.h (+75%, full in 8 frames, 1.5 s, 0.5 s pause, 3 s refill) and view.c (FOV +12 degrees, eased 2/16 a frame): judge in play and on the Saturn | S |
 | Boost juice beyond the view | Sound (Cesta-like glassy whoosh), the trail brightening while boosting, a flash when the gauge is full again | M |
 | Floor fog during the FOV kick | The fog rows are worked out for 90 degrees: while boosting the fog sits up to ~15% nearer. Rebuild the table per FOV step if it shows | S |
-| Cycle heading visible in iso view | The cube is symmetrical: only the trail shows direction. Nose polygon or camera lead | S |
 | Crash on walls and trails (collision) | Hitting a wall just stops the cycle; in Tron it's a crash. Board: "Add collision detection logic" | L |
-| Decide: double-tap U-turn, or grid-snapped turns | Two quick turns lay a 7-unit stub; with collision that's suicide | S (decision) |
-| One input source | Turns read raw SMPC registers, boost uses jo's pad read; they can be a frame apart | S |
+| Trail hole beside the camera | The trail is cut 20 in front of the 1st person camera; closer than ~20 to its side the cut shows as a hole. The turn gate (50) and collision (cycle half-width 25) keep the cycle out, but with the boost's wider view 25 to the side is only just enough: consider `TRAIL_MIN_FORWARD` 10 (VDP1 range allows ~6) | S |
 
 ## Next: floor pixelation (proposed 2026-10-27)
 
@@ -80,6 +78,8 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 
 | Item | Commit |
 |---|---|
+| Minimum gap between turns (`turn_gate`, decision A): a turn within 50 units (a cycle width) of the last waits and fires at the gap, so a double tap is a 50-wide U-turn instead of a 7-unit stub that would land on the cycle's own trail; a stopped cycle can always turn. Also closes the hole seen running right beside the trail (its clipped near end was on screen). E2E `uturn.steps`, slow-motion `uturn_slow.steps` | uncommitted |
+| One input source: boost reads the held buttons from the press latch (`press_latch_held`), the same vblank sample the turns come from, instead of jo's own pad read, so a turn and a boost pressed together land in the same frame | uncommitted |
 | Boost reworked: +75% of the current speed at any cruise (was a fixed +7), a full gauge lasts 1.5 s (was 0.67), refill waits 0.5 s after the button is let go (tapping can't top it up), 3 s to refill. The boost builds over 8 frames (0.13 s) and fades over 16; it snapped to full in 2, and the view widening with it looked like a glitch. Feedback: the 1st person view eases up to +12 degrees wider (`ease_out_step`, 2/16 a frame, never a whole degree in one frame; culling and `wall_clip` widen with it), and a gauge bar at the bottom (`src/hud.c`): white boosting, dim teal waiting, cyan refilling. E2E `boost.steps`, slow-motion `boost_gif.steps`; `keydown`/`keyup` steps added | 76f6c3e, 999c0ff, 59038ff |
 | Never-ending sunset: generated sky (`tools/make_sky.py`). The old SKY.TGA stepped to black at texel 53, a black band across the top of the 1st person screen; now the original glow up to violet, then deepening to indigo by texel 84 and held, past the screen top (~77) | c90954b |
 | Sky back on (`SHOW_SKY`), above the walls. It's RBG0 plane B, the floor's own screen, so the floor fog's per-row blend reaches it, but sky rows get level 0: checked unchanged with the floor fog on and off | ed926ac |

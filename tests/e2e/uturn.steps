@@ -1,0 +1,22 @@
+# U-turn by double tap (turn_gate.h): the second turn waits for a cycle-width gap, so the cycle
+# comes back alongside its own trail 50+ units away. 1st person shots while the camera swings
+# round and while running beside the trail: the trail should look solid, nothing showing past it.
+wait 17
+press c 3
+wait 3
+press left
+press left
+shot uturn_1
+wait 0.1
+shot uturn_2
+wait 0.2
+shot uturn_3
+wait 0.4
+shot uturn_4
+wait 1
+shot uturn_5
+wait 2
+shot uturn_6
+press down
+wait 0.5
+shot uturn_7_iso

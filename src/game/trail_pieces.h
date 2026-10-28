@@ -45,7 +45,9 @@ int trail_build_columns(const trail *t, int head_gap, world_point focus, const w
  * nearest end slid forward along the trail. Works in place (out may be columns).
  * Returns the number of columns left.
  */
-#define TRAIL_MIN_FORWARD 20 // the trail is 60 tall: its corners stay inside VDP1's range from ~6 away
+// The trail is 60 tall: its corners stay inside VDP1's range from ~6 away. A cycle closer than
+// this to the side of a trail would see the cut on screen as a hole (turn_gate.h keeps U-turns 50 apart)
+#define TRAIL_MIN_FORWARD 20
 int trail_clip_columns(const trail_column *columns, int count, const wall_clip_camera *camera,
 					   int min_forward, trail_column *out);
 

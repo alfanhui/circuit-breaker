@@ -11,7 +11,8 @@ shot boost_1_boosting
 wait 0.6
 shot boost_2_draining
 keyup up
-wait 0.2
+# The boost fades over 16 frames (white until then), then the pause before the refill
+wait 0.4
 shot boost_3_waiting
 wait 1.5
 shot boost_4_refilling

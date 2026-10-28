@@ -1,4 +1,5 @@
 #include "input.h"
+#include "game/turn_gate.h"
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
@@ -6,6 +7,7 @@
 
 cycle player1;
 trail player1_trail;
+static turn_gate player1_turns; // a minimum gap between turns (game/turn_gate.h)
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 
@@ -33,6 +35,7 @@ static void stress_fill_trail(void)
 void init_players(void)
 {
 	cycle_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
+	turn_gate_init(&player1_turns);
 	trail_reset(&player1_trail, player1.position);
 	view_init(&player1);
 #ifdef PERF_STRESS_TRAIL
@@ -93,6 +96,8 @@ void gamepad_input(void)
 {
 	static unsigned int frame = 0;
 	unsigned short struck;
+	int turn;
+	world_point before;
 
 	// Slow motion: skip the game update on most frames. Skipped before the presses are taken,
 	// so a press waits in the latch for the next update rather than being lost
@@ -122,21 +127,32 @@ void gamepad_input(void)
 	if (struck & DIGI_DOWN)
 		view_toggle(&player1);
 
-	// Turns are instant for the cycle and the wall; only the 1st person camera eases round
-	if (struck & DIGI_LEFT)
+	// Turns are instant for the cycle and the wall; only the 1st person camera eases round.
+	// The gate holds back a turn pressed within a cycle-width of the last one (a quick double
+	// tap) until that gap is reached, so a U-turn never lands on the cycle's own trail
+	turn = turn_gate_update(&player1_turns, (struck & DIGI_LEFT)	? TURN_LEFT
+											: (struck & DIGI_RIGHT) ? TURN_RIGHT
+																	: TURN_NONE);
+	if (turn == TURN_LEFT)
 	{
 		trail_add_corner(&player1_trail);
 		cycle_turn_left(&player1);
 		view_turn_left();
 	}
-	else if (struck & DIGI_RIGHT)
+	else if (turn == TURN_RIGHT)
 	{
 		trail_add_corner(&player1_trail);
 		cycle_turn_right(&player1);
 		view_turn_right();
 	}
 
-	cycle_update(&player1, jo_is_pad1_key_pressed(JO_KEY_UP));
+	// Boost (held) comes from the same pad sample as the turns (struck), so a turn and a boost
+	// pressed together land in the same frame. It used to be jo's own pad read, filled at a
+	// different point in the frame: the two could be a frame apart
+	before = player1.position;
+	cycle_update(&player1, (press_latch_held(&pad1_presses) & DIGI_UP) != 0);
+	// How far it went: it only moves along one axis, so the two differences add up to it
+	turn_gate_moved(&player1_turns, JO_ABS(player1.position.x - before.x) + JO_ABS(player1.position.y - before.y));
 	trail_set_head(&player1_trail, player1.position);
 
 	// A: clear the wall and start a fresh one here

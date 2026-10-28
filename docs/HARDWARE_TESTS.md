@@ -195,6 +195,8 @@ Result: ________
 
 ## 6. Controls
 
+- [ ] **Double tap for a U-turn**: does the short wait for the 50-unit gap feel like the turn
+      you asked for, or like lag? Running back beside your trail, it should look solid.
 - [ ] **Rapid taps**: tap Left five times fast. Every tap should turn (presses are latched so a
       slow frame can't lose one).
 - [ ] **Boost** (hold Up): does +75% feel like a kick at every cruise speed (B/C)? Is 1.5 s
@@ -203,9 +205,8 @@ Result: ________
       popping in at the screen edges as it widens (culling is told the wider view)?
 - [ ] **The gauge bar** at the bottom: readable on the TV, inside the picture (not cut off by
       the TV's edge), colours distinct (white boosting, dim teal waiting, cyan refilling)?
-- [ ] **Turn and boost together**: turns and boost read the pad in two different ways and may be
-      a frame apart (backlog: "one input source"). Does turn + boost on the same press feel
-      off?
+- [ ] **Turn and boost together**: both now come from the same pad sample, so they should
+      land in the same frame. Does turn + boost on the same press feel right?
 - [ ] **Unplug the pad mid-game** and plug it back: the game should carry on, not hang or turn.
 - [ ] If you have a 3D Control Pad (the analogue one), try it in digital mode (switch at "+").
 - [ ] **Tuning**: with B/C (speed) and L/R (arena size), find what feels best on the TV.

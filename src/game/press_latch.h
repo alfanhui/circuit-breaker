@@ -38,4 +38,8 @@ void press_latch_sample(press_latch *l, unsigned short pressed_now);
 // Game frame: buttons newly pressed since the last call (1 = struck).
 unsigned short press_latch_take(press_latch *l);
 
+// Game frame: buttons down at the last sample (1 = down), for held controls like boost. The same
+// sample the presses come from, so a turn and a boost made together are seen in the same frame.
+unsigned short press_latch_held(const press_latch *l);
+
 #endif
