@@ -28,6 +28,7 @@ void cycle_init(cycle *c, short x, short y, unsigned char heading)
 	c->boost = 0;
 	c->bounded = 1;
 	c->gauge = CYCLE_GAUGE_MAX;
+	c->refill_wait = 0;
 }
 
 void cycle_turn_left(cycle *c)
@@ -68,19 +69,28 @@ int cycle_update(cycle *c, int boosting)
 	else if (c->speed > cruise_speed)
 		c->speed = (unsigned char)cruise_speed;
 
+	// Holding the button, even on an empty gauge, holds the refill off
+	if (boosting)
+		c->refill_wait = CYCLE_REFILL_DELAY;
+
 	if (boosting && c->gauge >= CYCLE_GAUGE_DRAIN)
 	{
 		c->gauge -= CYCLE_GAUGE_DRAIN;
-		c->boost = (c->boost + CYCLE_BOOST_RAMP_UP > CYCLE_BOOST_MAX) ? CYCLE_BOOST_MAX : c->boost + CYCLE_BOOST_RAMP_UP;
+		c->boost = (c->boost + CYCLE_BOOST_RAMP_UP > CYCLE_BOOST_FULL) ? CYCLE_BOOST_FULL : c->boost + CYCLE_BOOST_RAMP_UP;
 	}
 	else
 	{
 		c->boost = (c->boost > CYCLE_BOOST_RAMP_DOWN) ? c->boost - CYCLE_BOOST_RAMP_DOWN : 0;
-		if (!boosting && c->gauge < CYCLE_GAUGE_MAX)
-			c->gauge += CYCLE_GAUGE_REFILL;
+		if (c->refill_wait > 0)
+			c->refill_wait--;
+		else if (c->gauge < CYCLE_GAUGE_MAX)
+			c->gauge = (c->gauge + CYCLE_GAUGE_REFILL > CYCLE_GAUGE_MAX) ? CYCLE_GAUGE_MAX : c->gauge + CYCLE_GAUGE_REFILL;
 	}
 
-	distance = c->speed + c->boost;
+	// The boost adds a share of the current speed: speed * share / 16 * level / 16, as one shift,
+	// rounded to the nearest unit (+ 128 is half of 256). Rounded down, the first boosted frame
+	// at cruise 7 added 0.66 of a unit: nothing
+	distance = c->speed + ((c->speed * CYCLE_BOOST_SHARE * c->boost + 128) >> 8);
 	c->position.x = (short)(c->position.x + WORLD_HEADING_DX(c->heading) * distance);
 	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * distance);
 
