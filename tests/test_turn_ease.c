@@ -1,5 +1,60 @@
 #include "test.h"
 #include "../src/game/turn_ease.h"
+#include "../src/game/cycle.h"
+
+// The boost's FOV kick, as view.c does it: the FOV (in ANGLE, 182 a degree) eases with
+// ease_out_step towards 90 degrees + 12 x boost level / 16, while the boost level ramps
+#define FOV_90 0x4000
+#define FOV_BOOST 2184 // 12 degrees
+#define FOV_SHARE 2
+#define FOV_MIN_STEP 32
+#define DEGREE 182
+
+// Frames of holding boost then letting go; returns the biggest change in one frame, and the FOV
+// at the end in *fov_out
+static int boost_fov_run(int held, int released, int *fov_out)
+{
+	int level = 0;
+	int fov = FOV_90;
+	int biggest = 0;
+
+	for (int frame = 0; frame < held + released; ++frame)
+	{
+		int next;
+
+		if (frame < held) // the boost level's ramps (cycle.c)
+			level = level + CYCLE_BOOST_RAMP_UP > CYCLE_BOOST_FULL ? CYCLE_BOOST_FULL : level + CYCLE_BOOST_RAMP_UP;
+		else
+			level = level > CYCLE_BOOST_RAMP_DOWN ? level - CYCLE_BOOST_RAMP_DOWN : 0;
+		next = ease_out_step(fov, FOV_90 + ((level * FOV_BOOST) >> 4), FOV_SHARE, FOV_MIN_STEP);
+		if (next - fov > biggest)
+			biggest = next - fov;
+		if (fov - next > biggest)
+			biggest = fov - next;
+		fov = next;
+	}
+	*fov_out = fov;
+	return biggest;
+}
+
+static void boost_fov_widens_smoothly(void)
+{
+	int fov;
+
+	// It used to follow the boost level straight: 6 degrees a frame, which looked like a glitch
+	CHECK(boost_fov_run(40, 60, &fov) < DEGREE); // never a whole degree in one frame
+	CHECK(boost_fov_run(1, 0, &fov) < DEGREE / 4); // and the first frame barely moves
+}
+
+static void boost_fov_settles_and_returns(void)
+{
+	int fov;
+
+	boost_fov_run(40, 0, &fov);
+	CHECK_EQ(FOV_90 + FOV_BOOST, fov); // fully widened after 2/3 s of boost
+	boost_fov_run(40, 60, &fov);
+	CHECK_EQ(FOV_90, fov); // and back to exactly 90 degrees a second after letting go
+}
 
 #define QUARTER 0x4000 // 90 degrees
 
@@ -106,4 +161,6 @@ void run_turn_ease_tests(void)
 	RUN(steps_shrink_and_never_overshoot);
 	RUN(tail_never_crawls);
 	RUN(second_turn_mid_ease_carries_on);
+	RUN(boost_fov_widens_smoothly);
+	RUN(boost_fov_settles_and_returns);
 }

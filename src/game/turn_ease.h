@@ -26,6 +26,11 @@
 // The camera's next angle, one frame from current towards target. Never overshoots.
 int turn_ease_step(int current, int target);
 
+// The same ease-out for anything else: one frame from current towards target, covering
+// share sixteenths of what's left (at least min_step), landing exactly. Never overshoots.
+// The boost's FOV kick uses it (view.c) with a smaller share, so it widens gently
+int ease_out_step(int current, int target, int share, int min_step);
+
 // The old turn, kept to compare against (debug: Z in input.c): the same 9 degrees every frame
 #define TURN_LINEAR_STEP (0x4000 / 10) // worked out by the compiler, so no division at runtime
 int turn_linear_step(int current, int target);

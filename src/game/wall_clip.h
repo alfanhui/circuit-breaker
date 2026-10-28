@@ -16,18 +16,24 @@
  * strip's near end slides along the wall until it's that far in front. VDP1 stretches the whole
  * texture over each quad, so sliding a corner just squeezes the texture sideways; the wall
  * texture has lines only at piece edges, so nothing visible moves.
- * Pieces wholly outside the 90 degree view are dropped, so far-off pieces can't overflow either.
+ * Pieces wholly outside the view (90 degrees, wider while boosting) are dropped, so far-off
+ * pieces can't overflow either.
  *
  * A strip is columns[0..n] (n pieces) along a straight wall.
  */
 
 #define WALL_CLIP_FOV_MARGIN 100 // keep pieces just outside the view edge, so none pop at the border
 
+// How far the view reaches sideways per unit in front, x16: tan(half the FOV) x 16. A 90
+// degree view reaches as far to the side as it is in front: 16. The boost widens the view (view.c)
+#define WALL_CLIP_VIEW_WIDTH_90 16
+
 typedef struct
 {
 	world_point eye;
-	int forward_x; // camera's forward direction on the floor, x1024
+	int forward_x;	// camera's forward direction on the floor, x1024
 	int forward_y;
+	int view_width; // sideways reach per unit in front, x16 (WALL_CLIP_VIEW_WIDTH_90 = 90 degrees)
 } wall_clip_camera;
 
 typedef struct

@@ -7,6 +7,18 @@
 #define FIRST_PERSON_FOV 90
 #define FIRST_PERSON_Z (-35)
 #define FIRST_PERSON_RX DEGtoANG(90.0)
+// Boosting widens the 1st person view: the classic sense-of-speed kick, as if the world
+// stretches past. Culling and wall_clip are told the wider view, so no wall pieces go missing at
+// the screen edges. The floor fog's rows are worked out for 90 degrees, so while widened it sits
+// a little nearer than it should (up to ~15%).
+// The FOV eases towards where the boost level says (ease_out_step), rather than following it:
+// following it, it widened 6 degrees a frame and looked like a glitch. It's kept in SGL's ANGLE
+// units (65536 a circle), not whole degrees, so even its slowest steps are smooth
+#define FIRST_PERSON_BOOST_FOV 12				   // extra degrees at full boost
+#define FIRST_PERSON_FOV_ANGLE DEGtoANG(FIRST_PERSON_FOV) // constants: worked out by the compiler
+#define BOOST_FOV_ANGLE DEGtoANG(FIRST_PERSON_BOOST_FOV)
+#define FOV_EASE_SHARE 2	 // sixteenths of the way each frame: most of it in ~0.3 s, settled in ~0.6 s
+#define FOV_EASE_MIN_STEP 32 // 0.18 degrees: the slowest it moves before it lands
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
@@ -33,6 +45,26 @@ ANGLE view_rz;
 static int heading_target = 0;
 static int heading_current = 0;
 
+// SGL's tangent (16.16 fixed point). jo's headers don't declare it; this is SGL's own line (sl_def.h)
+extern FIXED slTan(ANGLE);
+
+// The 1st person FOV now (ANGLE), and how far it reaches sideways per unit ahead (wall_clip.h)
+static int fov_now = FIRST_PERSON_FOV_ANGLE;
+static int view_width_now = WALL_CLIP_VIEW_WIDTH_90;
+
+// One frame of easing towards the target FOV (ANGLE)
+static void ease_first_person_fov(int target)
+{
+	int fov = ease_out_step(fov_now, target, FOV_EASE_SHARE, FOV_EASE_MIN_STEP);
+
+	if (fov == fov_now)
+		return; // only while it's moving, not every frame
+	fov_now = fov;
+	slPerspective((ANGLE)fov);
+	// tan(fov / 2) x 16, rounded up so the culling errs wide
+	view_width_now = (slTan((ANGLE)(fov >> 1)) * 16 + 0xFFFF) >> 16;
+}
+
 static void apply_view(const cycle *c)
 {
 	int fade_start;
@@ -41,6 +73,8 @@ static void apply_view(const cycle *c)
 	if (first_person)
 	{
 		jo_3d_perspective_angle(FIRST_PERSON_FOV);
+		fov_now = FIRST_PERSON_FOV_ANGLE;
+		view_width_now = WALL_CLIP_VIEW_WIDTH_90;
 		view_z = FIRST_PERSON_Z;
 		view_rx = FIRST_PERSON_RX;
 		heading_current = heading_target;
@@ -82,6 +116,8 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 		mode = VIEW_CULL_ISO;
 	else if (heading_current != heading_target)
 		mode = VIEW_CULL_TURNING; // easing round: the camera faces somewhere between two headings
+	else if (fov_now != FIRST_PERSON_FOV_ANGLE)
+		mode = VIEW_CULL_TURNING; // boosting: wider than the 90 degree rectangle, so look all round
 	else
 		mode = VIEW_CULL_FIRST_PERSON;
 	return view_cull_rect(c->position, c->heading, mode, range);
@@ -98,6 +134,7 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 	// slSin/slCos give 16.16 fixed point; >> 6 makes it x1024
 	out->forward_x = -(slSin(yaw) >> 6);
 	out->forward_y = -(slCos(yaw) >> 6);
+	out->view_width = view_width_now;
 	return true;
 }
 
@@ -137,6 +174,10 @@ void view_follow(const cycle *c)
 		else
 			heading_current = turn_ease_step(heading_current, heading_target);
 		view_rz = (ANGLE)heading_current;
+
+		// Ease towards the width the boost level asks for (0..CYCLE_BOOST_FULL, which is 16: >> 4
+		// divides by it). The level ramps up over 8 frames; easing on top rounds both ends off
+		ease_first_person_fov(FIRST_PERSON_FOV_ANGLE + ((c->boost * BOOST_FOV_ANGLE) >> 4));
 	}
 	else
 	{

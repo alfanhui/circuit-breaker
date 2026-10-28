@@ -24,7 +24,23 @@ static wall_clip_camera camera(int x, int y, int forward_x, int forward_y)
 	c.eye.y = (short)y;
 	c.forward_x = forward_x;
 	c.forward_y = forward_y;
+	c.view_width = WALL_CLIP_VIEW_WIDTH_90;
 	return c;
+}
+
+// The boost widens the view: a piece just off the side of a 90 degree view comes into it
+static void wider_view_keeps_pieces_at_the_side(void)
+{
+	// Facing north from the origin; the piece is 1000 ahead and 1200..1450 to the right (east, -x)
+	world_point piece[2] = {{-1200, -1000}, {-1450, -1000}};
+	wall_clip_camera c = camera(0, 0, 0, -1024);
+	wall_clip_run run;
+
+	run = wall_clip_strip(piece, 1, &c, 40);
+	CHECK_EQ(0, run.count); // 90 degrees reaches 1000 (+100 margin) to the side at 1000 ahead
+	c.view_width = 20;		// ~102 degrees: tan(51) = 1.23
+	run = wall_clip_strip(piece, 1, &c, 40);
+	CHECK_EQ(1, run.count); // reaches 1250 (+100)
 }
 
 // The screenshot case: hugging the north wall (96 away), running east (-x)
@@ -88,4 +104,5 @@ void run_wall_clip_tests(void)
 	RUN(facing_a_wall_up_close_keeps_only_the_low_strip);
 	RUN(wall_behind_draws_nothing);
 	RUN(diagonal_view_never_starts_behind);
+	RUN(wider_view_keeps_pieces_at_the_side);
 }

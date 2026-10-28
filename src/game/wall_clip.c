@@ -23,25 +23,28 @@ static view_pos view_pos_of(const wall_clip_camera *c, world_point p)
 	return v;
 }
 
-// Outside the 90 degree view: further to one side than it is in front (plus a margin)
-static int left_of_view(view_pos v)
+// Outside the view: further to one side than the view reaches at that distance in front (plus a
+// margin). The view reaches `width` sixteenths of the distance in front (wall_clip.h), so both
+// sides are compared x16 rather than dividing. Largest products: ~4e7 x 16 and ~4e7 x 32, well
+// inside an int
+static int left_of_view(view_pos v, int width)
 {
-	return v.right < -(v.forward + SCALED(WALL_CLIP_FOV_MARGIN));
+	return v.right * 16 < -(v.forward * width + SCALED(WALL_CLIP_FOV_MARGIN) * 16);
 }
 
-static int right_of_view(view_pos v)
+static int right_of_view(view_pos v, int width)
 {
-	return v.right > v.forward + SCALED(WALL_CLIP_FOV_MARGIN);
+	return v.right * 16 > v.forward * width + SCALED(WALL_CLIP_FOV_MARGIN) * 16;
 }
 
-static int piece_visible(view_pos a, view_pos b, int min_forward)
+static int piece_visible(view_pos a, view_pos b, int min_forward, int width)
 {
 	min_forward = SCALED(min_forward);
 	if (a.forward < min_forward && b.forward < min_forward)
 		return 0; // too close (or behind) all along
-	if (left_of_view(a) && left_of_view(b))
+	if (left_of_view(a, width) && left_of_view(b, width))
 		return 0;
-	if (right_of_view(a) && right_of_view(b))
+	if (right_of_view(a, width) && right_of_view(b, width))
 		return 0;
 	return 1;
 }
@@ -79,7 +82,7 @@ wall_clip_run wall_clip_strip(const world_point *columns, int pieces,
 	{
 		left = right;
 		right = view_pos_of(camera, columns[j + 1]);
-		if (piece_visible(left, right, min_forward))
+		if (piece_visible(left, right, min_forward, camera->view_width))
 		{
 			if (last < 0)
 				run.first = j;
