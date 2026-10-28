@@ -1,5 +1,6 @@
 #include "cycle.h"
 #include "arena.h"
+#include "collision.h"
 
 // Shared by every cycle: speed is a rule of the race, not a property of one bike
 static int cruise_speed = CYCLE_BASE_SPEED;
@@ -57,9 +58,10 @@ static int clamp_coordinate(short *value, short limit)
 	return 0;
 }
 
-int cycle_update(cycle *c, int boosting)
+int cycle_update(cycle *c, int boosting, const trail *const *trails, int trail_count)
 {
 	int distance;
+	int allowed;
 	int clamped;
 	short limit;
 
@@ -91,12 +93,26 @@ int cycle_update(cycle *c, int boosting)
 	// rounded to the nearest unit (+ 128 is half of 256). Rounded down, the first boosted frame
 	// at cruise 7 added 0.66 of a unit: nothing
 	distance = c->speed + ((c->speed * CYCLE_BOOST_SHARE * c->boost + 128) >> 8);
-	c->position.x = (short)(c->position.x + WORLD_HEADING_DX(c->heading) * distance);
-	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * distance);
 
-	// The clamp happens in the same frame as the move, so the cycle never draws past the edge
+	// Ask before moving how far it can go: the arena edge and trails (collision.h). Unbounded
+	// (debug, Y) is a ghost: through trails and out of the arena, up to the short overflow guard
 	limit = (short)(c->bounded ? arena_player_limit() : WORLD_COORD_LIMIT);
+	allowed = collision_free_distance(c->position, c->heading, distance, limit,
+								   c->bounded ? trails : 0, c->bounded ? trail_count : 0);
+	c->position.x = (short)(c->position.x + WORLD_HEADING_DX(c->heading) * allowed);
+	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * allowed);
+
+	// A cycle left outside the arena (it shrank, or the boundary came back on) is pulled to the
+	// edge. Only needed on the axis it isn't moving along: collision_edge already held the other
 	clamped = clamp_coordinate(&c->position.x, limit);
 	clamped |= clamp_coordinate(&c->position.y, limit);
-	return clamped;
+
+	// A crash, for now, just stops it dead: the speed builds back up from 0 once it turns away
+	if (allowed < distance || clamped)
+	{
+		c->speed = 0;
+		c->boost = 0;
+		return 1;
+	}
+	return 0;
 }

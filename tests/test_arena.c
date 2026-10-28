@@ -70,7 +70,7 @@ static void bounded_cycle_follows_a_resized_arena(void)
 	cycle c;
 	arena_set_pieces(ARENA_PIECES_MIN);
 	cycle_init(&c, 0, 5000, HEADING_SOUTH); // outside the shrunk arena
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(arena_player_limit(), c.position.y);
 	arena_set_pieces(ARENA_PIECES_DEFAULT);
 }
@@ -81,11 +81,11 @@ static void cruise_speed_is_tunable(void)
 	cycle_init(&c, 0, 0, HEADING_SOUTH);
 	CHECK_EQ(20, cycle_set_cruise_speed(20));
 	for (int i = 0; i < 30; ++i)
-		cycle_update(&c, 0);
+		cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(20, c.speed); // ramps up to the new cruise
 
 	cycle_set_cruise_speed(5);
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(5, c.speed); // tuning down takes effect at once
 
 	CHECK_EQ(1, cycle_set_cruise_speed(0));

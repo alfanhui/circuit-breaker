@@ -1,0 +1,24 @@
+# Collision: crash into the cycle's own trail, jink left a little, turn right into the same trail
+# again, then right once more, back up the bit just laid. It must not drive back over its trail:
+# it stays stopped (x and y unchanged between the last two shots).
+wait 17
+press c 3
+wait 2
+press right
+wait 0.5
+press right
+wait 0.5
+press right
+wait 1.5
+press left
+wait 0.15
+press right
+wait 0.3
+press right
+wait 0.3
+shot backtrack_1
+wait 1
+shot backtrack_2
+press down
+wait 0.5
+shot backtrack_iso

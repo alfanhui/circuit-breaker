@@ -2,6 +2,7 @@
 #define __CYCLE_H__
 
 #include "world.h"
+#include "trail.h"
 
 /*
  * Light cycle movement in world space. Pure C, integer only (the SH-2 has no FPU).
@@ -35,7 +36,7 @@ typedef struct
 	unsigned char heading;
 	unsigned char speed; // current speed, ramps up to the cruise speed from a standing start
 	unsigned char boost;   // boost level, 0..CYCLE_BOOST_FULL
-	unsigned char bounded; // 1: stopped at the arena edge, 0: free to leave (debug). Fills a padding byte, so free
+	unsigned char bounded; // 1: stopped by the arena edge and trails, 0: a ghost (debug). Fills a padding byte, so free
 	unsigned char gauge;   // 0..CYCLE_GAUGE_MAX
 	unsigned char refill_wait; // frames until the gauge refills. With gauge, fits where a short was
 } cycle;
@@ -48,8 +49,10 @@ void cycle_init(cycle *c, short x, short y, unsigned char heading);
 void cycle_turn_left(cycle *c);
 void cycle_turn_right(cycle *c);
 
-// Advances one frame. Returns 1 when a limit stopped the cycle: the arena edge when bounded,
-// otherwise WORLD_COORD_LIMIT.
-int cycle_update(cycle *c, int boosting);
+// Advances one frame, stopping short of anything in the way (collision.h): the arena edge and
+// the given trails when bounded, otherwise only WORLD_COORD_LIMIT. trails may be NULL when
+// trail_count is 0. Returns 1 on a crash: the cycle is then stopped (speed and boost 0), and
+// builds back up from a standing start once it's turned away.
+int cycle_update(cycle *c, int boosting, const trail *const *trails, int trail_count);
 
 #endif

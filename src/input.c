@@ -8,6 +8,8 @@
 cycle player1;
 trail player1_trail;
 static turn_gate player1_turns; // a minimum gap between turns (game/turn_gate.h)
+// The trails player 1 can crash into. Only its own for now; a second player's goes here too
+static const trail *const player1_trails[] = {&player1_trail};
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 
@@ -149,8 +151,9 @@ void gamepad_input(void)
 	// Boost (held) comes from the same pad sample as the turns (struck), so a turn and a boost
 	// pressed together land in the same frame. It used to be jo's own pad read, filled at a
 	// different point in the frame: the two could be a frame apart
+	// It stops short of the arena edge and of trails (game/collision.h): for now just its own
 	before = player1.position;
-	cycle_update(&player1, (press_latch_held(&pad1_presses) & DIGI_UP) != 0);
+	cycle_update(&player1, (press_latch_held(&pad1_presses) & DIGI_UP) != 0, player1_trails, 1);
 	// How far it went: it only moves along one axis, so the two differences add up to it
 	turn_gate_moved(&player1_turns, JO_ABS(player1.position.x - before.x) + JO_ABS(player1.position.y - before.y));
 	trail_set_head(&player1_trail, player1.position);
@@ -161,7 +164,8 @@ void gamepad_input(void)
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (struck & DIGI_X)
 		stress_fill_trail();
-	// Y: arena boundary on/off. Turning it back on outside the arena snaps the cycle to the edge next frame
+	// Y: collision on/off (off: a ghost, through trails and out of the arena). Turning it back on
+	// outside the arena snaps the cycle to the edge next frame
 	if (struck & DIGI_Y)
 		player1.bounded = !player1.bounded;
 	// Z: compare the turn cameras (debug text line 5)

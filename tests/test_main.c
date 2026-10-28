@@ -14,6 +14,7 @@ void run_wall_clip_tests(void);
 void run_turn_ease_tests(void);
 void run_depth_fog_tests(void);
 void run_turn_gate_tests(void);
+void run_collision_tests(void);
 void run_depth_fog_tests(void);
 
 int main(void)
@@ -29,6 +30,7 @@ int main(void)
 	run_turn_ease_tests();
 	run_depth_fog_tests();
 	run_turn_gate_tests();
+	run_collision_tests();
 	run_depth_fog_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);

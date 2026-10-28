@@ -6,14 +6,14 @@
 static void run_frames(cycle *c, int frames, int boosting)
 {
 	while (--frames >= 0)
-		cycle_update(c, boosting);
+		cycle_update(c, boosting, NULL, 0);
 }
 
 static void starts_slow_and_ramps_to_cruise(void)
 {
 	cycle c;
 	cycle_init(&c, 0, 0, HEADING_NORTH);
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(-2, c.position.y);
 	run_frames(&c, 20, 0);
 	CHECK_EQ(CYCLE_BASE_SPEED, c.speed);
@@ -31,17 +31,17 @@ static void moves_along_heading(void)
 
 	cycle_turn_right(&c); // east
 	start = c.position.x;
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(start - CYCLE_BASE_SPEED, c.position.x);
 
 	cycle_turn_right(&c); // south
 	start = c.position.y;
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(start + CYCLE_BASE_SPEED, c.position.y);
 
 	cycle_turn_right(&c); // west
 	start = c.position.x;
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(start + CYCLE_BASE_SPEED, c.position.x);
 }
 
@@ -68,7 +68,7 @@ static void boost_speeds_up_and_drains_gauge(void)
 	cycle_init(&c, 0, 0, HEADING_SOUTH);
 	run_frames(&c, 10, 0);
 	start = c.position.y;
-	cycle_update(&c, 1);
+	cycle_update(&c, 1, NULL, 0);
 	CHECK(c.boost > 0); // felt on the first frame...
 	CHECK(c.position.y - start > CYCLE_BASE_SPEED);
 	run_frames(&c, 7, 1);
@@ -85,7 +85,7 @@ static void boost_builds_up_rather_than_jumping(void)
 	// Each frame no more than an eighth of full: a snap to full looked like a glitch
 	while (c.boost < CYCLE_BOOST_FULL)
 	{
-		cycle_update(&c, 1);
+		cycle_update(&c, 1, NULL, 0);
 		CHECK(c.boost - last <= CYCLE_BOOST_FULL / 8);
 		last = c.boost;
 	}
@@ -102,7 +102,7 @@ static int full_boost_step(int speed)
 	run_frames(&c, speed, 0); // ramp up to cruise
 	run_frames(&c, CYCLE_BOOST_FULL / CYCLE_BOOST_RAMP_UP, 1); // boost to full
 	start = c.position.y;
-	cycle_update(&c, 1);
+	cycle_update(&c, 1, NULL, 0);
 	cycle_set_cruise_speed(CYCLE_BASE_SPEED); // cruise is shared by every cycle: put it back
 	return c.position.y - start;
 }
@@ -123,7 +123,7 @@ static void full_gauge_lasts_a_second_and_a_half(void)
 	cycle_init(&c, 0, 0, HEADING_SOUTH);
 	while (c.gauge >= CYCLE_GAUGE_DRAIN && frames < 1000)
 	{
-		cycle_update(&c, 1);
+		cycle_update(&c, 1, NULL, 0);
 		++frames;
 	}
 	CHECK_EQ(90, frames); // 1.5 s at 60 fps (it was 40 frames: 0.67 s)
@@ -148,7 +148,7 @@ static void boost_fades_after_release(void)
 	run_frames(&c, CYCLE_BOOST_FULL / CYCLE_BOOST_RAMP_UP, 1);
 	run_frames(&c, CYCLE_BOOST_FULL / CYCLE_BOOST_RAMP_DOWN - 1, 0);
 	CHECK(c.boost > 0); // still fading...
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(0, c.boost); // ...gone 16 frames after letting go
 }
 
@@ -162,7 +162,7 @@ static void gauge_waits_before_refilling(void)
 	after_boost = c.gauge;
 	run_frames(&c, CYCLE_REFILL_DELAY, 0);
 	CHECK_EQ(after_boost, c.gauge); // half a second of nothing...
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(after_boost + CYCLE_GAUGE_REFILL, c.gauge); // ...then it refills
 	run_frames(&c, 1000, 0);
 	CHECK_EQ(CYCLE_GAUGE_MAX, c.gauge); // and stops when full
@@ -178,7 +178,7 @@ static void tapping_never_refills(void)
 	// Tap every 20 frames: each tap restarts the wait, so the gauge only goes down
 	for (int tap = 0; tap < 10; ++tap)
 	{
-		cycle_update(&c, 1);
+		cycle_update(&c, 1, NULL, 0);
 		run_frames(&c, 19, 0);
 		CHECK(c.gauge < last);
 		last = c.gauge;
@@ -191,7 +191,7 @@ static void stops_at_arena_limit(void)
 	cycle_init(&c, 0, (short)(arena_player_limit() - 3), HEADING_SOUTH);
 	run_frames(&c, 10, 0);
 	CHECK_EQ(arena_player_limit(), c.position.y);
-	CHECK_EQ(1, cycle_update(&c, 0));
+	CHECK_EQ(1, cycle_update(&c, 0, NULL, 0));
 
 	cycle_init(&c, (short)(-arena_player_limit() + 3), 0, HEADING_EAST);
 	run_frames(&c, 10, 0);
@@ -212,7 +212,7 @@ static void unbounded_cycle_leaves_the_arena(void)
 	c.bounded = 0;
 	run_frames(&c, 10, 0);
 	CHECK(c.position.y > arena_player_limit());
-	CHECK_EQ(0, cycle_update(&c, 0)); // nothing stopped it
+	CHECK_EQ(0, cycle_update(&c, 0, NULL, 0)); // nothing stopped it
 }
 
 static void unbounded_cycle_stops_before_short_overflow(void)
@@ -222,14 +222,14 @@ static void unbounded_cycle_stops_before_short_overflow(void)
 	c.bounded = 0;
 	run_frames(&c, 10, 1);
 	CHECK_EQ(WORLD_COORD_LIMIT, c.position.x); // not wrapped round to a negative
-	CHECK_EQ(1, cycle_update(&c, 0));
+	CHECK_EQ(1, cycle_update(&c, 0, NULL, 0));
 }
 
 static void rebounding_snaps_back_to_the_edge(void)
 {
 	cycle c;
 	cycle_init(&c, 0, (short)(arena_player_limit() + 500), HEADING_SOUTH); // outside, as if the boundary was off
-	cycle_update(&c, 0);
+	cycle_update(&c, 0, NULL, 0);
 	CHECK_EQ(arena_player_limit(), c.position.y);
 }
 

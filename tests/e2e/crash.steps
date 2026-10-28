@@ -1,0 +1,27 @@
+# Collision (game/collision.h): drive a box and turn back into the cycle's own trail. The cycle
+# should stop dead 25 short of it, the trail still whole in front of the 1st person camera;
+# then turn away and build back up from a standing start.
+wait 17
+press c 3
+wait 2
+press right
+wait 0.5
+press right
+wait 0.5
+press right
+wait 0.3
+shot crash_1_approach
+wait 1.5
+shot crash_2_stopped
+wait 1
+shot crash_3_still_stopped
+press down
+wait 0.5
+shot crash_4_iso
+press down
+wait 0.5
+press right
+wait 0.15
+shot crash_5_rebuilding
+wait 1
+shot crash_6_away
