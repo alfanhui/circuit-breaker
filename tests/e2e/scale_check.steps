@@ -1,5 +1,8 @@
 # After drawing the world at 1/4 scale: near trail, far south wall, close-up wall, iso view
 wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 press down
 press right
 press right

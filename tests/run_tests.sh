@@ -4,5 +4,5 @@ set -e
 cd "$(dirname "$0")"
 mkdir -p build
 ${CC:-gcc} -std=c99 -W -Wall -Wextra -Werror -o build/tests \
-	test_main.c test_trail.c test_cycle.c test_press_latch.c test_arena.c test_trail_pieces.c test_floor_fade.c test_view_cull.c test_wall_clip.c ../src/game/trail.c ../src/game/cycle.c ../src/game/press_latch.c ../src/game/arena.c ../src/game/trail_pieces.c ../src/game/floor_fade.c ../src/game/view_cull.c ../src/game/wall_clip.c
+	test_main.c test_trail.c test_cycle.c test_press_latch.c test_arena.c test_trail_pieces.c test_floor_fade.c test_view_cull.c test_wall_clip.c test_turn_ease.c test_depth_fog.c test_depth_fog.c ../src/game/trail.c ../src/game/cycle.c ../src/game/press_latch.c ../src/game/arena.c ../src/game/trail_pieces.c ../src/game/floor_fade.c ../src/game/view_cull.c ../src/game/wall_clip.c ../src/game/turn_ease.c ../src/game/depth_fog.c ../src/game/depth_fog.c
 ./build/tests

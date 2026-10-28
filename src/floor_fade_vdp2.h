@@ -4,19 +4,23 @@
 #include <jo/jo.h>
 
 /*
- * Fades the far floor into a horizon haze using VDP2's line colour screen.
- *
- * VDP2 can insert a colour per screen line underneath a layer and mix the two. In
- * additive mode the result is layer + line colour: a black line colour changes nothing,
- * so near rows stay untouched while rows towards the horizon get more haze added.
- * The per-row strengths come from game/floor_fade.c; this file owns the VDP2 side:
- * a palette ramping from black to the haze colour, and the per-line table pointing into it.
+ * Fades the far floor into black fog: VDP2's line colour screen (black) blended into the floor
+ * by a ratio that an HBlank-started DMA changes on every screen row. See floor_fade_vdp2.c.
+ * The per-row strengths come from game/floor_fade.c; this file owns the VDP2 side.
  */
 
-// Call once, after the floor and sky planes are set up.
+// Call once, after the floor plane is set up. Arms the per-row DMA.
 void floor_fade_init(void);
 
-// Rebuild the per-line table for the current view (each camera sees the floor differently).
+// Call from a VBlank callback: points the per-row DMA back at the right row for the next frame.
+void floor_fade_vblank(void);
+
+// Rebuild the per-row ratios for the current view (each camera sees the floor differently).
 void floor_fade_set_first_person(bool first_person);
+
+// Where the floor's fade begins and where it's full, along the floor, for a view: so the walls
+// and trails (object_fog_vdp1.h) fade over the same distances as the floor they stand on.
+// Works whether or not the floor fog is on.
+void floor_fade_distances(bool first_person, int *fade_start, int *fade_end);
 
 #endif

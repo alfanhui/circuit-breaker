@@ -1,0 +1,10 @@
+# CPU with the worst-case trail (X), to compare WALL_TRAIL_FOG on and off. The cpu figure is a
+# one-second average, so each shot waits 3 s after the scene changes.
+wait 17
+# Starts in 1st person
+press x
+wait 3
+shot fog_perf_1st
+press down
+wait 3
+shot fog_perf_iso

@@ -35,6 +35,13 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range);
 // Returns false (nothing written) in other views.
 bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out);
 
+// Where the camera stands on the floor and the way it faces (x1024), for fogging walls and
+// trails by distance (object_fog_vdp1.h). Returns false for the debug camera: no fog.
+bool view_fog_camera(bool free_camera, world_point *eye, int *forward_x, int *forward_y);
+
+// Debug: the old linear turn instead of the ease-out, to compare (turn_ease.h)
+extern bool view_linear_turn;
+
 void view_turn_left(void);
 void view_turn_right(void);
 void view_follow(const cycle *c);

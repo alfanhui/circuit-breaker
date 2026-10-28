@@ -1,5 +1,8 @@
 # From near the arena centre the walls are ~8000 away: they should show in every direction.
 wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 press down
 # cpu is a one-second average: let it settle before each shot
 wait 2.5

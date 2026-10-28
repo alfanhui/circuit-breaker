@@ -11,6 +11,16 @@ static int level_for_distance(const floor_fade_view *view, int distance)
 	return (distance - view->fade_start) * MAX_LEVEL / (view->fade_end - view->fade_start);
 }
 
+int floor_fade_ratio(int level)
+{
+	if (level <= 0)
+		return 0;
+	if (level >= MAX_LEVEL)
+		return FLOOR_FADE_RATIO_MAX;
+	// Rounded to the nearest 32nd. Only runs when the view changes (once per screen row), not per frame
+	return (level * FLOOR_FADE_RATIO_MAX + MAX_LEVEL / 2) / MAX_LEVEL;
+}
+
 void floor_fade_rows(const floor_fade_view *view, unsigned char *levels, int rows)
 {
 	for (int row = 0; row < rows; ++row)

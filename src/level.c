@@ -1,5 +1,6 @@
 #include "level.h"
 #include "game/arena.h"
+#include "object_fog_vdp1.h"
 
 // The wall textures (tools/make_wall.py) carry the floor's 125-unit grid up the wall with a
 // glowing line where it meets the floor, so the wall reads as standing on the grid.
@@ -87,6 +88,9 @@ static void init_attributes(ATTR *attributes, int texture_id)
 		JO_ZERO(attributes[j].gstb);
 		attributes[j].flag = Dual_Plane;
 		jo_3d_set_mesh_polygon_texture(&setter, texture_id, j);
+		// Fog: VDP1 shades each corner by its own Gouraud colour (object_fog_vdp1.h)
+		if (object_fog_enabled)
+			attributes[j].atrb |= CL_Gouraud;
 	}
 }
 
@@ -130,6 +134,7 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 	int first = 0;
 	int count = pieces;
 	wall_clip_run run;
+	unsigned char fog_levels[ARENA_WALL_COLUMNS_MAX]; // per column: its top and bottom are equally far
 
 	if (camera != JO_NULL)
 	{
@@ -155,7 +160,16 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 		strip->points[i * 2 + 1][X] = strip->points[i * 2][X];
 		strip->points[i * 2 + 1][Y] = strip->points[i * 2][Y];
 		strip->points[i * 2 + 1][Z] = jo_int2fixed(z_top);
+		if (object_fog_enabled)
+			fog_levels[i] = (unsigned char)object_fog_level(p.x, p.y);
 	}
+	// Each piece's Gouraud table, its corners in Vertices order (init_arena_walls):
+	// left top, right top, right bottom, left bottom. The attributes are shared by every strip of
+	// this kind, but SGL reads them during jo_3d_mesh_draw below, before the next strip changes them
+	if (object_fog_enabled)
+		for (int j = 0; j < count; ++j)
+			strip->mesh.data.attbl[j].gstb = object_fog_quad(fog_levels[j], fog_levels[j + 1],
+															 fog_levels[j + 1], fog_levels[j]);
 	strip->mesh.data.nbPoint = (count + 1) * 2;
 	strip->mesh.data.nbPolygon = count;
 	jo_3d_mesh_draw(&strip->mesh);

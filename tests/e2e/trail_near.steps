@@ -1,6 +1,9 @@
 # Trails close to the 1st person camera must not bend: your own trail after a U-turn runs
 # alongside, starting behind you; the zig-zag's diagonal head passes right beside the camera.
 wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 press down
 wait 2
 # U-turn: two rights about 0.3 s apart, so the old leg runs ~130 to the right

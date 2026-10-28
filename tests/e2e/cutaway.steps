@@ -1,5 +1,8 @@
 # Iso cutaway: at the south wall (between the camera and the cycle) only the low strip is drawn.
 wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 press c 13
 press right
 press right

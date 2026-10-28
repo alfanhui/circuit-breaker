@@ -1,4 +1,5 @@
 #include "trail_render.h"
+#include "object_fog_vdp1.h"
 
 #define TRAIL_HEIGHT 60
 
@@ -21,6 +22,9 @@ void trail_mesh_init(trail_mesh *m, jo_color color)
 		JO_ZERO(m->attributes[i].gstb);
 		m->attributes[i].flag = Dual_Plane;
 		jo_3d_set_mesh_polygon_color(&m->mesh, color, i);
+		// Fog: VDP1 shades each corner by its own Gouraud colour (object_fog_vdp1.h)
+		if (object_fog_enabled)
+			m->attributes[i].atrb |= CL_Gouraud;
 	}
 	m->mesh.data.nbPoint = 0;
 	m->mesh.data.nbPolygon = 0;
@@ -31,6 +35,7 @@ void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point fo
 {
 	int columns = trail_build_columns(t, head_gap, focus, view, m->columns, TRAIL_DRAW_COLUMNS_MAX);
 	int pieces = 0;
+	unsigned char fog_levels[TRAIL_DRAW_COLUMNS_MAX]; // per column: its top and bottom are equally far
 
 	if (camera != JO_NULL)
 		columns = trail_clip_columns(m->columns, columns, camera, TRAIL_MIN_FORWARD, m->columns);
@@ -46,10 +51,15 @@ void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point fo
 		m->points[i * 2 + 1][X] = x;
 		m->points[i * 2 + 1][Y] = y;
 		m->points[i * 2 + 1][Z] = jo_int2fixed(TRAIL_HEIGHT);
+		if (object_fog_enabled)
+			fog_levels[i] = (unsigned char)object_fog_level(m->columns[i].p.x, m->columns[i].p.y);
 
 		// A joined column closes a piece with the column before it
 		if (m->columns[i].joined)
 		{
+			if (object_fog_enabled) // Gouraud corners in the same order as the vertices below
+				m->attributes[pieces].gstb = object_fog_quad(fog_levels[i - 1], fog_levels[i - 1],
+															 fog_levels[i], fog_levels[i]);
 			POLYGON *piece = &m->polygons[pieces++];
 			piece->Vertices[0] = (i - 1) * 2;	  // from, bottom
 			piece->Vertices[1] = (i - 1) * 2 + 1; // from, top

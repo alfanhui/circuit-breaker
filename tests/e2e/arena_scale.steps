@@ -1,6 +1,9 @@
 # Arena scale (16000 across) and pad tuning. Checks walls are drawn near the player only,
 # textures read left to right from inside, and speed/size tuning reach the game.
 wait 15.5
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 shot scale_1_centre
 # C x13: cruise 7 -> 20 units/frame (1200/s), then drive north to the wall (~6.6 s)
 press c 13

@@ -1,0 +1,19 @@
+# Fog on walls and trails (WALL_TRAIL_FOG in main.c): far walls and the far end of a trail
+# dim with distance, like the floor they stand on; near ones stay at full brightness.
+wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
+shot fog_iso
+# Lay a long trail at full speed, then look back along it in 1st person
+press c 6
+wait 5
+shot fog_iso_trail
+press down
+wait 1
+shot fog_wall
+press left
+wait 0.4
+press left
+wait 1.5
+shot fog_trail

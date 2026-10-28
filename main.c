@@ -28,10 +28,27 @@
 
 #include "main.h"
 #include "src/floor_fade_vdp2.h"
+#include "src/object_fog_vdp1.h"
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
 // Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
 // near the low 1st person camera stay small.
+// The purple-to-pink sky above the walls. It's the second half of the floor's VDP2 screen (RBG0
+// plane B), so the floor fog's per-row blend reaches it too, but every row above the horizon
+// gets fog level 0 (glow_rows 0), and the 1500 high walls always reach above the horizon, so
+// the sky shows only over the wall tops, untouched. false: black beyond the walls instead
+#define SHOW_SKY true
+
+// The floor fades to black with distance (src/floor_fade_vdp2.c). It's only been checked in
+// emulators: false builds a fallback disc for the real Saturn with the floor at full brightness
+// everywhere and the fog's DMA never started (docs/HARDWARE_TESTS.md, test 1)
+#define FLOOR_FOG true
+
+// Walls and trails dim with distance too, matching the floor (src/object_fog_vdp1.c), with VDP1
+// Gouraud shading. A prototype to judge: Gouraud can only take 16 of 31 steps of brightness off,
+// so far walls dim rather than vanish. false: walls and trails at full brightness everywhere
+#define WALL_TRAIL_FOG true
+
 // The grid is the player's ruler for speed and distance, so it's the same in every view.
 // 125 divides the arena (8000 / 125 = 64 tiles) and the 250 wide wall pieces, so grid lines
 // meet the walls cleanly.
@@ -97,7 +114,8 @@ void debug_3d(void)
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
 	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1_trail));
 	jo_printf(0, 4, "%s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"));
-	jo_printf(0, 5, "bounds %s ", player1.bounded ? "ON" : "OFF");
+	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bounded ? "ON" : "OFF", // Y; Z: turn camera
+			  view_linear_turn ? "LINEAR" : "EASE", debug_slow_motion ? "SLOW" : "    ");
 	jo_printf(0, 6, "speed %d  arena %d   ", cycle_cruise_speed(), 2 * arena_half()); // tuning: B/C and L/R
 
 	//FPS and 3D counts
@@ -126,12 +144,15 @@ void draw_3d(void)
 	//draw_hud();
 
 	// SKY: scrolls with the heading, outside the world matrix
-	jo_3d_push_matrix();
+	if (SHOW_SKY)
 	{
-		jo_3d_translate_matrix(view_rz / 104, -2, 100); // ANGLE / 104 ~= radians * 100
-		jo_background_3d_plane_b_draw(false);
+		jo_3d_push_matrix();
+		{
+			jo_3d_translate_matrix(view_rz / 104, -2, 100); // ANGLE / 104 ~= radians * 100
+			jo_background_3d_plane_b_draw(false);
+		}
+		jo_3d_pop_matrix();
 	}
-	jo_3d_pop_matrix();
 
 	// What the camera can see this frame: walls and trails outside it aren't sent to SGL.
 	// Walls are seen across the whole arena; trails only nearby
@@ -140,6 +161,16 @@ void draw_3d(void)
 	// 1st person: wall and trail corners are kept in front of the camera and inside VDP1's range
 	wall_clip_camera clip_camera;
 	const wall_clip_camera *clip = view_wall_clip_camera(&player1, debug_camera, &clip_camera) ? &clip_camera : JO_NULL;
+
+	// Fog for walls and trails: from where the camera stands, the way it faces this frame
+	if (object_fog_enabled)
+	{
+		world_point fog_eye;
+		int fog_forward_x;
+		int fog_forward_y;
+		bool fog_on = view_fog_camera(debug_camera, &fog_eye, &fog_forward_x, &fog_forward_y);
+		object_fog_begin_frame(fog_on, fog_eye, fog_forward_x, fog_forward_y);
+	}
 
 	view_push_world_matrix();
 	{
@@ -212,12 +243,18 @@ void init_3d_planes(void)
 	jo_free_img(&img);
 
 	// SKY
-	img.data = JO_NULL;
-	jo_tga_8bits_loader(&img, JO_ROOT_DIR, "SKY.TGA", 0);
-	jo_background_3d_plane_b_img(&img, image_pal.id, true, false);
-	jo_free_img(&img);
+	if (SHOW_SKY)
+	{
+		img.data = JO_NULL;
+		jo_tga_8bits_loader(&img, JO_ROOT_DIR, "SKY.TGA", 0);
+		jo_background_3d_plane_b_img(&img, image_pal.id, true, false);
+		jo_free_img(&img);
+	}
 
-	floor_fade_init(); // far floor fades into a horizon haze (1st person)
+	// The far floor fades to black. Skipped, nothing else in the fog runs either: its other
+	// functions (view changes, the VBlank restart) return early until this has set it up
+	if (FLOOR_FOG)
+		floor_fade_init();
 
 	jo_core_tv_on();
 }
@@ -257,6 +294,10 @@ void jo_main(void)
 	load_textures();
 
 	load_arena_textures();
+	// After the textures (it checks they leave room for its tables), before the walls and trails
+	// (they set their quads up for fog only if it's on)
+	if (WALL_TRAIL_FOG)
+		object_fog_init();
 	init_arena_walls();
 
 	load_player_model();
@@ -269,6 +310,7 @@ void jo_main(void)
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
 	jo_core_add_vblank_callback(perf_vblank);
+	jo_core_add_vblank_callback(floor_fade_vblank); // restarts the per-row fog each frame
 	jo_core_add_callback(perf_frame_start);
 	jo_core_add_callback(gamepad_input);
 	jo_core_add_callback(draw_3d);

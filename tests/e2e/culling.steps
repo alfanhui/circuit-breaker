@@ -1,5 +1,8 @@
 # Culling: what's sent (polygons, vertices) vs what SGL shows (displayed), per view.
 wait 15.5
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 # Speed 20, drive north to the wall (~6.6 s), turn east to run along it
 press c 13
 wait 7

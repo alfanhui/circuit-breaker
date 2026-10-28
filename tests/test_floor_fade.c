@@ -68,8 +68,20 @@ static void tilted_camera_fades_the_top_of_the_screen(void)
 		CHECK(levels[row] >= levels[row + 1]); // fades more towards the top
 }
 
+static void ratio_spans_none_to_almost_all_fog(void)
+{
+	CHECK_EQ(0, floor_fade_ratio(0)); // near floor: untouched
+	CHECK_EQ(FLOOR_FADE_RATIO_MAX, floor_fade_ratio(FLOOR_FADE_LEVELS - 1)); // horizon: 1/32 floor
+	CHECK_EQ(FLOOR_FADE_RATIO_MAX, floor_fade_ratio(FLOOR_FADE_LEVELS + 5)); // clamped
+	CHECK_EQ(0, floor_fade_ratio(-1));
+	CHECK_EQ(2, floor_fade_ratio(1)); // 31 / 15 = 2.07, rounded
+	for (int level = 1; level < FLOOR_FADE_LEVELS; ++level)
+		CHECK(floor_fade_ratio(level) > floor_fade_ratio(level - 1)); // every level a little darker
+}
+
 void run_floor_fade_tests(void)
 {
+	RUN(ratio_spans_none_to_almost_all_fog);
 	RUN(near_floor_is_untouched);
 	RUN(horizon_is_full_haze);
 	RUN(fade_grows_towards_the_horizon);

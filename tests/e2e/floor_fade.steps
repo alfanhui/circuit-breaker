@@ -1,5 +1,8 @@
 # Floor distance fade: 1st person looking along the arena, and iso (no fade).
 wait 15.5
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 # 1st person straight away, facing north across the whole arena
 press down
 wait 1

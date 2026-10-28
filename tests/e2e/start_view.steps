@@ -1,0 +1,6 @@
+# The game starts in 1st person (debug line 5 reads 1ST), and Down switches to iso.
+wait 17
+shot start_1st
+press down
+wait 1
+shot start_iso

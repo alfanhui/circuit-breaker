@@ -11,6 +11,9 @@ void run_trail_pieces_tests(void);
 void run_floor_fade_tests(void);
 void run_view_cull_tests(void);
 void run_wall_clip_tests(void);
+void run_turn_ease_tests(void);
+void run_depth_fog_tests(void);
+void run_depth_fog_tests(void);
 
 int main(void)
 {
@@ -22,6 +25,9 @@ int main(void)
 	run_floor_fade_tests();
 	run_view_cull_tests();
 	run_wall_clip_tests();
+	run_turn_ease_tests();
+	run_depth_fog_tests();
+	run_depth_fog_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

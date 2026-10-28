@@ -1,5 +1,8 @@
 # Isometric floor: the upper half is where far grid lines can merge into moire.
 wait 15.5
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 shot iso_floor_1
 # A quarter turn, so the lines are seen from the other diagonal
 press right

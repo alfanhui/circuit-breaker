@@ -1,0 +1,17 @@
+# 1st person turn camera eases out: most of the swing straight away, then it settles.
+# Shots straight after a right turn (from north to east); timings are rough (screenshots take time)
+wait 17
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
+press down
+wait 1
+shot ease_0_before
+press right
+shot ease_1_just_after
+wait 0.05
+shot ease_2_after_50ms
+wait 0.1
+shot ease_3_after_150ms
+wait 0.5
+shot ease_4_settled

@@ -1,5 +1,8 @@
 # Long trail segments: do they stay straight? Also shows the taller walls.
 wait 15.5
+# The game starts in 1st person; these steps were written from iso, so switch to it first
+press down
+wait 0.3
 # Speed 20 (1200 units/s), 3 s north, then west for 3 s: legs about 3600 long
 press c 13
 wait 3

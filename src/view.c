@@ -1,11 +1,12 @@
 #include "view.h"
 #include "floor_fade_vdp2.h"
+#include "object_fog_vdp1.h"
+#include "game/turn_ease.h"
 
-// 1st person: camera sits on the cycle and turns with it
+// 1st person: camera sits on the cycle and turns with it (easing round: turn_ease.h)
 #define FIRST_PERSON_FOV 90
 #define FIRST_PERSON_Z (-35)
 #define FIRST_PERSON_RX DEGtoANG(90.0)
-#define FIRST_PERSON_TURN_STEP (0x4000 / 10) // a 90 degree turn eases over 10 frames
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
@@ -20,7 +21,8 @@
 // 644 / sqrt(2) = 456 on each axis. Change ISO_Z or ISO_RX and this needs working out again.
 #define ISO_FOLLOW_OFFSET 456
 
-bool first_person = false;
+bool first_person = true; // the game starts in 1st person; Down switches to iso
+bool view_linear_turn = false;
 int view_x;
 int view_y;
 int view_z;
@@ -33,6 +35,9 @@ static int heading_current = 0;
 
 static void apply_view(const cycle *c)
 {
+	int fade_start;
+	int fade_end;
+
 	if (first_person)
 	{
 		jo_3d_perspective_angle(FIRST_PERSON_FOV);
@@ -48,6 +53,9 @@ static void apply_view(const cycle *c)
 		view_rz = ISO_RZ;
 	}
 	floor_fade_set_first_person(first_person); // each camera sees the floor at different distances
+	// Walls and trails fade over the same distances as the floor, so they fade together
+	floor_fade_distances(first_person, &fade_start, &fade_end);
+	object_fog_set_distances(fade_start, fade_end);
 	view_follow(c);
 }
 
@@ -93,6 +101,19 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 	return true;
 }
 
+bool view_fog_camera(bool free_camera, world_point *eye, int *forward_x, int *forward_y)
+{
+	// The point on the floor under the camera, and the way it faces: the floor fog measures its
+	// distances from there (game/floor_fade.h). In 1st person that's the cycle; in iso, the
+	// camera's spot behind and above it. view_rz is the camera's turn in both (mid-turn too)
+	eye->x = (short)view_x;
+	eye->y = (short)view_y;
+	// Heading 0 faces north (-y), turning right goes east (-x): forward = (-sin, -cos), x1024
+	*forward_x = -(slSin(view_rz) >> 6);
+	*forward_y = -(slCos(view_rz) >> 6);
+	return !free_camera; // the debug camera looks anywhere, so the fog's distances don't fit it
+}
+
 void view_turn_left(void)
 {
 	heading_target -= 0x4000;
@@ -110,12 +131,11 @@ void view_follow(const cycle *c)
 		view_x = c->position.x;
 		view_y = c->position.y;
 
-		if (heading_current < heading_target - FIRST_PERSON_TURN_STEP)
-			heading_current += FIRST_PERSON_TURN_STEP;
-		else if (heading_current > heading_target + FIRST_PERSON_TURN_STEP)
-			heading_current -= FIRST_PERSON_TURN_STEP;
+		// Ease-out: a big swing on the frame of the turn, settling over the next few (turn_ease.h)
+		if (view_linear_turn)
+			heading_current = turn_linear_step(heading_current, heading_target);
 		else
-			heading_current = heading_target;
+			heading_current = turn_ease_step(heading_current, heading_target);
 		view_rz = (ANGLE)heading_current;
 	}
 	else

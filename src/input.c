@@ -7,6 +7,7 @@
 cycle player1;
 trail player1_trail;
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
+bool debug_slow_motion = false;
 
 // Debug: fills the trail with a full-length serpentine across the arena, the worst case for drawing
 static void stress_fill_trail(void)
@@ -77,11 +78,31 @@ static void debug_camera_input(void)
 		view_rx -= DEGtoANG(0.5);
 }
 
+// Z steps through the ways to compare turn cameras: ease-out, ease-out slowed down,
+// the old linear turn slowed down, the linear turn at full speed, then back to the start
+static void debug_next_turn_compare(void)
+{
+	static int stage = 0;
+
+	stage = (stage + 1) & 3;
+	view_linear_turn = stage >= 2;
+	debug_slow_motion = stage == 1 || stage == 2;
+}
+
 void gamepad_input(void)
 {
+	static unsigned int frame = 0;
+	unsigned short struck;
+
+	// Slow motion: skip the game update on most frames. Skipped before the presses are taken,
+	// so a press waits in the latch for the next update rather than being lost
+	++frame;
+	if (debug_slow_motion && (frame & (DEBUG_SLOW_MOTION_FRAMES - 1)) != 0)
+		return;
+
 	// Every press since the last game frame, even if this frame spanned several vblanks.
 	// Taken first and on every frame, so presses can't pile up while the debug camera is on.
-	const unsigned short struck = press_latch_take(&pad1_presses);
+	struck = press_latch_take(&pad1_presses);
 
 	if (struck & DIGI_START)
 	{
@@ -127,6 +148,9 @@ void gamepad_input(void)
 	// Y: arena boundary on/off. Turning it back on outside the arena snaps the cycle to the edge next frame
 	if (struck & DIGI_Y)
 		player1.bounded = !player1.bounded;
+	// Z: compare the turn cameras (debug text line 5)
+	if (struck & DIGI_Z)
+		debug_next_turn_compare();
 
 	// Tuning, to find the balance of speed and scale by feel. The debug text shows both.
 	// L / R: arena smaller / larger. A cycle left outside a shrunk arena is pulled to the edge next frame

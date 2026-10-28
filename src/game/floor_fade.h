@@ -33,4 +33,9 @@ typedef struct
 // Writes one level per screen row (0..rows - 1) into levels.
 void floor_fade_rows(const floor_fade_view *view, unsigned char *levels, int rows);
 
+// VDP2's colour calculation ratio for a level: how much of the fog colour is mixed into the floor,
+// in 32nds (0 = none, FLOOR_FADE_RATIO_MAX = all but 1/32 of the floor). See floor_fade_vdp2.c.
+#define FLOOR_FADE_RATIO_MAX 31
+int floor_fade_ratio(int level);
+
 #endif
