@@ -20,9 +20,9 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 
 | Item | Why | Effort |
 |---|---|---|
-| Boost scales with cruise speed | Boost is a fixed +7: at cruise 20 it's only +35% | S |
-| Boost feedback: FOV kick in 1st person, HUD gauge | Gauge empty / full is invisible outside the debug text | M |
-| Retune boost: longer, refill pause after use | 0.67 s of boost then 3.3 s of waiting may feel like a blip | S |
+| Tune the boost by feel | Numbers in cycle.h (+75%, full in 8 frames, 1.5 s, 0.5 s pause, 3 s refill) and view.c (FOV +12 degrees, eased 2/16 a frame): judge in play and on the Saturn | S |
+| Boost juice beyond the view | Sound (Cesta-like glassy whoosh), the trail brightening while boosting, a flash when the gauge is full again | M |
+| Floor fog during the FOV kick | The fog rows are worked out for 90 degrees: while boosting the fog sits up to ~15% nearer. Rebuild the table per FOV step if it shows | S |
 | Cycle heading visible in iso view | The cube is symmetrical: only the trail shows direction. Nose polygon or camera lead | S |
 | Crash on walls and trails (collision) | Hitting a wall just stops the cycle; in Tron it's a crash. Board: "Add collision detection logic" | L |
 | Decide: double-tap U-turn, or grid-snapped turns | Two quick turns lay a 7-unit stub; with collision that's suicide | S (decision) |
@@ -80,11 +80,12 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 
 | Item | Commit |
 |---|---|
-| Never-ending sunset: generated sky (`tools/make_sky.py`). The old SKY.TGA stepped to black at texel 53, a black band across the top of the 1st person screen; now the original glow up to violet, then deepening to indigo by texel 84 and held, past the screen top (~77) | uncommitted |
-| Sky back on (`SHOW_SKY`), above the walls. It's RBG0 plane B, the floor's own screen, so the floor fog's per-row blend reaches it, but sky rows get level 0: checked unchanged with the floor fog on and off | uncommitted |
-| Fog on walls and trails (prototype, `WALL_TRAIL_FOG` in main.c): VDP1 Gouraud shading, each corner darkened by its distance ahead along the floor, over the floor fog's own distances so walls fade with the floor they stand on (`depth_fog`, unit-tested to agree with the floor at every distance). Tables written each frame into VDP1 RAM, two sets on alternate frames. Dims by at most 16/31. Cost ~6-8% CPU worst case (Mednafen) | uncommitted |
-| Fog to black on the floor: VDP2 ratio blend with a black line colour, the ratio (CCRR) rewritten every row by SCU DMA level 2 started on HBlank, restarted each VBlank from the row counter. Sky off (`SHOW_SKY`). No measurable CPU cost. Mednafen only: **check on the Saturn** | uncommitted |
-| Ease-out 1st person turn camera: 6/16 of the remaining angle per frame (38% on the first frame, was 10%), min step 1.4 degrees, lands in 10 frames (the old linear turn took 11) (`turn_ease`). Z: debug slow motion and linear turn, to compare | uncommitted |
+| Boost reworked: +75% of the current speed at any cruise (was a fixed +7), a full gauge lasts 1.5 s (was 0.67), refill waits 0.5 s after the button is let go (tapping can't top it up), 3 s to refill. The boost builds over 8 frames (0.13 s) and fades over 16; it snapped to full in 2, and the view widening with it looked like a glitch. Feedback: the 1st person view eases up to +12 degrees wider (`ease_out_step`, 2/16 a frame, never a whole degree in one frame; culling and `wall_clip` widen with it), and a gauge bar at the bottom (`src/hud.c`): white boosting, dim teal waiting, cyan refilling. E2E `boost.steps`, slow-motion `boost_gif.steps`; `keydown`/`keyup` steps added | 76f6c3e, 999c0ff, 59038ff |
+| Never-ending sunset: generated sky (`tools/make_sky.py`). The old SKY.TGA stepped to black at texel 53, a black band across the top of the 1st person screen; now the original glow up to violet, then deepening to indigo by texel 84 and held, past the screen top (~77) | c90954b |
+| Sky back on (`SHOW_SKY`), above the walls. It's RBG0 plane B, the floor's own screen, so the floor fog's per-row blend reaches it, but sky rows get level 0: checked unchanged with the floor fog on and off | ed926ac |
+| Fog on walls and trails (prototype, `WALL_TRAIL_FOG` in main.c): VDP1 Gouraud shading, each corner darkened by its distance ahead along the floor, over the floor fog's own distances so walls fade with the floor they stand on (`depth_fog`, unit-tested to agree with the floor at every distance). Tables written each frame into VDP1 RAM, two sets on alternate frames. Dims by at most 16/31. Cost ~6-8% CPU worst case (Mednafen) | ed926ac |
+| Fog to black on the floor: VDP2 ratio blend with a black line colour, the ratio (CCRR) rewritten every row by SCU DMA level 2 started on HBlank, restarted each VBlank from the row counter. Sky off (`SHOW_SKY`). No measurable CPU cost. Mednafen only: **check on the Saturn** | ed926ac |
+| Ease-out 1st person turn camera: 6/16 of the remaining angle per frame (38% on the first frame, was 10%), min step 1.4 degrees, lands in 10 frames (the old linear turn took 11) (`turn_ease`). Z: debug slow motion and linear turn, to compare | ed926ac |
 | Iso camera centred on the cycle (offset 456, worked out from height and pitch) | 7c8d9c9 |
 | View culling: walls and trails clipped to what each camera can see (`view_cull`), not a fixed square. Iso sends 70 -> 19 polygons along a wall, 274 -> 142 with a full zig-zag | 7c8d9c9 |
 | Walls visible across the whole arena: own view range (28000), level of detail (250 / 1000 / 2000 pieces by distance), world handed to SGL at 1/4 scale (SGL stops drawing a little under 8192 deep), slZdspLevel 7 (was an invalid 0) | 7c8d9c9 |

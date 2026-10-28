@@ -5,6 +5,8 @@
 #   press BUTTON [N]    tap a Saturn pad button N times (default 1), each held ~4 frames
 #                       then released ~4 frames, so the game sees every press
 #   hold BUTTON SECONDS hold a button down
+#   keydown BUTTON      press a button and keep it down (shots can be taken meanwhile)...
+#   keyup BUTTON        ...until this lets it go
 #   shot NAME           save the screen to /out/NAME.png
 # Buttons: up down left right a b c x y z l r start  (Mednafen's default keyboard mapping)
 set -e
@@ -47,6 +49,8 @@ while read -r command arg1 arg2; do
 		done
 		;;
 	hold) k=$(key_for "$arg1"); xdotool keydown "$k"; sleep "$arg2"; xdotool keyup "$k" ;;
+	keydown) xdotool keydown "$(key_for "$arg1")" ;;
+	keyup) xdotool keyup "$(key_for "$arg1")" ;;
 	shot) import -window root -crop 906x720+0+0 "/out/$arg1.png"; echo "shot $arg1" ;;
 	*) echo "unknown step: $command" >&2; exit 1 ;;
 	esac

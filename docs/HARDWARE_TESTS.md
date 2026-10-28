@@ -197,6 +197,12 @@ Result: ________
 
 - [ ] **Rapid taps**: tap Left five times fast. Every tap should turn (presses are latched so a
       slow frame can't lose one).
+- [ ] **Boost** (hold Up): does +75% feel like a kick at every cruise speed (B/C)? Is 1.5 s
+      long enough, and the half-second pause before the refill noticeable but fair?
+- [ ] **The view widening while boosting**: felt as speed, or as a lurch? Any wall pieces
+      popping in at the screen edges as it widens (culling is told the wider view)?
+- [ ] **The gauge bar** at the bottom: readable on the TV, inside the picture (not cut off by
+      the TV's edge), colours distinct (white boosting, dim teal waiting, cyan refilling)?
 - [ ] **Turn and boost together**: turns and boost read the pad in two different ways and may be
       a frame apart (backlog: "one input source"). Does turn + boost on the same press feel
       off?

@@ -1,0 +1,23 @@
+# Boost (hold Up): the view widens and the gauge bar at the bottom turns white and drains;
+# after letting go the bar is dim teal for half a second, then cyan as it refills.
+wait 17
+# Faster cruise, so the boost's +75% shows; let the speed settle
+press c 6
+wait 2
+shot boost_0_ready
+keydown up
+wait 0.4
+shot boost_1_boosting
+wait 0.6
+shot boost_2_draining
+keyup up
+wait 0.2
+shot boost_3_waiting
+wait 1.5
+shot boost_4_refilling
+# Iso: the same bar
+press down
+keydown up
+wait 0.4
+shot boost_5_iso
+keyup up
