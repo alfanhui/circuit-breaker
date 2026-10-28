@@ -1,0 +1,19 @@
+# Crash into the cycle's own trail, turn along it and run beside it 25 away (the closest
+# collision allows): the trail beside should reach the screen edge, with nothing showing past it.
+wait 17
+press c 3
+wait 2
+press right
+wait 0.5
+press right
+wait 0.5
+press right
+wait 1.5
+press right
+wait 1
+shot side_run
+keydown up
+wait 0.4
+shot side_boost
+keyup up
+wait 0.3

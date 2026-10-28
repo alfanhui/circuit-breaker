@@ -1,0 +1,47 @@
+# Crash into the cycle's own trail, then turn along it in slow motion: shots about a game frame
+# apart while the camera eases round with the trail 25 to the side.
+wait 17
+press c 3
+wait 2
+press right
+wait 0.5
+press right
+wait 0.5
+press right
+wait 1.5
+press z
+wait 0.5
+press right
+shot cs_01
+shot cs_02
+shot cs_03
+shot cs_04
+shot cs_05
+shot cs_06
+shot cs_07
+shot cs_08
+shot cs_09
+shot cs_10
+shot cs_11
+shot cs_12
+shot cs_13
+shot cs_14
+shot cs_15
+shot cs_16
+shot cs_17
+shot cs_18
+shot cs_19
+shot cs_20
+shot cs_21
+shot cs_22
+shot cs_23
+shot cs_24
+shot cs_25
+shot cs_26
+shot cs_27
+shot cs_28
+shot cs_29
+shot cs_30
+press z 3
+wait 1
+shot cs_run_1

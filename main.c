@@ -83,11 +83,16 @@ void initCamera(jo_camera *curCam)
 {
 	(*curCam).viewpoint[X] = toFIXED(0.0);
 	(*curCam).viewpoint[Y] = toFIXED(0.0);
-	(*curCam).viewpoint[Z] = toFIXED(5.0); // 5.0
+	// The eye sits exactly where view.c puts the world's origin (the cycle, in 1st person), looking
+	// along -z; view.c's rotations then turn the world in front of it. It was at z 5 looking at
+	// the origin: the same direction, but 5 SGL units (20 world units, at 1/4 scale) behind the
+	// cycle, while clipping, culling and fog all measure from the cycle. Running beside a trail,
+	// its clipped near end then showed as a hole at the screen's edge
+	(*curCam).viewpoint[Z] = toFIXED(0.0);
 	(*curCam).z_angle = DEGtoANG(0.0);	   // orientation
 	(*curCam).target[X] = toFIXED(0.0);
 	(*curCam).target[Y] = toFIXED(0.0);
-	(*curCam).target[Z] = toFIXED(0.0);
+	(*curCam).target[Z] = toFIXED(-5.0); // only the direction matters
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
 	// How close polygons may be drawn: SGL drops anything nearer than its screen distance / 2^level.
 	// The world reaches SGL at 1/4 size (view.c), so the 20-40 unit safety distances that

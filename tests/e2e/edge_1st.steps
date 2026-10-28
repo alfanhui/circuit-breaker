@@ -1,0 +1,9 @@
+# 1st person against the arena edge: drive north into the wall and stay pressed against it.
+# The wall should fill the view whole, no pieces missing or bent.
+wait 17
+press c 3
+wait 15
+shot edge_1st
+press right
+wait 0.5
+shot edge_1st_along

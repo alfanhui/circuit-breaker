@@ -14,10 +14,10 @@
  * (the player meant it). So a double tap is still a U-turn, just one cycle-width across, and
  * every turn that isn't the second of a very quick pair is still instant.
  *
- * It also keeps the 1st person view whole: the trail is cut TRAIL_MIN_FORWARD (20) in front of
- * the camera (trail_pieces.h), and the screen's edge shows what's as far to the side as it is
- * ahead. Running 10 beside a trail, its missing first 20 units were on screen: a hole through
- * which the far side of the trail showed. At 50 to the side, the cut is well off-screen.
+ * It also kept the 1st person view whole: the trail is cut a little in front of the camera
+ * (TRAIL_MIN_FORWARD, trail_pieces.h), and the screen's edge shows what's well to the side of
+ * what's ahead. Running 10 beside a trail, its missing near end was on screen: a hole through
+ * which the far side of the trail showed. (The cut is now 10, small enough for 25 to the side.)
  *
  * A stopped cycle (against the arena edge) can always turn: it isn't travelling, so it would
  * otherwise never reach the gap and be stuck facing the wall.

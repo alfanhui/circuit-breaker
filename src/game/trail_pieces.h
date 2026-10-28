@@ -45,9 +45,13 @@ int trail_build_columns(const trail *t, int head_gap, world_point focus, const w
  * nearest end slid forward along the trail. Works in place (out may be columns).
  * Returns the number of columns left.
  */
-// The trail is 60 tall: its corners stay inside VDP1's range from ~6 away. A cycle closer than
-// this to the side of a trail would see the cut on screen as a hole (turn_gate.h keeps U-turns 50 apart)
-#define TRAIL_MIN_FORWARD 20
+// Near, but safely: the trail's base is 35 below the eye, and at 90 degrees a corner d in front
+// projects 160 * 35 / d pixels down, inside VDP1's 1024 from ~6 away (SGL's own near limit,
+// slZdspLevel 7, is ~5). Too far and the cut shows: the screen's edge shows what's as far to the
+// side as it is in front (further while boosting), and collision lets a cycle run 25 beside a
+// trail, so its cut-off near end showed as a hole there, the far side showing through
+// (crash_slide.steps). At 10 the end is 2.5x further to the side than in front: well off-screen
+#define TRAIL_MIN_FORWARD 10
 int trail_clip_columns(const trail_column *columns, int count, const wall_clip_camera *camera,
 					   int min_forward, trail_column *out);
 
