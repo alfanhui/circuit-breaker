@@ -9,8 +9,12 @@
  *
  * The fill's colour says what the gauge is doing, so it can be read from the corner of the eye:
  *   white       boosting
- *   cyan        refilling, or full: the trail's colour
- *   dim teal    the pause after a boost, before it refills (cycle.h, CYCLE_REFILL_DELAY)
+ *   amber       refilling, or full
+ *   dim amber   the pause after a boost, before it refills (cycle.h, CYCLE_REFILL_DELAY)
+ *
+ * Amber, because nothing else on screen is: it's the opposite of the trails' cyan (it was cyan,
+ * and vanished when the cycle stopped facing a trail), and stands out on the navy floor and
+ * against the sunset sky's indigo and magenta.
  */
 
 #define BAR_WIDTH (CYCLE_GAUGE_MAX >> 1) // 90 pixels: a full gauge (180) halved, so no division
@@ -53,8 +57,8 @@ void hud_init(void)
 {
 	part_sprites[PART_BACK] = make_part(JO_COLOR_RGB(10, 12, 40));		// dark navy
 	part_sprites[PART_BOOSTING] = make_part(JO_COLOR_RGB(235, 250, 255)); // near white
-	part_sprites[PART_READY] = make_part(JO_COLOR_RGB(0, 220, 255));	// the trail's cyan
-	part_sprites[PART_WAITING] = make_part(JO_COLOR_RGB(0, 90, 110));	// dim teal
+	part_sprites[PART_READY] = make_part(JO_COLOR_RGB(255, 170, 0));	// amber
+	part_sprites[PART_WAITING] = make_part(JO_COLOR_RGB(110, 70, 0));	// dim amber
 }
 
 // A rectangle from (left, top) to (right, bottom), in pixels from the screen centre
