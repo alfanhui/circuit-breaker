@@ -40,7 +40,6 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 | Decide: keep wall and trail fog? (`WALL_TRAIL_FOG`) | Prototype in (see Done). Judge the look, and whether far walls dimmed by half still give the arena its scale | S (decision) |
 | Wall and trail fog: cheaper | Costs ~6-8% CPU with the worst-case trail in Mednafen (~200 cycles a quad). Ideas: inline the level maths (two calls per corner now), build the tables in work RAM and DMA them to VDP1 in one go (CPU writes to VDP1 RAM may stall while it draws), skip the far wall LOD pieces' tables (all full fog: share one table). Measure on the Saturn first | M |
 | Wall and trail fog: darker than half | Gouraud can only take 16 of 31 steps off. Far pieces could also switch to Gouraud + half-luminance (VDP1 colour mode 6), but the switch shows as a step between pieces | M |
-| Black band across the top of the 1st person sky | The sky image ends there (same with the floor fog off). Extend or repeat SKY.TGA, or start its gradient darker | S |
 | Iso cutaway shows the floor grid outside the arena | VDP2's floor is endless; past the south/west glow line it carries on | S |
 | Unused BOX1-4.TGA on the disc | No longer loaded (walls use WALL.TGA); delete when sure | S |
 | jo: every 8-bit VDP1 sprite uses the first TGA palette | Why WALL.TGA is 24-bit. Worth understanding before more 8-bit sprites | S |
@@ -81,6 +80,7 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 
 | Item | Commit |
 |---|---|
+| Never-ending sunset: generated sky (`tools/make_sky.py`). The old SKY.TGA stepped to black at texel 53, a black band across the top of the 1st person screen; now the original glow up to violet, then deepening to indigo by texel 84 and held, past the screen top (~77) | uncommitted |
 | Sky back on (`SHOW_SKY`), above the walls. It's RBG0 plane B, the floor's own screen, so the floor fog's per-row blend reaches it, but sky rows get level 0: checked unchanged with the floor fog on and off | uncommitted |
 | Fog on walls and trails (prototype, `WALL_TRAIL_FOG` in main.c): VDP1 Gouraud shading, each corner darkened by its distance ahead along the floor, over the floor fog's own distances so walls fade with the floor they stand on (`depth_fog`, unit-tested to agree with the floor at every distance). Tables written each frame into VDP1 RAM, two sets on alternate frames. Dims by at most 16/31. Cost ~6-8% CPU worst case (Mednafen) | uncommitted |
 | Fog to black on the floor: VDP2 ratio blend with a black line colour, the ratio (CCRR) rewritten every row by SCU DMA level 2 started on HBlank, restarted each VBlank from the row counter. Sky off (`SHOW_SKY`). No measurable CPU cost. Mednafen only: **check on the Saturn** | uncommitted |
