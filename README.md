@@ -2,6 +2,9 @@
 
 Sega Saturn homebrew game built with jo-engine.
 
+You're the Saturn's forgotten second CPU, waking up and fighting your way out of the console:
+see [the story](./docs/STORY.md).
+
 ## Development Images
 
 ![Circuit Breaker Grid](./docs/images/01.PNG)
