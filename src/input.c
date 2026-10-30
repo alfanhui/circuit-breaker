@@ -10,6 +10,7 @@
 
 rider player1;
 rider bot1;
+static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
 // Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
 // The order is the radar's colours: player 1 cyan, then orange
 const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bot1.wall};
@@ -41,6 +42,7 @@ void init_players(void)
 {
 	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
+	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
 	view_init(&player1.bike);
 #ifdef PERF_STRESS_TRAIL
 	stress_fill_trail();
@@ -147,7 +149,7 @@ void gamepad_input(void)
 	}
 
 	// The bot decides its buttons from what it can see, then rides by the same rules
-	rider_step(&bot1, bot_think(&bot1, field_trails, FIELD_TRAIL_COUNT), field_trails, FIELD_TRAIL_COUNT);
+	rider_step(&bot1, bot_think(&bot1_mind, &bot1, field_trails, FIELD_TRAIL_COUNT), field_trails, FIELD_TRAIL_COUNT);
 
 	// A: clear every wall, each starting fresh where its cycle is
 	if (struck & DIGI_A)
