@@ -209,6 +209,44 @@ static bool draw_terminal(void)
 	return true;
 }
 
+// The status line during play (game/status_message.h): centred above the horizon, in the
+// terminal's green behind the same block cursor, so it reads as the same machine talking.
+// The text layer keeps what's printed, so it's only printed when another character is typed,
+// and blanked once when the message goes
+#define STATUS_ROW 13 // text rows are 8 pixels: 104 down, on the dark sky above the horizon (row 17,
+					  // just above the radar, sat on the horizon's pink glow: green on pink was hard to read)
+#define STATUS_BLANK "                                        " // a whole row: 40 characters
+
+static void draw_status(void)
+{
+	static int printed = 0; // characters on screen now
+	int count = status_typed_chars(&status);
+	int column = (40 - status.length) >> 1; // centred on the 40 character row
+
+	if (!status_visible(&status))
+	{
+		if (printed > 0)
+			jo_printf(0, STATUS_ROW, STATUS_BLANK);
+		printed = 0;
+		return;
+	}
+	if (count < printed) // a new message over an old one: clear the old first
+		jo_printf(0, STATUS_ROW, STATUS_BLANK);
+	if (count != printed && count > 0)
+	{
+		char typed[41];
+
+		for (int i = 0; i < count; ++i)
+			typed[i] = status.text[i];
+		typed[count] = 0;
+		jo_printf_with_color(column, STATUS_ROW, terminal_palette.id, "%s", typed);
+		jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
+	}
+	printed = count;
+	if (status_cursor_on(&status))
+		hud_draw_text_cursor(column + count, STATUS_ROW);
+}
+
 void draw_3d(void)
 {
 	// Terminated: only the terminal text. The world isn't drawn at all
@@ -312,6 +350,7 @@ void draw_3d(void)
 		}
 		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
 	}
+	draw_status();
 	debug_3d();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text

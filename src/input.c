@@ -1,5 +1,6 @@
 #include "input.h"
 #include "game/bot.h"
+#include "game/camera_shake.h"
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
@@ -11,6 +12,7 @@
 rider player1;
 rider bot1;
 game_state game;
+status_message status;
 static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
 static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
 // Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
@@ -54,6 +56,7 @@ static void stress_fill_trail(void)
 void init_players(void)
 {
 	game_init(&game);
+	status_init(&status);
 	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
 	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
@@ -190,12 +193,17 @@ void gamepad_input(void)
 				   solid_trail_count);
 		if (bot1.crashed)
 		{
+			// Whatever it hit (your trail, its own, the arena edge), make it felt and say so: a
+			// jolt of the camera, and the status line. It may have been a long way off, or behind you
+			view_shake(CAMERA_SHAKE_BOT_KILL);
+			status_show(&status, STATUS_ENEMY_ELIMINATED);
 			rider_kill(&bot1);
 			update_solid_trails();
 		}
 	}
 	else
 		rider_sink(&bot1);
+	status_update(&status); // the status line types on, and goes once it's been read
 
 	// A: clear every wall, each starting fresh where its cycle is
 	if (struck & DIGI_A)
