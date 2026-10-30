@@ -1,0 +1,21 @@
+# Long play: does the frame rate hold as trails fill up? The player turns now and then; the bot
+# chases. Shots every 30 s show the debug readout (polygons, cpu, fps, late frames).
+wait 17
+press right
+wait 30
+shot long_1
+press right
+wait 30
+shot long_2
+press left
+wait 30
+shot long_3
+press right
+wait 30
+shot long_4
+press left
+wait 30
+shot long_5
+press right
+wait 30
+shot long_6

@@ -249,8 +249,68 @@ static void arena_edge_is_a_crash_too(void)
 	CHECK_EQ(0, c.speed);
 }
 
+// The same answer as asking collision_segment about each segment in turn (what collision_trail
+// used to do, before it was made faster for the SH-2), on thousands of random trails
+static unsigned int seed = 7;
+
+static int random_below(int n)
+{
+	seed = seed * 1103515245u + 12345u;
+	return (int)((seed >> 8) % (unsigned int)n);
+}
+
+static int reference_trail(world_point from, int heading, int distance, const trail *t)
+{
+	world_point a;
+	world_point b;
+
+	for (int i = 0; i < trail_segment_count(t); ++i)
+		if (trail_get_segment(t, i, 0, &a, &b))
+			distance = collision_segment(from, heading, distance, a, b, COLLISION_TRAIL_CLEARANCE);
+	return distance;
+}
+
+static void fast_trail_check_matches_segment_by_segment(void)
+{
+	static trail t;
+	int differ = 0;
+
+	for (int round = 0; round < 3000; ++round)
+	{
+		// A random N/S/E/W walk of up to 40 corners in a 1000 square, some steps short
+		world_point p = pt((short)(random_below(1000) - 500), (short)(random_below(1000) - 500));
+		int corners = 1 + random_below(40);
+
+		trail_reset(&t, p);
+		for (int c = 0; c < corners; ++c)
+		{
+			int step = random_below(4) == 0 ? random_below(60) : random_below(400);
+
+			if (random_below(2))
+				p.x = (short)(p.x + (random_below(2) ? step : -step));
+			else
+				p.y = (short)(p.y + (random_below(2) ? step : -step));
+			trail_set_head(&t, p);
+			if (c + 1 < corners)
+				trail_add_corner(&t);
+		}
+		// Asked from anywhere nearby, any heading, any distance, the head included (a cycle on it)
+		for (int q = 0; q < 8; ++q)
+		{
+			world_point from = q == 0 ? t.head : pt((short)(random_below(1400) - 700), (short)(random_below(1400) - 700));
+			int heading = random_below(4);
+			int distance = random_below(300);
+
+			if (collision_trail(from, heading, distance, &t) != reference_trail(from, heading, distance, &t))
+				differ++;
+		}
+	}
+	CHECK_EQ(0, differ);
+}
+
 void run_collision_tests(void)
 {
+	RUN(fast_trail_check_matches_segment_by_segment);
 	RUN(trail_across_the_path_stops_the_cycle_short);
 	RUN(trail_out_of_reach_this_frame_does_not_stop_it);
 	RUN(trail_behind_does_not_stop_it);
