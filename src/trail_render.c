@@ -31,9 +31,9 @@ void trail_mesh_init(trail_mesh *m, jo_color color)
 }
 
 void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point focus, const world_rect *view,
-					 const wall_clip_camera *camera)
+					 const wall_clip_camera *camera, const trail_occluders *occluders)
 {
-	int columns = trail_build_columns(t, head_gap, focus, view, m->columns, TRAIL_DRAW_COLUMNS_MAX);
+	int columns = trail_build_columns(t, head_gap, focus, view, occluders, m->columns, TRAIL_DRAW_COLUMNS_MAX);
 	int pieces = 0;
 	unsigned char fog_levels[TRAIL_DRAW_COLUMNS_MAX]; // per column: its top and bottom are equally far
 

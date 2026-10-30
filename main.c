@@ -57,6 +57,7 @@
 #define FLOOR_TILE_UNITS 125
 #define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
 #define PLAYER_HALF 25
+#define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
 #define TRAIL_HEAD_GAP PLAYER_HALF // the wall starts at the back of the cycle
 
 jo_camera cam;
@@ -72,6 +73,8 @@ bool enable_trails = true;
 
 static trail_mesh player1_trail_mesh;
 static trail_mesh bot1_trail_mesh;
+// 1st person: the trails near the camera that can hide parts of others behind them (game/trail_occlusion.h)
+static trail_occluders occluders;
 
 //Third person
 // Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
@@ -132,6 +135,7 @@ void debug_3d(void)
 	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
 	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
 	jo_printf(0, 11, "late %d  ", perf_late_frames);
+	jo_printf(0, 12, "bot %d %d %c   ", bot1.bike.position.x, bot1.bike.position.y, compass[bot1.bike.heading]);
 }
 
 void draw_hud(void)
@@ -194,14 +198,29 @@ void draw_3d(void)
 
 		if (enable_trails)
 		{
-			trail_mesh_draw(&player1_trail_mesh, &player1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip);
+			// 1st person (the eye is below the trails' tops): a part of a trail hidden behind a
+			// nearer one isn't drawn. VDP1 has no depth buffer, and side by side pieces of two
+			// parallel trails sort in either order: the hidden one showed through
+			const trail_occluders *hide = JO_NULL;
+
+			if (clip)
+			{
+				trail_occluders_begin(&occluders, clip->eye);
+				for (int i = 0; i < FIELD_TRAIL_COUNT; ++i)
+					trail_occluders_add(&occluders, field_trails[i], TRAIL_HEAD_GAP, &visible_trails);
+				hide = &occluders;
+			}
+			trail_mesh_draw(&player1_trail_mesh, &player1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip, hide);
 			// Cut finer near the player (the camera), not near the bot: that's where detail shows
-			trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip);
+			trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip, hide);
 		}
 
 		if (!first_person)
 			draw_cycle(player1.bike.position); // in 1st person the camera is inside it
-		draw_cycle(bot1.bike.position);
+		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
+		// camera on screen anyway, as if in front) and not wholly off to one side
+		if (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD))
+			draw_cycle(bot1.bike.position);
 	}
 	jo_3d_pop_matrix();
 

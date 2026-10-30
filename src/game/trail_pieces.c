@@ -111,21 +111,13 @@ static int next_near_boundary(int s, int f)
 	return s + TRAIL_NEAR_PIECE - ((s - f - (TRAIL_NEAR_PIECE >> 1)) & (TRAIL_NEAR_PIECE - 1));
 }
 
-static int add_segment(world_point from, world_point to, world_point focus, const world_rect *view,
-					   trail_column *out, int count, int max_columns)
+// One strip of pieces from step s0 to s1 along the segment
+static int add_strip(world_point from, world_point to, int length, int f, world_point focus, int s0, int s1,
+					 trail_column *out, int count, int max_columns)
 {
-	const int length = max_int(abs_int(to.x - from.x), abs_int(to.y - from.y));
-	const int f = focus_step(from, to, focus);
-	int s0 = 0;
-	int s1 = length;
 	int s;
 
-	if (length == 0)
-		return count;
-	if (!clip_axis(from.x, to.x - from.x, length, view->x_min, view->x_max, &s0, &s1) ||
-		!clip_axis(from.y, to.y - from.y, length, view->y_min, view->y_max, &s0, &s1))
-		return count;
-	if (count + 2 > max_columns) // a strip needs at least two columns
+	if (s0 >= s1 || count + 2 > max_columns) // a strip needs at least two columns
 		return count;
 
 	out[count].p = point_at(from, to, length, s0);
@@ -143,6 +135,33 @@ static int add_segment(world_point from, world_point to, world_point focus, cons
 		out[count].p = point_at(from, to, length, s);
 		out[count].joined = 1;
 	}
+	return count;
+}
+
+static int add_segment(world_point from, world_point to, world_point focus, const world_rect *view,
+					   const trail_occluders *occluders, trail_column *out, int count, int max_columns)
+{
+	const int length = max_int(abs_int(to.x - from.x), abs_int(to.y - from.y));
+	const int f = focus_step(from, to, focus);
+	int s0 = 0;
+	int s1 = length;
+	int starts[TRAIL_VISIBLE_PARTS_MAX];
+	int ends[TRAIL_VISIBLE_PARTS_MAX];
+	int parts;
+
+	if (length == 0)
+		return count;
+	if (!clip_axis(from.x, to.x - from.x, length, view->x_min, view->x_max, &s0, &s1) ||
+		!clip_axis(from.y, to.y - from.y, length, view->y_min, view->y_max, &s0, &s1))
+		return count;
+
+	// Each part not hidden behind a nearer trail is its own strip. The pieces stay on the same
+	// grid (next_near_boundary), so cutting a part out doesn't move the pieces either side of it
+	if (!occluders)
+		return add_strip(from, to, length, f, focus, s0, s1, out, count, max_columns);
+	parts = trail_occluders_visible(occluders, from, to, s0, s1, starts, ends, TRAIL_VISIBLE_PARTS_MAX);
+	for (int i = 0; i < parts; ++i)
+		count = add_strip(from, to, length, f, focus, starts[i], ends[i], out, count, max_columns);
 	return count;
 }
 
@@ -185,13 +204,13 @@ int trail_clip_columns(const trail_column *columns, int count, const wall_clip_c
 }
 
 int trail_build_columns(const trail *t, int head_gap, world_point focus, const world_rect *view,
-						trail_column *out, int max_columns)
+						const trail_occluders *occluders, trail_column *out, int max_columns)
 {
 	world_point from, to;
 	int count = 0;
 
 	for (int i = trail_segment_count(t) - 1; i >= 0; --i) // newest first
 		if (trail_get_segment(t, i, head_gap, &from, &to))
-			count = add_segment(from, to, focus, view, out, count, max_columns);
+			count = add_segment(from, to, focus, view, occluders, out, count, max_columns);
 	return count;
 }

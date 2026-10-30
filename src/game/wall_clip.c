@@ -97,3 +97,16 @@ wall_clip_run wall_clip_strip(const world_point *columns, int pieces,
 	run.end = slide_in_front(columns[last + 1], columns[last], camera, min_forward);
 	return run;
 }
+
+int wall_clip_object_visible(const wall_clip_camera *camera, world_point p, int radius, int min_forward)
+{
+	view_pos v = view_pos_of(camera, p);
+
+	// Its nearest point must be min_forward in front: its centre, radius + min_forward
+	if (v.forward < SCALED(radius + min_forward))
+		return 0;
+	// Off to one side: its centre is more than radius beyond the view's edge. Moving the centre
+	// radius towards the middle and testing that is the same, without a division
+	v.right += v.right > 0 ? -SCALED(radius) : SCALED(radius);
+	return !left_of_view(v, camera->view_width) && !right_of_view(v, camera->view_width);
+}

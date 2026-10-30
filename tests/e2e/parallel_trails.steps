@@ -1,0 +1,25 @@
+# Two parallel trails on the same side (game/trail_occlusion.h): the nearer hides the farther
+# completely, so the farther isn't drawn there. Ride north 3 s (trail A), left: west 1 s, left:
+# south 4 s (trail B, 420 west of A, reaching past A's start), left: east 2 s (round A's start),
+# left: north again 420 east of A, with B 840 away beyond it. The radar shows the layout.
+wait 17
+wait 3
+press left
+wait 1
+press left
+wait 4
+press left
+wait 2
+press left
+wait 0.5
+shot par_1
+wait 0.4
+shot par_2
+wait 0.4
+shot par_3
+wait 0.4
+shot par_4
+wait 0.4
+shot par_5
+wait 0.4
+shot par_6

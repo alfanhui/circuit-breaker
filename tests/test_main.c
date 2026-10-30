@@ -18,6 +18,7 @@ void run_collision_tests(void);
 void run_minimap_tests(void);
 void run_rider_tests(void);
 void run_bot_tests(void);
+void run_trail_occlusion_tests(void);
 
 int main(void)
 {
@@ -36,6 +37,7 @@ int main(void)
 	run_minimap_tests();
 	run_rider_tests();
 	run_bot_tests();
+	run_trail_occlusion_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;
