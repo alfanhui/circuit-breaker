@@ -42,14 +42,15 @@ static int abs_int(int v)
 	return v < 0 ? -v : v;
 }
 
-// Where it aims, to cut off the nearest rival it can see (bot.h): far along their path while
-// it races to get ahead, or straight across to their line once it's far enough ahead. Returns
-// 0 if it can't see any, or if their way is already blocked (nothing left to cut)
+// Where it aims, to cut off the nearest rival (bot.h): far along their path while it races to
+// get ahead, or straight across to their line once it's far enough ahead. A rival beyond
+// BOT_SIGHT it can't see, only the way to them (as the player's radar shows the bots): it heads
+// for them. Returns 0 if there's no rival, or if their way is already blocked (nothing to cut)
 static int find_target(const rider *me, const rider *const *rivals, int rival_count,
 					   const trail *const *trails, int trail_count, world_point *target)
 {
 	const cycle *nearest = 0;
-	int nearest_distance = BOT_SIGHT + 1;
+	int nearest_distance = 0;
 	int dx;
 	int dy;
 	int ahead;
@@ -61,7 +62,7 @@ static int find_target(const rider *me, const rider *const *rivals, int rival_co
 		// "Distance" across plus along: no square root, and fine for comparing
 		int distance = abs_int(r->position.x - me->bike.position.x) + abs_int(r->position.y - me->bike.position.y);
 
-		if (distance < nearest_distance)
+		if (!nearest || distance < nearest_distance)
 		{
 			nearest_distance = distance;
 			nearest = r;
@@ -69,6 +70,13 @@ static int find_target(const rider *me, const rider *const *rivals, int rival_co
 	}
 	if (!nearest)
 		return 0;
+	if (nearest_distance > BOT_SIGHT)
+	{
+		// Too far to see, but the radar says which way: head for them. Only the way matters, as
+		// approach() caps how far a point counts, so where exactly they are gives nothing away
+		*target = nearest->position;
+		return 1;
+	}
 
 	// Where the bot is from the rival, measured along their heading (ahead of them is +) and
 	// across it. Their heading is one of N/E/S/W, so DX and DY are -1, 0 or +1: these just pick

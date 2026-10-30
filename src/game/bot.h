@@ -10,8 +10,9 @@
  * its rider is then driven exactly like a player's (rider.h). So it plays by the same rules.
  *
  * It only knows what it could see: it asks the same collision code the cycles use
- * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT.
- * Nothing else: not the player's buttons, not the whole map.
+ * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT. Beyond
+ * that it knows only which way they are, as the player's radar shows the bots. Nothing else:
+ * not the player's buttons, not the whole map.
  *
  * How it chooses: utility scoring. Every few frames it scores its three options, straight on,
  * left and right, and picks the best:
@@ -44,7 +45,8 @@
 #define BOT_SIDE_LOOK_FRAMES 120
 
 // Rivals it can see: within this many units across plus along (|dx| + |dy|, no square root).
-// About what's drawn round a player; a person sees as far, if only ahead
+// About what's drawn round a player; a person sees as far, if only ahead. Beyond it, it only
+// knows which way they are, and heads that way (as the player's radar shows the bots)
 #define BOT_SIGHT 4096
 /*
  * Cutting a rival off. Aiming at a point just ahead of them was pursuit: the bot drew level and

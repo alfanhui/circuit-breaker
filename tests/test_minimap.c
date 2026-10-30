@@ -227,8 +227,41 @@ static void gauge_lights_in_proportion(void)
 		CHECK(MINIMAP_GAUGE_LIT(level, 180) >= MINIMAP_GAUGE_LIT(level - 1, 180)); // never goes backwards
 }
 
+// Directions for the rim markers: facing north (-y); east is -x, on the right
+static void direction_on_the_rim(void)
+{
+	int side, k;
+
+	minimap_direction(0, -5000, FACING_NORTH, &side, &k); // straight ahead: the top
+	CHECK_EQ(MINIMAP_GAUGE_STEPS, k);
+	minimap_direction(0, 5000, FACING_NORTH, &side, &k); // straight behind: the bottom
+	CHECK_EQ(0, k);
+	minimap_direction(-5000, 0, FACING_NORTH, &side, &k); // east: right, level
+	CHECK_EQ(0, side);
+	CHECK_EQ(6, k);
+	minimap_direction(5000, 0, FACING_NORTH, &side, &k); // west: left, level
+	CHECK_EQ(1, side);
+	CHECK_EQ(6, k);
+	minimap_direction(-3000, -3000, FACING_NORTH, &side, &k); // ahead and right, 45 degrees
+	CHECK_EQ(0, side);
+	CHECK_EQ(9, k);
+	minimap_direction(-1000, -3730, FACING_NORTH, &side, &k); // 15 degrees right of ahead
+	CHECK_EQ(0, side);
+	CHECK_EQ(11, k);
+	// Facing east, something to the north is on the left, level
+	minimap_direction(0, -5000, FACING_EAST, &side, &k);
+	CHECK_EQ(1, side);
+	CHECK_EQ(6, k);
+	// Close or far, the same direction (the far side of the arena too: no overflow)
+	minimap_direction(-30, -30, FACING_NORTH, &side, &k);
+	CHECK_EQ(9, k);
+	minimap_direction(-28000, -28000, FACING_NORTH, &side, &k);
+	CHECK_EQ(9, k);
+}
+
 void run_minimap_tests(void)
 {
+	RUN(direction_on_the_rim);
 	RUN(gauge_points_go_up_the_right_side);
 	RUN(gauge_lights_in_proportion);
 	RUN(tilt_keeps_the_centre_and_the_near_edge);

@@ -262,12 +262,19 @@ static void cuts_across_once_ahead(void)
 	CHECK_EQ(TURN_NONE, decide(1, NULL));
 }
 
-// Further than it can see: it doesn't know they're there
-static void ignores_a_rival_out_of_sight(void)
+// Further than it can see, it still knows which way they are (as the player's radar shows the
+// bots): it heads that way rather than wander. Off to its left (west, +x): it turns left
+static void heads_for_a_rival_beyond_sight(void)
 {
 	setup();
 	rider_init(&bot, 0, 0, HEADING_NORTH);
-	add_rival(BOT_SIGHT + 100, 0, HEADING_NORTH);
+	add_rival(BOT_SIGHT + 2000, 0, HEADING_NORTH);
+	CHECK_EQ(TURN_LEFT, decide(1, NULL));
+	// Far ahead: straight on, boosting to get there
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	add_rival(0, -(BOT_SIGHT + 2000), HEADING_EAST);
+	CHECK_EQ(1, think(1).boost);
 	CHECK_EQ(TURN_NONE, decide(1, NULL));
 }
 
@@ -379,7 +386,7 @@ void run_bot_tests(void)
 {
 	RUN(races_ahead_of_a_rival_level_with_it);
 	RUN(cuts_across_once_ahead);
-	RUN(ignores_a_rival_out_of_sight);
+	RUN(heads_for_a_rival_beyond_sight);
 	RUN(will_not_chase_into_a_trail);
 	RUN(boosts_towards_a_rival_ahead);
 	RUN(boosts_again_once_the_gauge_refills);

@@ -298,8 +298,20 @@ void draw_3d(void)
 	jo_3d_pop_matrix();
 
 	hud_draw_boost(&player1.bike); // on top of the world: screen pixels, no perspective
-	if (first_person && !debug_camera)
-		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT); // every trail on the field
+	if (!debug_camera) // both views: in iso it turns with the iso camera (hud.h)
+	{
+		// Every trail on the field, and a marker on the rim pointing at each live bot
+		hud_marker markers[1];
+		int marker_count = 0;
+
+		if (bot1.alive)
+		{
+			markers[0].position = bot1.bike.position;
+			markers[0].colour = 1; // its place in field_trails: the radar's orange
+			marker_count = 1;
+		}
+		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
+	}
 	debug_3d();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text
