@@ -43,7 +43,7 @@
 #define MAP_LINE_DEPTH 4
 #define GAUGE_DEPTH 3
 #define MAP_DISC_SIZE 32 // the glass's texture, stretched to the map's size
-#define MAP_TRAILS_MAX 4 // trail colours ready (only player 1's so far)
+#define MAP_TRAILS_MAX 4 // trail colours ready: player 1 and a bot so far
 /*
  * The tilted disc in perspective (game/minimap.h). VDP1 stretches a texture across a quad
  * linearly, not in perspective, so one quad bent the circle. So the glass is cut into MAP_STRIPS

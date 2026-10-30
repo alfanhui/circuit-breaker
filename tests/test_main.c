@@ -16,6 +16,8 @@ void run_depth_fog_tests(void);
 void run_turn_gate_tests(void);
 void run_collision_tests(void);
 void run_minimap_tests(void);
+void run_rider_tests(void);
+void run_bot_tests(void);
 
 int main(void)
 {
@@ -32,6 +34,8 @@ int main(void)
 	run_turn_gate_tests();
 	run_collision_tests();
 	run_minimap_tests();
+	run_rider_tests();
+	run_bot_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;
