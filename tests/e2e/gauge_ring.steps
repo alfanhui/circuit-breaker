@@ -1,0 +1,19 @@
+# The boost gauge as the radar's rim (bottom centre). Full and amber; boosting (white) as it drains
+# down both sides; the pause after (dim amber); refilling; then iso, where the rim shows alone.
+wait 17
+press c 3
+wait 2
+shot ring_full
+keydown up
+wait 0.3
+shot ring_boosting
+wait 0.7
+shot ring_drained
+keyup up
+wait 0.2
+shot ring_pause
+wait 1.5
+shot ring_refilling
+press down
+wait 0.5
+shot ring_iso

@@ -59,8 +59,10 @@ reads memory 4 bytes at a time. If any of them differs on the real console, it s
 
 - [ ] 1st person, facing a far wall: the floor darkens smoothly to black where it meets the
       wall's base. Rows near the bottom of the screen are clear, with no banding.
-- [ ] 1st person radar (bottom right): is it round, not an oval, and fully on screen (CRTs crop
-      the edges)? Readable at a glance? It should turn smoothly with the view on every turn.
+- [ ] 1st person radar (bottom right): a tilted hologram disc, fully on screen (CRTs crop the
+      edges)? Readable at a glance? It should turn smoothly with the view on every turn.
+- [ ] The radar's glass is a mesh (every other pixel). Over composite or RF it should blur into
+      see-through; over S-video or RGB it will look like a checkerboard. Which does it look like?
 - [ ] Iso (Down): the top of the floor fades to black; the area round the cycle is clear.
 - [ ] Iso: crash into your trail and slide along it with the trail on the camera's side. The cube
       should stay behind the trail (only its top showing) all along, no flicker at any spot. The
@@ -216,8 +218,9 @@ Result: ________
       long enough, and the half-second pause before the refill noticeable but fair?
 - [ ] **The view widening while boosting**: felt as speed, or as a lurch? Any wall pieces
       popping in at the screen edges as it widens (culling is told the wider view)?
-- [ ] **The gauge bar** at the bottom: readable on the TV, inside the picture (not cut off by
-      the TV's edge), colours distinct (white boosting, dim teal waiting, cyan refilling)?
+- [ ] **The gauge, round the radar's rim** (bottom centre): readable from the corner of the
+      eye? It drains from the top down both sides. Colours distinct: white boosting, dim amber
+      in the pause, amber refilling or full. In iso the rim shows on its own.
 - [ ] **Turn and boost together**: both now come from the same pad sample, so they should
       land in the same frame. Does turn + boost on the same press feel right?
 - [ ] **Unplug the pad mid-game** and plug it back: the game should carry on, not hang or turn.
