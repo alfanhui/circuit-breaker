@@ -11,6 +11,7 @@
 rider player1;
 rider bot1;
 static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
+static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
 // Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
 // The order is the radar's colours: player 1 cyan, then orange
 const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bot1.wall};
@@ -149,7 +150,7 @@ void gamepad_input(void)
 	}
 
 	// The bot decides its buttons from what it can see, then rides by the same rules
-	rider_step(&bot1, bot_think(&bot1_mind, &bot1, field_trails, FIELD_TRAIL_COUNT), field_trails, FIELD_TRAIL_COUNT);
+	rider_step(&bot1, bot_think(&bot1_mind, &bot1, bot1_rivals, 1, field_trails, FIELD_TRAIL_COUNT), field_trails, FIELD_TRAIL_COUNT);
 
 	// A: clear every wall, each starting fresh where its cycle is
 	if (struck & DIGI_A)
