@@ -1,0 +1,13 @@
+# The radar in iso too (hud.h): turned with the iso camera's fixed 45 degrees, so up on the
+# radar is up the screen; the bot's marker on the rim. 1st person first, then iso.
+wait 21
+shot isoradar_1st
+press down
+wait 1
+shot isoradar_1
+press right
+wait 1.5
+shot isoradar_2
+press left
+wait 1.5
+shot isoradar_3

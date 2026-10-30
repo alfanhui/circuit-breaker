@@ -48,4 +48,10 @@ typedef struct
 wall_clip_run wall_clip_strip(const world_point *columns, int pieces,
 							  const wall_clip_camera *camera, int min_forward);
 
+// Whether to draw an object (another cycle) at p, reaching radius from its centre: all of it at
+// least min_forward in front of the camera, and not wholly off either side of the view. An
+// object even partly behind the camera is skipped: SGL would project its corners behind the
+// camera onto the screen (a cycle behind the player showed up in front of them)
+int wall_clip_object_visible(const wall_clip_camera *camera, world_point p, int radius, int min_forward);
+
 #endif

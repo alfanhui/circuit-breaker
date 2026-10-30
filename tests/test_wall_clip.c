@@ -98,6 +98,29 @@ static void diagonal_view_never_starts_behind(void)
 	CHECK(forward >= LOW_MIN - 1);
 }
 
+// A cycle 25 across (radius 35 to its corners), seen from the origin facing north (-y)
+static void objects_behind_or_beside_are_not_drawn(void)
+{
+	wall_clip_camera c = camera(0, 0, 0, -1024);
+	world_point p;
+
+	p.x = 0;
+	p.y = -1000; // straight ahead
+	CHECK_EQ(1, wall_clip_object_visible(&c, p, 35, 10));
+	p.y = 1000; // straight behind: the bug, it showed on screen
+	CHECK_EQ(0, wall_clip_object_visible(&c, p, 35, 10));
+	p.y = -40; // so close part of it is behind the near limit
+	CHECK_EQ(0, wall_clip_object_visible(&c, p, 35, 10));
+	p.y = -50; // all of it just in front
+	CHECK_EQ(1, wall_clip_object_visible(&c, p, 35, 10));
+	// 1000 ahead, the 90 degree view reaches 1000 (+100 margin) to each side
+	p.y = -1000;
+	p.x = 1100; // centre just outside, but it reaches back in
+	CHECK_EQ(1, wall_clip_object_visible(&c, p, 35, 10));
+	p.x = -1200; // wholly outside on the other side
+	CHECK_EQ(0, wall_clip_object_visible(&c, p, 35, 10));
+}
+
 void run_wall_clip_tests(void)
 {
 	RUN(running_along_a_wall_starts_it_in_front);
@@ -105,4 +128,5 @@ void run_wall_clip_tests(void)
 	RUN(wall_behind_draws_nothing);
 	RUN(diagonal_view_never_starts_behind);
 	RUN(wider_view_keeps_pieces_at_the_side);
+	RUN(objects_behind_or_beside_are_not_drawn);
 }

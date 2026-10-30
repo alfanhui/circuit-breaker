@@ -44,6 +44,11 @@ extern bool view_linear_turn;
 
 void view_turn_left(void);
 void view_turn_right(void);
+// 1st person: turn the head to look aside (-1 left, 1 right) or back ahead (0); it eases there
+void view_look(int direction);
+// Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
+// In iso it's half the size: the whole arena swinging is too much
+void view_shake(int strength);
 void view_follow(const cycle *c);
 void view_push_world_matrix(void);
 

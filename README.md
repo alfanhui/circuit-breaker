@@ -56,9 +56,9 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - Left / Right: turn 90°
 - Up: boost
 - Down: switch between isometric and 1st person view
-- A: clear the trail
+- L / R (hold): look left / right (1st person)
+- A: clear every trail
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
-- L / R: arena smaller / larger (tuning; the debug text shows the width)
 - B / C: cruise speed down / up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)
-- Start: debug camera (D-pad pans, L/R height, B/C pitch)
+- Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width)

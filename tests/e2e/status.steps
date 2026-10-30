@@ -1,0 +1,15 @@
+# The status line (game/status_message.h): "Enemy process eliminated" typed above the horizon
+# when the bot dies. The arena shrinks to the smallest (2000 across) in the debug camera: the player
+# soon crashes into the edge, and after the restart the bot, starting 2000 out, is outside the
+# arena and crashes at once. 1st person while it types, then iso.
+wait 21
+press start
+press x 7
+press start
+wait 4.5
+shot status_1
+wait 0.4
+shot status_2
+press down
+wait 0.3
+shot status_3

@@ -83,6 +83,18 @@ typedef struct
 // image: negate x.
 void minimap_gauge_point(int k, int radius, int *x, int *y);
 
+/*
+ * Which way something is, as a point on the rim: for a marker showing where a rider is, however
+ * far (a bot beyond the radar's range is otherwise impossible to find in an arena this size).
+ * dx, dy: where it is from the player; forward: the camera's facing, x1024 (as minimap_build).
+ * Writes the nearest of the rim's points, every 15 degrees (minimap_gauge_point's k, 0 behind
+ * .. MINIMAP_GAUGE_STEPS ahead) and the side (0 right, 1 left). How: turn it into the camera's
+ * frame (right, ahead), then score each 15 degree direction by how well it points that way (a dot
+ * product with its sine and cosine) and keep the best. 13 tries, 2 multiplies each: no division
+ * and no square root, which finding the exact angle would need
+ */
+void minimap_direction(int dx, int dy, int forward_x, int forward_y, int *side, int *k);
+
 // Works out the circle's half-widths and the tilt's rows. Once, at start-up (the only place with
 // a square root or a division).
 void minimap_init(void);

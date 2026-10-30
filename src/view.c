@@ -2,6 +2,7 @@
 #include "floor_fade_vdp2.h"
 #include "object_fog_vdp1.h"
 #include "game/turn_ease.h"
+#include "game/camera_shake.h"
 
 // 1st person: camera sits on the cycle and turns with it (easing round: turn_ease.h)
 #define FIRST_PERSON_FOV 90
@@ -19,6 +20,22 @@
 #define BOOST_FOV_ANGLE DEGtoANG(FIRST_PERSON_BOOST_FOV)
 #define FOV_EASE_SHARE 2	 // sixteenths of the way each frame: most of it in ~0.3 s, settled in ~0.6 s
 #define FOV_EASE_MIN_STEP 32 // 0.18 degrees: the slowest it moves before it lands
+
+/*
+ * Looking left and right (L / R, 1st person): the head turns LOOK_ANGLE to the side, easing
+ * there and back like the turn camera, and dips a little towards the floor as it turns, as a
+ * person turning their head does. The cycle keeps going straight: only the camera turns.
+ * The dip is in proportion to how far the head has turned: a multiply and a shift (x 27 / 256 is
+ * ~8 / 75, so 7.9 degrees down at the full 75 to the side; 6 was too slight to feel, 10 too much).
+ * The floor fog's rows depend on the pitch (the horizon moves up as the camera dips: ~22 rows at
+ * 8 degrees, which would leave a band of far floor unfogged), so it's rebuilt for the new pitch
+ * when that has changed by more than LOOK_FOG_TILT_STEP: about 14 times through a look.
+ */
+#define LOOK_ANGLE DEGtoANG(75.0)
+#define LOOK_PITCH_X256 27
+#define LOOK_EASE_SHARE 4	   // sixteenths of the way a frame: quicker than a turn, it's a glance
+#define LOOK_EASE_MIN_STEP 64 // 0.35 degrees
+#define LOOK_FOG_TILT_STEP 10 // tan(pitch) x 1000: about 0.6 degrees
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
@@ -44,6 +61,16 @@ ANGLE view_rz;
 // Accumulated heading angle, eased towards on every turn
 static int heading_target = 0;
 static int heading_current = 0;
+
+// The head's turn to the side (ANGLE, negative left), on top of the heading, eased to the target
+static int look_target = 0;
+static int look_now = 0;
+static int fog_tilt = 0; // the floor fog's tilt (tan x 1000) as last built
+
+// A jolt that dies away (a bot crashed into your trail): this frame's share is added on top of
+// everything else. The floor fog isn't rebuilt for its pitch: it's small and over in ~0.2 s
+static camera_shake shake;
+static int shake_yaw = 0; // this frame's (ANGLE), for wall_clip's camera too
 
 // SGL's tangent (16.16 fixed point). jo's headers don't declare it; this is SGL's own line (sl_def.h)
 extern FIXED slTan(ANGLE);
@@ -78,6 +105,8 @@ static void apply_view(const cycle *c)
 		view_z = FIRST_PERSON_Z;
 		view_rx = FIRST_PERSON_RX;
 		heading_current = heading_target;
+		look_now = look_target;
+		fog_tilt = 0; // floor_fade_set_first_person (below) builds it level
 	}
 	else
 	{
@@ -114,8 +143,8 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 		mode = VIEW_CULL_ALL;
 	else if (!first_person)
 		mode = VIEW_CULL_ISO;
-	else if (heading_current != heading_target)
-		mode = VIEW_CULL_TURNING; // easing round: the camera faces somewhere between two headings
+	else if (heading_current != heading_target || look_now != 0 || camera_shake_active(&shake))
+		mode = VIEW_CULL_TURNING; // easing round, looking aside or shaking: it faces between headings
 	else if (fov_now != FIRST_PERSON_FOV_ANGLE)
 		mode = VIEW_CULL_TURNING; // boosting: wider than the 90 degree rectangle, so look all round
 	else
@@ -125,7 +154,8 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 
 bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out)
 {
-	ANGLE yaw = (ANGLE)heading_current; // where the camera faces now, even mid-turn
+	// Where the camera faces now: mid-turn, looking aside or shaking
+	ANGLE yaw = (ANGLE)(heading_current + look_now + shake_yaw);
 
 	if (free_camera || !first_person)
 		return false;
@@ -161,8 +191,22 @@ void view_turn_right(void)
 	heading_target += 0x4000;
 }
 
+void view_look(int direction)
+{
+	look_target = direction * LOOK_ANGLE;
+}
+
+void view_shake(int strength)
+{
+	camera_shake_start(&shake, strength);
+}
+
 void view_follow(const cycle *c)
 {
+	int shake_pitch;
+
+	// This frame's jolt (0, 0 when still), then it dies away a little
+	camera_shake_step(&shake, &shake_yaw, &shake_pitch);
 	if (first_person)
 	{
 		view_x = c->position.x;
@@ -173,7 +217,24 @@ void view_follow(const cycle *c)
 			heading_current = turn_linear_step(heading_current, heading_target);
 		else
 			heading_current = turn_ease_step(heading_current, heading_target);
-		view_rz = (ANGLE)heading_current;
+		// The head's turn to the side, and its dip towards the floor
+		look_now = ease_out_step(look_now, look_target, LOOK_EASE_SHARE, LOOK_EASE_MIN_STEP);
+		view_rz = (ANGLE)(heading_current + look_now + shake_yaw);
+		{
+			int pitch = ((look_now < 0 ? -look_now : look_now) * LOOK_PITCH_X256) >> 8;
+			int tilt = (slTan((ANGLE)pitch) * 1000) >> 16; // tan x 1000, as the floor fog keeps it
+
+			// Less than level (90 degrees) looks down. The shake's pitch isn't in the fog's tilt
+			view_rx = (ANGLE)(FIRST_PERSON_RX - pitch + shake_pitch);
+			int change = tilt > fog_tilt ? tilt - fog_tilt : fog_tilt - tilt;
+
+			// Rebuilt in steps, and once more on landing level, so it ends exactly right
+			if (change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0))
+			{
+				fog_tilt = tilt;
+				floor_fade_set_first_person_tilt(tilt);
+			}
+		}
 
 		// Ease towards the width the boost level asks for (0..CYCLE_BOOST_FULL, which is 16: >> 4
 		// divides by it). The level ramps up over 8 frames; easing on top rounds both ends off
@@ -183,6 +244,9 @@ void view_follow(const cycle *c)
 	{
 		view_x = c->position.x + ISO_FOLLOW_OFFSET;
 		view_y = c->position.y + ISO_FOLLOW_OFFSET;
+		// Half the jolt: from up here a degree swings the whole arena
+		view_rz = (ANGLE)(ISO_RZ + (shake_yaw >> 1));
+		view_rx = (ANGLE)(ISO_RX + (shake_pitch >> 1));
 	}
 }
 

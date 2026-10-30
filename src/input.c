@@ -1,15 +1,34 @@
 #include "input.h"
-#include "game/turn_gate.h"
+#include "game/bot.h"
+#include "game/camera_shake.h"
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
+// The bot starts 2000 to the east of the player (east is -x), riding the same way
+#define BOT1_START_X (-2000)
+#define BOT1_START_Y 0
 #define DEBUG_CAMERA_SPEED 8
 
-cycle player1;
-trail player1_trail;
-static turn_gate player1_turns; // a minimum gap between turns (game/turn_gate.h)
-// The trails player 1 can crash into. Only its own for now; a second player's goes here too
-static const trail *const player1_trails[] = {&player1_trail};
+rider player1;
+rider bot1;
+game_state game;
+status_message status;
+static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
+static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
+// Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
+// The order is the radar's colours: player 1 cyan, then orange
+const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bot1.wall};
+const trail *solid_trails[FIELD_TRAIL_COUNT];
+int solid_trail_count;
+
+// The player's trail always counts (a crash ends the game); the bot's only while it's alive
+static void update_solid_trails(void)
+{
+	solid_trail_count = 0;
+	solid_trails[solid_trail_count++] = &player1.wall;
+	if (bot1.alive)
+		solid_trails[solid_trail_count++] = &bot1.wall;
+}
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 
@@ -22,24 +41,27 @@ static void stress_fill_trail(void)
 
 	p.x = -edge;
 	p.y = -edge;
-	trail_reset(&player1_trail, p);
+	trail_reset(&player1.wall, p);
 	for (int i = 1; i < TRAIL_MAX_CORNERS; ++i)
 	{
 		if (i & 1)
 			p.x = -p.x;
 		else
 			p.y += row_spacing;
-		trail_set_head(&player1_trail, p);
-		trail_add_corner(&player1_trail);
+		trail_set_head(&player1.wall, p);
+		trail_add_corner(&player1.wall);
 	}
 }
 
 void init_players(void)
 {
-	cycle_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
-	turn_gate_init(&player1_turns);
-	trail_reset(&player1_trail, player1.position);
-	view_init(&player1);
+	game_init(&game);
+	status_init(&status);
+	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
+	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
+	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
+	update_solid_trails();
+	view_init(&player1.bike);
 #ifdef PERF_STRESS_TRAIL
 	stress_fill_trail();
 #endif
@@ -55,8 +77,15 @@ void debug_pad1(void)
 	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
-static void debug_camera_input(void)
+static void debug_camera_input(unsigned short struck)
 {
+	// X / Y: arena smaller / bigger (L and R are the camera's height here, and look aside in play).
+	// A cycle left outside a shrunk arena is pulled to the edge when play resumes: a crash
+	if (struck & DIGI_X)
+		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
+	if (struck & DIGI_Y)
+		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
+
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
 	else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
@@ -98,8 +127,7 @@ void gamepad_input(void)
 {
 	static unsigned int frame = 0;
 	unsigned short struck;
-	int turn;
-	world_point before;
+	rider_controls controls;
 
 	// Slow motion: skip the game update on most frames. Skipped before the presses are taken,
 	// so a press waits in the latch for the next update rather than being lost
@@ -111,15 +139,24 @@ void gamepad_input(void)
 	// Taken first and on every frame, so presses can't pile up while the debug camera is on.
 	struck = press_latch_take(&pad1_presses);
 
+	// Terminated: everything is frozen behind the terminal screen (main.c) until a button is
+	// pressed or 3 s pass, then it starts again from the beginning (game/game_state.h)
+	if (game.phase == GAME_TERMINATED)
+	{
+		if (game_update(&game, 0, struck != 0))
+			init_players();
+		return;
+	}
+
 	if (struck & DIGI_START)
 	{
 		debug_camera = !debug_camera;
 		if (!debug_camera)
-			view_init(&player1);
+			view_init(&player1.bike);
 	}
 	if (debug_camera)
 	{
-		debug_camera_input();
+		debug_camera_input(struck);
 		return;
 	}
 
@@ -127,62 +164,78 @@ void gamepad_input(void)
 		return;
 
 	if (struck & DIGI_DOWN)
-		view_toggle(&player1);
+		view_toggle(&player1.bike);
 
-	// Turns are instant for the cycle and the wall; only the 1st person camera eases round.
-	// The gate holds back a turn pressed within a cycle-width of the last one (a quick double
-	// tap) until that gap is reached, so a U-turn never lands on the cycle's own trail
-	turn = turn_gate_update(&player1_turns, (struck & DIGI_LEFT)	? TURN_LEFT
-											: (struck & DIGI_RIGHT) ? TURN_RIGHT
-																	: TURN_NONE);
-	if (turn == TURN_LEFT)
-	{
-		trail_add_corner(&player1_trail);
-		cycle_turn_left(&player1);
-		view_turn_left();
-	}
-	else if (turn == TURN_RIGHT)
-	{
-		trail_add_corner(&player1_trail);
-		cycle_turn_right(&player1);
-		view_turn_right();
-	}
-
+	// The pad becomes this frame's controls: the same thing a bot decides (game/rider.h). Turns
+	// are instant for the cycle and the wall; only the 1st person camera eases round with them.
 	// Boost (held) comes from the same pad sample as the turns (struck), so a turn and a boost
-	// pressed together land in the same frame. It used to be jo's own pad read, filled at a
-	// different point in the frame: the two could be a frame apart
-	// It stops short of the arena edge and of trails (game/collision.h): for now just its own
-	before = player1.position;
-	cycle_update(&player1, (press_latch_held(&pad1_presses) & DIGI_UP) != 0, player1_trails, 1);
-	// How far it went: it only moves along one axis, so the two differences add up to it
-	turn_gate_moved(&player1_turns, JO_ABS(player1.position.x - before.x) + JO_ABS(player1.position.y - before.y));
-	trail_set_head(&player1_trail, player1.position);
+	// pressed together land in the same frame
+	controls.turn = (struck & DIGI_LEFT) ? TURN_LEFT : (struck & DIGI_RIGHT) ? TURN_RIGHT : TURN_NONE;
+	controls.boost = (press_latch_held(&pad1_presses) & DIGI_UP) != 0;
+	switch (rider_step(&player1, controls, solid_trails, solid_trail_count))
+	{
+	case TURN_LEFT:
+		view_turn_left();
+		break;
+	case TURN_RIGHT:
+		view_turn_right();
+		break;
+	}
+	// A crash terminates the player's process: the terminal screen from the next frame
+	game_update(&game, player1.crashed, 0);
 
-	// A: clear the wall and start a fresh one here
+	// The bot decides its buttons from what it can see, then rides by the same rules
+	// A crash terminates the bot's process: it stops, and its trail sinks into the floor (and
+	// from now on stops nobody)
+	if (bot1.alive)
+	{
+		rider_step(&bot1, bot_think(&bot1_mind, &bot1, bot1_rivals, 1, solid_trails, solid_trail_count), solid_trails,
+				   solid_trail_count);
+		if (bot1.crashed)
+		{
+			// Whatever it hit (your trail, its own, the arena edge), make it felt and say so: a
+			// jolt of the camera, and the status line. It may have been a long way off, or behind you
+			view_shake(CAMERA_SHAKE_BOT_KILL);
+			status_show(&status, STATUS_ENEMY_ELIMINATED);
+			rider_kill(&bot1);
+			update_solid_trails();
+		}
+	}
+	else
+		rider_sink(&bot1);
+	status_update(&status); // the status line types on, and goes once it's been read
+
+	// A: clear every wall, each starting fresh where its cycle is
 	if (struck & DIGI_A)
-		trail_reset(&player1_trail, player1.position);
+	{
+		trail_reset(&player1.wall, player1.bike.position);
+		trail_reset(&bot1.wall, bot1.bike.position);
+	}
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (struck & DIGI_X)
 		stress_fill_trail();
 	// Y: collision on/off (off: a ghost, through trails and out of the arena). Turning it back on
 	// outside the arena snaps the cycle to the edge next frame
 	if (struck & DIGI_Y)
-		player1.bounded = !player1.bounded;
+		player1.bike.bounded = !player1.bike.bounded;
 	// Z: compare the turn cameras (debug text line 5)
 	if (struck & DIGI_Z)
 		debug_next_turn_compare();
 
 	// Tuning, to find the balance of speed and scale by feel. The debug text shows both.
-	// L / R: arena smaller / larger. A cycle left outside a shrunk arena is pulled to the edge next frame
-	if (struck & DIGI_L)
-		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
-	if (struck & DIGI_R)
-		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
-	// B / C: cruise speed down / up
+	// (The arena's size is in the debug camera: START, then X / Y.) B / C: cruise speed down / up
 	if (struck & DIGI_B)
 		cycle_set_cruise_speed(cycle_cruise_speed() - 1);
 	if (struck & DIGI_C)
 		cycle_set_cruise_speed(cycle_cruise_speed() + 1);
 
-	view_follow(&player1);
+	// L / R held: look left / right (1st person; both or neither: ahead). The head eases round
+	{
+		unsigned short held = press_latch_held(&pad1_presses);
+		int left = (held & DIGI_L) != 0;
+		int right = (held & DIGI_R) != 0;
+
+		view_look(left == right ? 0 : left ? -1 : 1);
+	}
+	view_follow(&player1.bike);
 }

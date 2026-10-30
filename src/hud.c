@@ -37,13 +37,15 @@
  * where the HUD is: the world reaches SGL at 1/4 size, and the nearest trail pieces (10 world
  * units ahead, TRAIL_MIN_FORWARD) are 2.5 of SGL's, but collision keeps the cycle 25 from a
  * trail's side, so those are always off the screen's edges. SGL drops anything nearer than its
- * screen distance / 128 (slZdspLevel 7): 2.2 in iso (60 degree view), so 2 vanished there
+ * screen distance / 128 (slZdspLevel 7): 2.2 in iso (60 degree view), so 2 vanished there.
+ * Depths are SGL's FIXED (16.16): whole numbers apart, but the markers need 2.5
  */
-#define MAP_FILL_DEPTH 5
-#define MAP_LINE_DEPTH 4
-#define GAUGE_DEPTH 3
+#define MAP_FILL_DEPTH (5 * JO_FIXED_1)
+#define MAP_LINE_DEPTH (4 * JO_FIXED_1)
+#define GAUGE_DEPTH (3 * JO_FIXED_1)
+#define MARKER_DEPTH (5 * JO_FIXED_1 / 2) // 2.5: over the gauge, and still drawn in iso (2 isn't)
 #define MAP_DISC_SIZE 32 // the glass's texture, stretched to the map's size
-#define MAP_TRAILS_MAX 4 // trail colours ready (only player 1's so far)
+#define MAP_TRAILS_MAX 4 // trail colours ready: player 1 and a bot so far
 /*
  * The tilted disc in perspective (game/minimap.h). VDP1 stretches a texture across a quad
  * linearly, not in perspective, so one quad bent the circle. So the glass is cut into MAP_STRIPS
@@ -65,7 +67,8 @@ enum
 	PART_MAP_PLAYER,
 	PART_MAP_TRAIL,							   // one per trail colour, MAP_TRAILS_MAX of them
 	PART_MAP_FILL = PART_MAP_TRAIL + MAP_TRAILS_MAX, // one per band of the glass, MAP_STRIPS of them
-	PART_COUNT = PART_MAP_FILL + MAP_STRIPS
+	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
+	PART_COUNT
 };
 
 // Each trail's colour on the map. Another player's goes in the next slot
@@ -171,12 +174,13 @@ void hud_init(void)
 		part_sprites[PART_MAP_TRAIL + i] = make_part(map_trail_colours[i]);
 	for (int k = 0; k < MAP_STRIPS; ++k)
 		part_sprites[PART_MAP_FILL + k] = make_map_strip(k);
+	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
 	minimap_init();
 	prepare_map_disc();
 }
 
-// Any 4 corners, in pixels from the screen centre (+y down), at an SGL depth (nearer drawn later)
-static void draw_corners(int part, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, int depth)
+// Any 4 corners, in pixels from the screen centre (+y down), at an SGL depth (FIXED; nearer drawn later)
+static void draw_corners(int part, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, FIXED depth)
 {
 	jo_pos2D_fixed corners[4] = {
 		{jo_int2fixed(x0), jo_int2fixed(y0)},
@@ -185,7 +189,7 @@ static void draw_corners(int part, int x0, int y0, int x1, int y1, int x2, int y
 		{jo_int2fixed(x3), jo_int2fixed(y3)},
 	};
 
-	jo_sprite_draw_4p_fixed(part_sprites[part], corners, jo_int2fixed(depth), true);
+	jo_sprite_draw_4p_fixed(part_sprites[part], corners, depth, true);
 }
 
 // A line between two map points: a quad squashed flat, corners A, B, B, A
@@ -251,7 +255,42 @@ static void draw_gauge_piece(int part, int side, int k, int t0, int t1)
 	draw_corners(part, ix0, iy0, ox0, oy0, ox1, oy1, ix1, iy1, GAUGE_DEPTH);
 }
 
-void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_count)
+void hud_draw_text_cursor(int column, int row)
+{
+	// The text cell's top left, in pixels from the screen's centre. Text cells are 8 x 8; VDP1
+	// draws a quad's edges inclusive, so corners 7 apart fill exactly 8 pixels
+	int left = column * 8 - JO_TV_WIDTH_2;
+	int top = row * 8 - JO_TV_HEIGHT_2;
+
+	draw_corners(PART_TEXT_CURSOR, left, top, left + 7, top, left + 7, top + 7, left, top + 7, GAUGE_DEPTH);
+}
+
+/*
+ * A marker on the rim pointing at a rider (game/minimap.h, minimap_direction): an arrowhead
+ * standing out from the rim at the nearest of its 15 degree points, in the rider's trail colour.
+ * It stands outside the rim rather than on it, so it doesn't merge with the amber gauge.
+ * Its shape comes from the rim's own corners there: from the inner corner out to the outer one
+ * is "outwards" (r), and r turned 90 degrees is "along the rim" (its width). Outer + r is the tip
+ */
+static void draw_rim_marker(int part, int side, int k)
+{
+	const int ix = gauge_inner[side][k][0];
+	const int iy = gauge_inner[side][k][1];
+	const int ox = gauge_outer[side][k][0];
+	const int oy = gauge_outer[side][k][1];
+	const int rx = ox - ix; // ~3 pixels, outwards
+	const int ry = oy - iy;
+
+	// Base corners either side of the outer corner (1.5 r each way: ~9 pixels across), the tip 3 r
+	// further out, and back to the middle. At r it was too small to spot beside the amber gauge
+	const int wx = (3 * ry) >> 1;
+	const int wy = (3 * rx) >> 1;
+
+	draw_corners(part, ox - wx, oy + wy, ox + 3 * rx, oy + 3 * ry, ox + wx, oy - wy, ox, oy, MARKER_DEPTH);
+}
+
+void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_count, const hud_marker *markers,
+					  int marker_count)
 {
 	// The camera's facing now (eased mid-turn, so the map swings round with the view), as a unit
 	// vector x1024. Heading 0 faces north (-y), turning right goes east (-x): (-sin, -cos)
@@ -278,6 +317,16 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 	// on the tilted map like everything else
 	draw_map_line(PART_MAP_PLAYER, -3, 3, 0, -4);
 	draw_map_line(PART_MAP_PLAYER, 0, -4, 3, 3);
+
+	// Which way each rider is, however far: on the rim, turned with the camera like the map
+	for (int i = 0; i < marker_count; ++i)
+	{
+		int side, k;
+
+		minimap_direction(markers[i].position.x - eye.x, markers[i].position.y - eye.y, forward_x, forward_y, &side,
+						  &k);
+		draw_rim_marker(PART_MAP_TRAIL + (markers[i].colour < MAP_TRAILS_MAX ? markers[i].colour : 0), side, k);
+	}
 }
 
 void hud_draw_boost(const cycle *c)

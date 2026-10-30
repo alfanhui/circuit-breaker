@@ -16,6 +16,12 @@ void run_depth_fog_tests(void);
 void run_turn_gate_tests(void);
 void run_collision_tests(void);
 void run_minimap_tests(void);
+void run_rider_tests(void);
+void run_bot_tests(void);
+void run_trail_occlusion_tests(void);
+void run_game_state_tests(void);
+void run_camera_shake_tests(void);
+void run_status_message_tests(void);
 
 int main(void)
 {
@@ -32,6 +38,12 @@ int main(void)
 	run_turn_gate_tests();
 	run_collision_tests();
 	run_minimap_tests();
+	run_rider_tests();
+	run_bot_tests();
+	run_trail_occlusion_tests();
+	run_game_state_tests();
+	run_camera_shake_tests();
+	run_status_message_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

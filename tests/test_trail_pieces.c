@@ -47,7 +47,7 @@ static void short_trail_is_cut_into_near_pieces(void)
 
 	make_line(&t, pt(0, 0), pt(0, -1000));
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 
 	// Near pieces are cut on a grid centred on the player (one piece straddles it): boundaries
 	// at y = -128, -384, -640, -896, so the ends make 5 pieces, 6 columns
@@ -70,7 +70,7 @@ static void piece_beside_the_player_is_centred_on_it(void)
 
 	make_line(&t, pt(0, 1000), pt(0, -1000));
 	world_rect view = square(pt(25, 300));
-	n = trail_build_columns(&t, 0, pt(25, 300), &view, columns, TRAIL_DRAW_COLUMNS_MAX); // 25 beside it
+	n = trail_build_columns(&t, 0, pt(25, 300), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX); // 25 beside it
 	for (int i = 1; i < n; ++i)
 		if (columns[i - 1].p.y == 300 + TRAIL_NEAR_PIECE / 2 && columns[i].p.y == 300 - TRAIL_NEAR_PIECE / 2)
 			found = 1;
@@ -78,7 +78,7 @@ static void piece_beside_the_player_is_centred_on_it(void)
 
 	// Running the other way along it: still centred
 	make_line(&t, pt(0, -1000), pt(0, 1000));
-	n = trail_build_columns(&t, 0, pt(25, 300), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(25, 300), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	found = 0;
 	for (int i = 1; i < n; ++i)
 		if (columns[i - 1].p.y == 300 - TRAIL_NEAR_PIECE / 2 && columns[i].p.y == 300 + TRAIL_NEAR_PIECE / 2)
@@ -93,7 +93,7 @@ static void long_trail_is_clipped_to_the_draw_window(void)
 
 	make_line(&t, pt(0, 15000), pt(0, -15000)); // runs right through the player
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 
 	CHECK(n > 2);
 	for (int i = 0; i < n; ++i)
@@ -109,7 +109,7 @@ static void pieces_are_short_near_and_longer_far(void)
 
 	make_line(&t, pt(0, 15000), pt(0, -15000));
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 
 	for (int i = 1; i < n; ++i)
 	{
@@ -126,7 +126,7 @@ static void trail_out_of_range_draws_nothing(void)
 	trail t;
 	make_line(&t, pt(7000, 7000), pt(7000, -7000)); // parallel to the player, 7000 away
 	world_rect view = square(pt(0, 0));
-	CHECK_EQ(0, trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX));
+	CHECK_EQ(0, trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX));
 }
 
 static void diagonal_trail_stays_on_its_line(void)
@@ -136,7 +136,7 @@ static void diagonal_trail_stays_on_its_line(void)
 
 	make_line(&t, pt(-9000, -3000), pt(9000, 3000)); // slope 1/3, as the stress fill's head can be
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 
 	CHECK(n > 2);
 	for (int i = 0; i < n; ++i)
@@ -153,7 +153,7 @@ static void each_segment_starts_its_own_strip_newest_first(void)
 	trail_add_corner(&t);
 	trail_set_head(&t, pt(-500, -500)); // newest: heading east (-x)
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 
 	for (int i = 0; i < n; ++i)
 		strips += !columns[i].joined;
@@ -169,7 +169,7 @@ static void column_limit_keeps_the_newest(void)
 
 	make_line(&t, pt(0, 5000), pt(0, -5000));
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, 6);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, 6);
 	CHECK_EQ(6, n);
 	CHECK_EQ(0, columns[0].joined);
 	CHECK_EQ(5000, columns[0].p.y); // starts at the segment's beginning, stops when full
@@ -182,7 +182,7 @@ static void head_gap_is_respected(void)
 
 	make_line(&t, pt(0, 0), pt(0, -1000));
 	world_rect view = square(pt(0, -1000));
-	n = trail_build_columns(&t, 25, pt(0, -1000), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 25, pt(0, -1000), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	CHECK_EQ(-975, columns[n - 1].p.y); // the wall stops 25 behind the cycle
 }
 
@@ -211,7 +211,7 @@ static void trail_beside_the_camera_starts_in_front(void)
 
 	make_line(&t, pt(100, 3000), pt(100, -3000));
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	n = trail_clip_columns(columns, n, &c, TRAIL_MIN_FORWARD, columns);
 
 	CHECK(n >= 2);
@@ -231,7 +231,7 @@ static void trail_behind_the_camera_is_dropped(void)
 
 	make_line(&t, pt(100, 500), pt(100, 3000)); // all behind (+y)
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	CHECK_EQ(0, trail_clip_columns(columns, n, &c, TRAIL_MIN_FORWARD, columns));
 }
 
@@ -249,7 +249,7 @@ static void strips_stay_separate_after_clipping(void)
 	trail_add_corner(&t);
 	trail_set_head(&t, pt(500, -2000)); // newest: crossing ahead of the camera
 	world_rect view = square(pt(0, 0));
-	n = trail_build_columns(&t, 0, pt(0, 0), &view, columns, TRAIL_DRAW_COLUMNS_MAX);
+	n = trail_build_columns(&t, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	n = trail_clip_columns(columns, n, &c, TRAIL_MIN_FORWARD, columns);
 
 	for (int i = 0; i < n; ++i)

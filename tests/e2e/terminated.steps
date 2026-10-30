@@ -1,0 +1,17 @@
+# A crash terminates the player (game/game_state.h): black screen, green "SH-2 process
+# terminated..." with a flashing cursor; it restarts by itself after 3 s, or on a press.
+# C x20 raises the cruise speed so the cycle reaches the north wall in a few seconds.
+wait 17
+press c 20
+wait 9
+shot term_1
+wait 0.55
+shot term_2
+wait 3
+shot term_auto_restart
+wait 9
+shot term_3
+wait 0.5
+press a
+wait 0.3
+shot term_press_restart

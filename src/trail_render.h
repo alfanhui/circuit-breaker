@@ -27,7 +27,9 @@ void trail_mesh_init(trail_mesh *m, jo_color color);
 // Call inside view_push_world_matrix(). head_gap keeps the wall starting behind the cycle;
 // only what's inside view is drawn, cut finer near focus (the player).
 // camera: the 1st person camera, to keep corners in front of it (trail_clip_columns); NULL otherwise.
-void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point focus, const world_rect *view,
-					 const wall_clip_camera *camera);
+// occluders: nearer trails that hide parts of this one (game/trail_occlusion.h); NULL: none.
+// height: how tall it stands (TRAIL_HEIGHT; less while a dead rider's trail sinks, rider.h)
+void trail_mesh_draw(trail_mesh *m, const trail *t, int height, int head_gap, world_point focus,
+					 const world_rect *view, const wall_clip_camera *camera, const trail_occluders *occluders);
 
 #endif

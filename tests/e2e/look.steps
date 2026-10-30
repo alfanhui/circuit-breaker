@@ -1,0 +1,18 @@
+# L / R: look left / right (view.c): the head turns 75 degrees and dips ~6 degrees towards the
+# floor, easing there and back; the floor fog follows the dip. The cycle keeps going straight.
+wait 21
+shot look_ahead
+keydown l
+wait 0.1
+shot look_left_turning
+wait 0.6
+shot look_left
+keyup l
+wait 0.6
+shot look_back
+keydown r
+wait 0.7
+shot look_right
+keyup r
+wait 0.6
+shot look_ahead_again

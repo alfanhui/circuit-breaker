@@ -18,6 +18,10 @@ void floor_fade_vblank(void);
 // Rebuild the per-row ratios for the current view (each camera sees the floor differently).
 void floor_fade_set_first_person(bool first_person);
 
+// The same for the 1st person camera pitched down by tilt (tan x 1000, 0 = level): looking aside
+// dips the head (view.c), which moves the horizon up the screen
+void floor_fade_set_first_person_tilt(int tilt);
+
 // Where the floor's fade begins and where it's full, along the floor, for a view: so the walls
 // and trails (object_fog_vdp1.h) fade over the same distances as the floor they stand on.
 // Works whether or not the floor fog is on.

@@ -1,0 +1,13 @@
+# The first bot (game/bot.h): it starts 2000 to the player's right, riding north alongside.
+# The player turns right towards it, sees its orange trail, and crashes into it (other riders'
+# trails stop you too). Then iso, to see both cycles and both trails.
+wait 17
+shot bot_start
+press right
+wait 0.5
+shot bot_facing
+wait 5.5
+shot bot_crashed
+press down
+wait 0.5
+shot bot_iso

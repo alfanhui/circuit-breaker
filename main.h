@@ -42,7 +42,7 @@ extern Sint16 draw_distance;
 
 void initCamera(jo_camera *curCam);
 void debug_3d(void);
-void draw_player(void);
+void draw_cycle(world_point position);
 void draw_hud(void);
 void draw_3d(void);
 jo_palette *my_tga_palette_handling(void);

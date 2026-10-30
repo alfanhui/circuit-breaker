@@ -1,0 +1,8 @@
+# Worst-case trail at once (X: 64 corners across the arena), to measure CPU per frame.
+wait 17
+press x
+wait 3
+shot stress_1st
+press down
+wait 3
+shot stress_iso

@@ -84,6 +84,34 @@ void minimap_gauge_point(int k, int radius, int *x, int *y)
 	*y = c < 0 ? -((radius * -c + 512) >> 10) : (radius * c + 512) >> 10;
 }
 
+void minimap_direction(int dx, int dy, int forward_x, int forward_y, int *side, int *k)
+{
+	// Right of and ahead of the camera, back from x1024 (>> 10: a few shifts, not a division).
+	// Up to ~30000 each, so the dot products below (x 1024) stay well inside an int
+	int right = (dx * forward_y - dy * forward_x) >> 10;
+	int ahead = (dx * forward_x + dy * forward_y) >> 10;
+	int across = right < 0 ? -right : right;
+	int best = -1;
+	int best_score = 0;
+
+	*side = right < 0 ? 1 : 0;
+	// Point k is k x 15 degrees round from behind: (sin, cos) across and towards the bottom. The
+	// bottom is behind, so "down the screen" is -ahead (as minimap_gauge_point)
+	for (int i = 0; i <= MINIMAP_GAUGE_STEPS; ++i)
+	{
+		int s = sin15[i <= 6 ? i : 12 - i];
+		int c = i <= 6 ? sin15[6 - i] : -sin15[i - 6];
+		int score = across * s - ahead * c;
+
+		if (best < 0 || score > best_score)
+		{
+			best = i;
+			best_score = score;
+		}
+	}
+	*k = best;
+}
+
 int minimap_half_width(int across)
 {
 	if (across < 0)

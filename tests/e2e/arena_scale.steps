@@ -17,7 +17,9 @@ shot scale_3_north_wall_1st
 press right
 wait 1
 shot scale_4_along_wall_1st
-# L x7: shrink to the smallest arena (2000 across); the cycle is pulled inside
-press l 7
+# START, X x7, START: shrink to the smallest arena (2000 across); the cycle is pulled inside
+press start
+press x 7
+press start
 wait 1
 shot scale_5_shrunk

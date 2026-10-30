@@ -16,6 +16,15 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 | Stutter that the FPS counter doesn't show | `late` counter added (debug line 11). Long trails did drop to 32 fps; now 60. If you see stutter and `late` doesn't move, it's the emulator's pacing on the PC: **retest** | M |
 | Docker E2E still waits ~15 s for the BIOS | Mednafen has no emulated BIOS and fast-forward can't go faster in the container | S |
 
+## Next: rivals and team play (requested 2026-10-30)
+
+| Item | Why | Effort |
+|---|---|---|
+| Camera shake when a bot crashes into your trail | Reward and juice (CLAUDE.md: multi-sensory feedback): you made that happen. Needs to know whose trail stopped it: `collision_free_distance` returns only the distance, so it would also report which trail (an index into the list). Shake the 1st person camera a few frames, decaying; maybe a shatter sound later | M |
+| Pick-up that spawns an ally bot (team play) | The arena is huge and you're alone against the bots. A pick-up appears on the field (shown on the radar); riding through it spawns a bot on your side, in the next trail colour. It's the same brain (`bot.h`) with the enemy riders as its rivals. Story fit: Shh forking a child process. Needs: pick-ups, spawning, teams in `bot_think` (rivals = the other team), and the round's rules with teammates | L |
+| Bots' directions on the radar | Bots out of the radar's range are hard to find in an arena this size. A marker on the radar's rim in each bot's direction (its trail colour), maybe brighter when near. Bots should get the same rough sense of where the player is, so they head for you rather than wander: beyond `BOT_SIGHT` they'd steer towards your bearing (fair: it's what the player's radar shows) | M |
+| L / R: look left and right | Shoulder buttons turn the 1st person camera's head (eased, like the turn camera) towards the side, with a slight pitch down into the floor, as a person turning their head does. Clipping and culling must follow the look direction (`view_cull` already has a TURNING mode that covers both headings). L / R are now the debug arena size: move that to another button | M |
+
 ## Next: movement feel (from the turn and boost review)
 
 | Item | Why | Effort |
@@ -24,7 +33,7 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 | Tune the boost by feel | Numbers in cycle.h (+75%, full in 8 frames, 1.5 s, 0.5 s pause, 3 s refill) and view.c (FOV +12 degrees, eased 2/16 a frame): judge in play and on the Saturn | S |
 | Boost juice beyond the view | Sound (Cesta-like glassy whoosh), the trail brightening while boosting, a flash when the gauge is full again | M |
 | Floor fog during the FOV kick | The fog rows are worked out for 90 degrees: while boosting the fog sits up to ~15% nearer. Rebuild the table per FOV step if it shows | S |
-| What a crash does | Collision is in (`collision.c`), but a crash only stops the cycle dead. Decide the real outcome: lose the round, a respawn, a bounce with a speed penalty? Plus juice: a glassy shatter sound, a flash, a camera shake. Board: "Add collision detection logic" | M |
+| Crash juice | A crash now terminates you (see Done). Still to add: a glassy shatter sound, a flash before the terminal screen | M |
 | Other players' trails and heads | `cycle_update` takes a list of trails; a second player's goes in `player1_trails`. Head-on cycle-to-cycle hits need their own check: a cycle that's already inside a trail (its rival's head grew into it) isn't stopped by it | M |
 
 ## Next: floor pixelation (proposed 2026-10-27)
@@ -79,6 +88,7 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 
 | Item | Commit |
 |---|---|
+| Bots (issue #37 steps 1-3): riders driven only by pad-like controls (`rider.h`), human reaction time, utility scoring, race-then-cut, boosting on their own. A crash terminates: the player gets the typed green "SH-2 process terminated..." screen and a restart; a bot dies and its trail sinks away. Also: no drawing the bot behind the camera, trails hidden behind nearer parallel trails left out, faster trail collision | ebf132d .. 5c60f01 |
 | Radar moved to the bottom centre, with the boost gauge as its rim (it replaces the bar and the teal ring): 2 x 12 segments on the tilted perspective, lit from the bottom up both sides (`MINIMAP_GAUGE_LIT`: a multiply and a shift), dark where empty, same colours as the bar. In iso the rim shows alone. E2E `gauge_ring.steps` | 9e7b51a |
 | Radar as a hologram: tilted back 50 degrees in true perspective (`minimap_tilt`: a start-up table per map row of screen y and x scale; straight lines stay straight, unit-tested). A linear stretch looked like a bent bicycle tyre. The disc is 8 bands each of glass and ring, so VDP1's linear texture stretch follows the curve (16 sprites, ~3% CPU more than the flat map; a 32-line ring cost ~6%), the disc's fill drawn as a mesh (see-through on composite/RF; VDP1 half-transparency can't blend with the VDP2 floor), a solid ring. Zoomed in for close quarters (1024 range, / 32), trail lines 2 pixels thick | 9e7b51a |
 | 1st person radar (`minimap.c`, drawn in `hud.c`): every trail within 2048 of the player, heading-up, turning with the camera's eased angle. Clipped to the circle with a start-up table of half-widths (no square root or division per frame); turned and scaled with one shift. Lines are squashed 4-corner sprites; x stretched 9/8 because Saturn pixels are taller than wide. Trail colours ready for 4 players. E2E `minimap.steps`; E2E shots now capture Mednafen's window (the old crop cut the screen's right edge) | bb0cac5 |

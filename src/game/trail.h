@@ -11,6 +11,7 @@
  * The last (live) segment grows every frame until the next turn pins it as a corner.
  */
 
+#define TRAIL_HEIGHT 60 // how tall a trail stands (the 1st person eye is 35 up: below its top)
 #define TRAIL_MAX_CORNERS 64
 #define TRAIL_MAX_SEGMENTS TRAIL_MAX_CORNERS // count - 1 committed + 1 live
 

@@ -57,6 +57,7 @@
 #define FLOOR_TILE_UNITS 125
 #define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
 #define PLAYER_HALF 25
+#define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
 #define TRAIL_HEAD_GAP PLAYER_HALF // the wall starts at the back of the cycle
 
 jo_camera cam;
@@ -71,9 +72,9 @@ int plane1_texture_id = 0;
 bool enable_trails = true;
 
 static trail_mesh player1_trail_mesh;
-// Every trail the 1st person radar shows. Other players' and bots' trails go here too
-static const trail *const map_trails[] = {&player1_trail};
-#define MAP_TRAIL_COUNT (sizeof(map_trails) / sizeof(map_trails[0])) // worked out by the compiler
+static trail_mesh bot1_trail_mesh;
+// 1st person: the trails near the camera that can hide parts of others behind them (game/trail_occlusion.h)
+static trail_occluders occluders;
 
 //Third person
 // Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
@@ -117,14 +118,14 @@ void debug_3d(void)
 		return;
 	frames_until_refresh = DEBUG_TEXT_INTERVAL;
 
-	jo_printf(20, 0, "Compass: %c", compass[player1.heading]);
-	jo_printf(20, 1, "Boost: %d  ", player1.gauge);
-	jo_printf(0, 0, "x %d    ", player1.position.x);
-	jo_printf(0, 1, "y %d    ", player1.position.y);
+	jo_printf(20, 0, "Compass: %c", compass[player1.bike.heading]);
+	jo_printf(20, 1, "Boost: %d  ", player1.bike.gauge);
+	jo_printf(0, 0, "x %d    ", player1.bike.position.x);
+	jo_printf(0, 1, "y %d    ", player1.bike.position.y);
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
-	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1_trail));
+	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1.wall));
 	jo_printf(0, 4, "%s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"));
-	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bounded ? "ON" : "OFF", // Y; Z: turn camera
+	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bike.bounded ? "ON" : "OFF", // Y; Z: turn camera
 			  view_linear_turn ? "LINEAR" : "EASE", debug_slow_motion ? "SLOW" : "    ");
 	jo_printf(0, 6, "speed %d  arena %d   ", cycle_cruise_speed(), 2 * arena_half()); // tuning: B/C and L/R
 
@@ -134,6 +135,8 @@ void debug_3d(void)
 	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
 	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
 	jo_printf(0, 11, "late %d  ", perf_late_frames);
+	jo_printf(0, 12, "bot %d %d %c boost %d   ", bot1.bike.position.x, bot1.bike.position.y, compass[bot1.bike.heading],
+			  bot1.bike.gauge); // its gauge falls while it boosts
 }
 
 void draw_hud(void)
@@ -146,8 +149,113 @@ void draw_hud(void)
 	jo_3d_pop_matrix();
 }
 
+// The screens that make up the game: NBG0 (text), NBG1 (jo's bitmap layer) and RBG0 (the floor
+// and sky). The terminal screen shows only NBG0: with no polygons sent to VDP1 either, the
+// screen is black but for the text. RBG0 is off, and NBG1 is left out too: hidden behind the floor in play, it holds leftover data that
+// showed as stripes
+#define GAME_SCREENS (JO_NBG0_SCREEN | JO_NBG1_SCREEN | JO_RBG0_SCREEN)
+#define TERMINAL_SCREENS JO_NBG0_SCREEN
+#define TERMINAL_X 1 // text position, in characters from the top left
+#define TERMINAL_Y 2
+
+// The terminal text's colour. jo's printf colours are colour 1 of a palette bank, and jo's own
+// green (bank 3) is overwritten by the palettes our images load (the text came out white). A
+// palette of our own is a bank nobody else uses (init_terminal)
+static jo_palette terminal_palette;
+
+static void init_terminal(void)
+{
+	jo_create_palette(&terminal_palette);
+	jo_set_printf_palette_color(terminal_palette.id, HUD_TERMINAL_GREEN);
+}
+
+// After a crash (game/game_state.h): green terminal text typed out on black, behind a block
+// cursor. Called every frame while terminated; returns false (drawing nothing) while playing
+static bool draw_terminal(void)
+{
+	static const char text[] = GAME_TERMINAL_TEXT;
+	static bool showing = false;
+	char typed[sizeof(text)];
+	int count;
+
+	if (game.phase != GAME_TERMINATED)
+	{
+		if (showing)
+		{
+			// Back to the game: the floor on again, and the text layer cleared for the debug readout
+			jo_clear_screen();
+			jo_set_displayed_screens(GAME_SCREENS);
+			showing = false;
+		}
+		return false;
+	}
+	if (!showing)
+	{
+		jo_clear_screen();
+		jo_set_displayed_screens(TERMINAL_SCREENS);
+		showing = true;
+	}
+	// What's typed so far. The text only grows, so the screen needn't be cleared each frame
+	count = game_typed_chars(&game);
+	for (int i = 0; i < count; ++i)
+		typed[i] = text[i];
+	typed[count] = 0;
+	if (count > 0)
+		jo_printf_with_color(TERMINAL_X, TERMINAL_Y, terminal_palette.id, "%s", typed);
+	jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
+	// The cursor sits on the next character's cell
+	if (game_cursor_on(&game))
+		hud_draw_text_cursor(TERMINAL_X + count, TERMINAL_Y);
+	return true;
+}
+
+// The status line during play (game/status_message.h): centred above the horizon, in the
+// terminal's green behind the same block cursor, so it reads as the same machine talking.
+// The text layer keeps what's printed, so it's only printed when another character is typed,
+// and blanked once when the message goes
+#define STATUS_ROW 13 // text rows are 8 pixels: 104 down, on the dark sky above the horizon (row 17,
+					  // just above the radar, sat on the horizon's pink glow: green on pink was hard to read)
+#define STATUS_BLANK "                                        " // a whole row: 40 characters
+
+static void draw_status(void)
+{
+	static int printed = 0; // characters on screen now
+	int count = status_typed_chars(&status);
+	int column = (40 - status.length) >> 1; // centred on the 40 character row
+
+	if (!status_visible(&status))
+	{
+		if (printed > 0)
+			jo_printf(0, STATUS_ROW, STATUS_BLANK);
+		printed = 0;
+		return;
+	}
+	if (count < printed) // a new message over an old one: clear the old first
+		jo_printf(0, STATUS_ROW, STATUS_BLANK);
+	if (count != printed && count > 0)
+	{
+		char typed[41];
+
+		for (int i = 0; i < count; ++i)
+			typed[i] = status.text[i];
+		typed[count] = 0;
+		jo_printf_with_color(column, STATUS_ROW, terminal_palette.id, "%s", typed);
+		jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
+	}
+	printed = count;
+	if (status_cursor_on(&status))
+		hud_draw_text_cursor(column + count, STATUS_ROW);
+}
+
 void draw_3d(void)
 {
+	// Terminated: only the terminal text. The world isn't drawn at all
+	if (draw_terminal())
+	{
+		perf_frame_end();
+		return;
+	}
+
 	jo_3d_camera_look_at(&cam);
 
 	//HUD
@@ -166,11 +274,11 @@ void draw_3d(void)
 
 	// What the camera can see this frame: walls and trails outside it aren't sent to SGL.
 	// Walls are seen across the whole arena; trails only nearby
-	world_rect visible_walls = view_visible_rect(&player1, debug_camera, WORLD_WALL_VIEW_RANGE);
-	world_rect visible_trails = view_visible_rect(&player1, debug_camera, WORLD_VIEW_RANGE);
+	world_rect visible_walls = view_visible_rect(&player1.bike, debug_camera, WORLD_WALL_VIEW_RANGE);
+	world_rect visible_trails = view_visible_rect(&player1.bike, debug_camera, WORLD_VIEW_RANGE);
 	// 1st person: wall and trail corners are kept in front of the camera and inside VDP1's range
 	wall_clip_camera clip_camera;
-	const wall_clip_camera *clip = view_wall_clip_camera(&player1, debug_camera, &clip_camera) ? &clip_camera : JO_NULL;
+	const wall_clip_camera *clip = view_wall_clip_camera(&player1.bike, debug_camera, &clip_camera) ? &clip_camera : JO_NULL;
 
 	// Fog for walls and trails: from where the camera stands, the way it faces this frame
 	if (object_fog_enabled)
@@ -192,18 +300,57 @@ void draw_3d(void)
 		}
 		jo_3d_pop_matrix();
 
-		draw_arena_walls(&visible_walls, &player1.position, clip, !first_person && !debug_camera);
+		draw_arena_walls(&visible_walls, &player1.bike.position, clip, !first_person && !debug_camera);
 
 		if (enable_trails)
-			trail_mesh_draw(&player1_trail_mesh, &player1_trail, TRAIL_HEAD_GAP, player1.position, &visible_trails, clip);
+		{
+			// 1st person (the eye is below the trails' tops): a part of a trail hidden behind a
+			// nearer one isn't drawn. VDP1 has no depth buffer, and side by side pieces of two
+			// parallel trails sort in either order: the hidden one showed through
+			const trail_occluders *hide = JO_NULL;
 
-		draw_player();
+			if (clip)
+			{
+				trail_occluders_begin(&occluders, clip->eye);
+				// Only trails standing full height: a sinking one is lower than the eye, hiding nothing
+				for (int i = 0; i < solid_trail_count; ++i)
+					trail_occluders_add(&occluders, solid_trails[i], TRAIL_HEAD_GAP, &visible_trails);
+				hide = &occluders;
+			}
+			trail_mesh_draw(&player1_trail_mesh, &player1.wall, player1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
+							&visible_trails, clip, hide);
+			// Cut finer near the player (the camera), not near the bot: that's where detail shows.
+			// A dead bot's trail sinks (its height falls), then has nothing left to draw
+			if (bot1.trail_height > 0)
+				trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, bot1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
+								&visible_trails, clip, hide);
+		}
+
+		if (!first_person)
+			draw_cycle(player1.bike.position); // in 1st person the camera is inside it
+		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
+		// camera on screen anyway, as if in front) and not wholly off to one side
+		if (bot1.alive && (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
+			draw_cycle(bot1.bike.position);
 	}
 	jo_3d_pop_matrix();
 
-	hud_draw_boost(&player1); // on top of the world: screen pixels, no perspective
-	if (first_person && !debug_camera)
-		hud_draw_minimap(player1.position, map_trails, MAP_TRAIL_COUNT);
+	hud_draw_boost(&player1.bike); // on top of the world: screen pixels, no perspective
+	if (!debug_camera) // both views: in iso it turns with the iso camera (hud.h)
+	{
+		// Every trail on the field, and a marker on the rim pointing at each live bot
+		hud_marker markers[1];
+		int marker_count = 0;
+
+		if (bot1.alive)
+		{
+			markers[0].position = bot1.bike.position;
+			markers[0].colour = 1; // its place in field_trails: the radar's orange
+			marker_count = 1;
+		}
+		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
+	}
+	draw_status();
 	debug_3d();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text
@@ -263,13 +410,12 @@ void load_player_model(void)
 	}
 }
 
-void draw_player(void)
+// A cycle (the cube for now) standing at position
+void draw_cycle(world_point position)
 {
-	if (first_person)
-		return;
 	jo_3d_push_matrix();
 	{
-		jo_3d_translate_matrix(player1.position.x, player1.position.y, PLAYER_HALF);
+		jo_3d_translate_matrix(position.x, position.y, PLAYER_HALF);
 		jo_3d_mesh_draw(&cube.mesh);
 	}
 	jo_3d_pop_matrix();
@@ -357,8 +503,10 @@ void jo_main(void)
 
 	load_player_model();
 	trail_mesh_init(&player1_trail_mesh, JO_COLOR_RGB(0, 220, 255));
+	trail_mesh_init(&bot1_trail_mesh, JO_COLOR_RGB(255, 120, 0)); // the radar's second colour (hud.c)
 
 	init_3d_planes();
+	init_terminal(); // after every image palette, so its bank is one of its own
 	initCamera(&cam);
 	init_players();
 
