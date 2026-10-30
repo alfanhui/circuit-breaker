@@ -336,6 +336,31 @@ static void does_not_cut_a_rival_already_blocked(void)
 	CHECK_EQ(TURN_NONE, decide(2, NULL));
 }
 
+// Heading across a rival's line to cut them off: it boosts to get there sooner
+static void boosts_while_cutting_across(void)
+{
+	setup();
+	// Heading west (+x); the rival 1000 to the west is 2000 behind (south, +y), heading north:
+	// far enough ahead to cut, and its line is straight ahead
+	rider_init(&bot, 0, 0, HEADING_WEST);
+	add_rival(1000, 2000, HEADING_NORTH);
+	CHECK_EQ(1, think(1).boost);
+}
+
+// Nobody to chase, but a trail close beside it: it boosts out of the gap. Open both sides: no
+static void boosts_out_of_a_squeeze(void)
+{
+	static trail wall;
+
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	another_trail(&wall, 100, 500, 100, -3000); // 100 to its left, all the way along
+	CHECK_EQ(1, think(2).boost);
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	CHECK_EQ(0, think(1).boost);
+}
+
 // A rival straight ahead: it holds its line rather than weaving
 static void does_not_weave(void)
 {
@@ -359,6 +384,8 @@ void run_bot_tests(void)
 	RUN(boosts_towards_a_rival_ahead);
 	RUN(boosts_again_once_the_gauge_refills);
 	RUN(does_not_cut_a_rival_already_blocked);
+	RUN(boosts_while_cutting_across);
+	RUN(boosts_out_of_a_squeeze);
 	RUN(does_not_weave);
 	RUN(reacts_after_a_human_delay);
 	RUN(reaction_times_vary);

@@ -135,7 +135,8 @@ void debug_3d(void)
 	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
 	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
 	jo_printf(0, 11, "late %d  ", perf_late_frames);
-	jo_printf(0, 12, "bot %d %d %c   ", bot1.bike.position.x, bot1.bike.position.y, compass[bot1.bike.heading]);
+	jo_printf(0, 12, "bot %d %d %c boost %d   ", bot1.bike.position.x, bot1.bike.position.y, compass[bot1.bike.heading],
+			  bot1.bike.gauge); // its gauge falls while it boosts
 }
 
 void draw_hud(void)

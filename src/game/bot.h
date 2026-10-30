@@ -24,8 +24,9 @@
  *
  * Each part is a distance in world units, so weights are plain whole numbers and the sums are
  * a few multiplies and adds: no division. Changing the weights changes its character (step 5:
- * personalities). It boosts when it has picked straight on, the way is clear, and the rival's
- * point is well ahead: from a full gauge, letting go when it runs dry, as a player would.
+ * personalities). It boosts when it has picked straight on with the way clear, and either where it
+ * aims is ahead (racing a rival, or crossing their line) or it's squeezed by something close
+ * beside it: from a full gauge, letting go when it runs dry, as a player would.
  *
  * It reacts like a person, not a machine. A person takes about 200 ms (12 frames) to react, and
  * not exactly the same time every time. So once it has picked a turn, it presses it a reaction

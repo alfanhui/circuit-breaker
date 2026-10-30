@@ -125,7 +125,7 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 	int danger_ahead;
 	int best = OPTION_STRAIGHT;
 	int scores[3];
-	int straight_room = 0;
+	int rooms[3];
 	int straight_approach = 0;
 
 	controls.turn = TURN_NONE;
@@ -173,10 +173,9 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 			if (option == OPTION_STRAIGHT)
 				straight_approach = a;
 		}
-		if (option == OPTION_STRAIGHT)
-			straight_room = room;
-		else
+		if (option != OPTION_STRAIGHT)
 			score -= turn_cost;
+		rooms[option] = room;
 		scores[option] = score;
 	}
 	// The best, straight on winning ties (then left over right)
@@ -190,10 +189,19 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 
 	if (best == OPTION_STRAIGHT)
 	{
-		// Boost when the way is clear and the rival's point is well ahead (none to chase: no boost).
+		// Boost, with the way ahead clear, when either:
+		//   - where it aims is ahead of it: racing to get ahead of a rival (the only way to set up
+		//     a cut against one riding straight, bot.h), or crossing their line to cut them off.
+		//     Before, it boosted only for a point over 1 s ahead, so mostly when the rival had
+		//     boosted away from it: it looked like it copied the player
+		//   - it's squeezed: something close beside it, on either side. A burst gets it out of
+		//     the gap before the gap closes
 		// Like a player watching the gauge: it starts a boost only on a full gauge, and lets go once
 		// it runs dry, so it refills (holding on, even empty, keeps the refill off: cycle.h)
-		int wants = has_target && straight_room >= side_look && straight_approach * 2 > side_look;
+		int clear = rooms[OPTION_STRAIGHT] >= side_look;
+		int chasing = has_target && straight_approach > look;
+		int squeezed = rooms[OPTION_LEFT] < look || rooms[OPTION_RIGHT] < look;
+		int wants = clear && (chasing || squeezed);
 
 		if (!mind->boosting)
 			mind->boosting = wants && me->bike.gauge == CYCLE_GAUGE_MAX;
