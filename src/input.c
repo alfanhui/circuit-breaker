@@ -10,11 +10,23 @@
 
 rider player1;
 rider bot1;
+game_state game;
 static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
 static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
 // Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
 // The order is the radar's colours: player 1 cyan, then orange
 const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bot1.wall};
+const trail *solid_trails[FIELD_TRAIL_COUNT];
+int solid_trail_count;
+
+// The player's trail always counts (a crash ends the game); the bot's only while it's alive
+static void update_solid_trails(void)
+{
+	solid_trail_count = 0;
+	solid_trails[solid_trail_count++] = &player1.wall;
+	if (bot1.alive)
+		solid_trails[solid_trail_count++] = &bot1.wall;
+}
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 
@@ -41,9 +53,11 @@ static void stress_fill_trail(void)
 
 void init_players(void)
 {
+	game_init(&game);
 	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
 	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
+	update_solid_trails();
 	view_init(&player1.bike);
 #ifdef PERF_STRESS_TRAIL
 	stress_fill_trail();
@@ -115,6 +129,15 @@ void gamepad_input(void)
 	// Taken first and on every frame, so presses can't pile up while the debug camera is on.
 	struck = press_latch_take(&pad1_presses);
 
+	// Terminated: everything is frozen behind the terminal screen (main.c) until a button is
+	// pressed or 3 s pass, then it starts again from the beginning (game/game_state.h)
+	if (game.phase == GAME_TERMINATED)
+	{
+		if (game_update(&game, 0, struck != 0))
+			init_players();
+		return;
+	}
+
 	if (struck & DIGI_START)
 	{
 		debug_camera = !debug_camera;
@@ -139,7 +162,7 @@ void gamepad_input(void)
 	// pressed together land in the same frame
 	controls.turn = (struck & DIGI_LEFT) ? TURN_LEFT : (struck & DIGI_RIGHT) ? TURN_RIGHT : TURN_NONE;
 	controls.boost = (press_latch_held(&pad1_presses) & DIGI_UP) != 0;
-	switch (rider_step(&player1, controls, field_trails, FIELD_TRAIL_COUNT))
+	switch (rider_step(&player1, controls, solid_trails, solid_trail_count))
 	{
 	case TURN_LEFT:
 		view_turn_left();
@@ -148,9 +171,24 @@ void gamepad_input(void)
 		view_turn_right();
 		break;
 	}
+	// A crash terminates the player's process: the terminal screen from the next frame
+	game_update(&game, player1.crashed, 0);
 
 	// The bot decides its buttons from what it can see, then rides by the same rules
-	rider_step(&bot1, bot_think(&bot1_mind, &bot1, bot1_rivals, 1, field_trails, FIELD_TRAIL_COUNT), field_trails, FIELD_TRAIL_COUNT);
+	// A crash terminates the bot's process: it stops, and its trail sinks into the floor (and
+	// from now on stops nobody)
+	if (bot1.alive)
+	{
+		rider_step(&bot1, bot_think(&bot1_mind, &bot1, bot1_rivals, 1, solid_trails, solid_trail_count), solid_trails,
+				   solid_trail_count);
+		if (bot1.crashed)
+		{
+			rider_kill(&bot1);
+			update_solid_trails();
+		}
+	}
+	else
+		rider_sink(&bot1);
 
 	// A: clear every wall, each starting fresh where its cycle is
 	if (struck & DIGI_A)

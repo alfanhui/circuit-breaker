@@ -1,8 +1,6 @@
 #include "trail_render.h"
 #include "object_fog_vdp1.h"
 
-#define TRAIL_HEIGHT 60
-
 void trail_mesh_init(trail_mesh *m, jo_color color)
 {
 	m->mesh.data.pntbl = m->points;
@@ -30,8 +28,8 @@ void trail_mesh_init(trail_mesh *m, jo_color color)
 	m->mesh.data.nbPolygon = 0;
 }
 
-void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point focus, const world_rect *view,
-					 const wall_clip_camera *camera, const trail_occluders *occluders)
+void trail_mesh_draw(trail_mesh *m, const trail *t, int height, int head_gap, world_point focus,
+					 const world_rect *view, const wall_clip_camera *camera, const trail_occluders *occluders)
 {
 	int columns = trail_build_columns(t, head_gap, focus, view, occluders, m->columns, TRAIL_DRAW_COLUMNS_MAX);
 	int pieces = 0;
@@ -50,7 +48,7 @@ void trail_mesh_draw(trail_mesh *m, const trail *t, int head_gap, world_point fo
 		m->points[i * 2][Z] = JO_FIXED_0;
 		m->points[i * 2 + 1][X] = x;
 		m->points[i * 2 + 1][Y] = y;
-		m->points[i * 2 + 1][Z] = jo_int2fixed(TRAIL_HEIGHT);
+		m->points[i * 2 + 1][Z] = jo_int2fixed(height);
 		if (object_fog_enabled)
 			fog_levels[i] = (unsigned char)object_fog_level(m->columns[i].p.x, m->columns[i].p.y);
 

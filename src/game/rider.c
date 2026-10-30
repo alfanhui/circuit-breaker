@@ -5,6 +5,24 @@ void rider_init(rider *r, short x, short y, unsigned char heading)
 	cycle_init(&r->bike, x, y, heading);
 	turn_gate_init(&r->turns);
 	trail_reset(&r->wall, r->bike.position);
+	r->crashed = 0;
+	r->alive = 1;
+	r->trail_height = TRAIL_HEIGHT;
+}
+
+void rider_kill(rider *r)
+{
+	r->alive = 0;
+}
+
+int rider_sink(rider *r)
+{
+	if (r->alive || r->trail_height == 0)
+		return r->trail_height > 0;
+	r->trail_height = (unsigned char)(r->trail_height > RIDER_SINK_SPEED ? r->trail_height - RIDER_SINK_SPEED : 0);
+	if (r->trail_height == 0)
+		trail_reset(&r->wall, r->bike.position); // into the floor: removed (a lone point, no segments)
+	return r->trail_height > 0;
 }
 
 int rider_step(rider *r, rider_controls controls, const trail *const *trails, int trail_count)
@@ -29,7 +47,7 @@ int rider_step(rider *r, rider_controls controls, const trail *const *trails, in
 	}
 
 	before = r->bike.position;
-	cycle_update(&r->bike, controls.boost, trails, trail_count);
+	r->crashed = (unsigned char)cycle_update(&r->bike, controls.boost, trails, trail_count);
 	// How far it went: it only moves along one axis, so the two differences add up to it
 	dx = r->bike.position.x - before.x;
 	dy = r->bike.position.y - before.y;

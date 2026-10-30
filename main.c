@@ -148,8 +148,75 @@ void draw_hud(void)
 	jo_3d_pop_matrix();
 }
 
+// The screens that make up the game: NBG0 (text), NBG1 (jo's bitmap layer) and RBG0 (the floor
+// and sky). The terminal screen shows only NBG0: with no polygons sent to VDP1 either, the
+// screen is black but for the text. RBG0 is off, and NBG1 is left out too: hidden behind the floor in play, it holds leftover data that
+// showed as stripes
+#define GAME_SCREENS (JO_NBG0_SCREEN | JO_NBG1_SCREEN | JO_RBG0_SCREEN)
+#define TERMINAL_SCREENS JO_NBG0_SCREEN
+#define TERMINAL_X 1 // text position, in characters from the top left
+#define TERMINAL_Y 2
+
+// The terminal text's colour. jo's printf colours are colour 1 of a palette bank, and jo's own
+// green (bank 3) is overwritten by the palettes our images load (the text came out white). A
+// palette of our own is a bank nobody else uses (init_terminal)
+static jo_palette terminal_palette;
+
+static void init_terminal(void)
+{
+	jo_create_palette(&terminal_palette);
+	jo_set_printf_palette_color(terminal_palette.id, HUD_TERMINAL_GREEN);
+}
+
+// After a crash (game/game_state.h): green terminal text typed out on black, behind a block
+// cursor. Called every frame while terminated; returns false (drawing nothing) while playing
+static bool draw_terminal(void)
+{
+	static const char text[] = GAME_TERMINAL_TEXT;
+	static bool showing = false;
+	char typed[sizeof(text)];
+	int count;
+
+	if (game.phase != GAME_TERMINATED)
+	{
+		if (showing)
+		{
+			// Back to the game: the floor on again, and the text layer cleared for the debug readout
+			jo_clear_screen();
+			jo_set_displayed_screens(GAME_SCREENS);
+			showing = false;
+		}
+		return false;
+	}
+	if (!showing)
+	{
+		jo_clear_screen();
+		jo_set_displayed_screens(TERMINAL_SCREENS);
+		showing = true;
+	}
+	// What's typed so far. The text only grows, so the screen needn't be cleared each frame
+	count = game_typed_chars(&game);
+	for (int i = 0; i < count; ++i)
+		typed[i] = text[i];
+	typed[count] = 0;
+	if (count > 0)
+		jo_printf_with_color(TERMINAL_X, TERMINAL_Y, terminal_palette.id, "%s", typed);
+	jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
+	// The cursor sits on the next character's cell
+	if (game_cursor_on(&game))
+		hud_draw_text_cursor(TERMINAL_X + count, TERMINAL_Y);
+	return true;
+}
+
 void draw_3d(void)
 {
+	// Terminated: only the terminal text. The world isn't drawn at all
+	if (draw_terminal())
+	{
+		perf_frame_end();
+		return;
+	}
+
 	jo_3d_camera_look_at(&cam);
 
 	//HUD
@@ -206,20 +273,25 @@ void draw_3d(void)
 			if (clip)
 			{
 				trail_occluders_begin(&occluders, clip->eye);
-				for (int i = 0; i < FIELD_TRAIL_COUNT; ++i)
-					trail_occluders_add(&occluders, field_trails[i], TRAIL_HEAD_GAP, &visible_trails);
+				// Only trails standing full height: a sinking one is lower than the eye, hiding nothing
+				for (int i = 0; i < solid_trail_count; ++i)
+					trail_occluders_add(&occluders, solid_trails[i], TRAIL_HEAD_GAP, &visible_trails);
 				hide = &occluders;
 			}
-			trail_mesh_draw(&player1_trail_mesh, &player1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip, hide);
-			// Cut finer near the player (the camera), not near the bot: that's where detail shows
-			trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, TRAIL_HEAD_GAP, player1.bike.position, &visible_trails, clip, hide);
+			trail_mesh_draw(&player1_trail_mesh, &player1.wall, player1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
+							&visible_trails, clip, hide);
+			// Cut finer near the player (the camera), not near the bot: that's where detail shows.
+			// A dead bot's trail sinks (its height falls), then has nothing left to draw
+			if (bot1.trail_height > 0)
+				trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, bot1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
+								&visible_trails, clip, hide);
 		}
 
 		if (!first_person)
 			draw_cycle(player1.bike.position); // in 1st person the camera is inside it
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
-		if (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD))
+		if (bot1.alive && (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
 			draw_cycle(bot1.bike.position);
 	}
 	jo_3d_pop_matrix();
@@ -382,6 +454,7 @@ void jo_main(void)
 	trail_mesh_init(&bot1_trail_mesh, JO_COLOR_RGB(255, 120, 0)); // the radar's second colour (hud.c)
 
 	init_3d_planes();
+	init_terminal(); // after every image palette, so its bank is one of its own
 	initCamera(&cam);
 	init_players();
 

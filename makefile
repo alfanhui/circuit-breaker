@@ -33,6 +33,7 @@ SRCS=main.c \
 	src/game/rider.c \
 	src/game/bot.c \
 	src/game/trail_occlusion.c \
+	src/game/game_state.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \

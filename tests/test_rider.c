@@ -93,13 +93,40 @@ static void another_riders_trail_stops_it(void)
 	other.wall.head.x = 500;
 	both[0] = &me.wall;
 	both[1] = &other.wall;
+	CHECK_EQ(0, me.crashed);
 	for (int i = 0; i < 100; ++i)
 		rider_step(&me, NOTHING, both, 2);
 	CHECK_EQ(-200 + COLLISION_TRAIL_CLEARANCE, me.bike.position.y); // stopped short of it
+	CHECK_EQ(1, me.crashed); // and it says so (the game terminates a player who crashes)
+}
+
+// A killed rider stops, and its trail sinks into the floor over 1 s, then is gone
+static void a_dead_riders_trail_sinks_and_is_removed(void)
+{
+	rider r;
+	int frames = 0;
+
+	setup();
+	rider_init(&r, 0, 0, HEADING_NORTH);
+	CHECK_EQ(TRAIL_HEIGHT, r.trail_height);
+	for (int i = 0; i < 20; ++i)
+		step(&r, NOTHING);
+	CHECK_EQ(1, rider_sink(&r)); // alive: standing, nothing sinks
+	CHECK_EQ(TRAIL_HEIGHT, r.trail_height);
+
+	rider_kill(&r);
+	CHECK_EQ(0, r.alive);
+	while (rider_sink(&r) && frames < 1000)
+		frames++;
+	CHECK_EQ(TRAIL_HEIGHT / RIDER_SINK_SPEED - 1, frames); // 1 s: the last frame takes it to 0
+	CHECK_EQ(0, r.trail_height);
+	CHECK_EQ(0, trail_segment_count(&r.wall)); // removed
+	CHECK_EQ(0, rider_sink(&r)); // and stays gone
 }
 
 void run_rider_tests(void)
 {
+	RUN(a_dead_riders_trail_sinks_and_is_removed);
 	RUN(it_moves_and_the_trail_follows);
 	RUN(a_turn_pins_a_corner);
 	RUN(a_quick_second_turn_waits_for_the_gap);

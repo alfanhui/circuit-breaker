@@ -1,0 +1,22 @@
+# A dead bot's trail sinks into the floor (game/rider.h). The player U-turns back towards the
+# middle, then L x6 shrinks the arena to 4000 across: the bot, 2000 out to the side, is pulled
+# inside the wall (a crash) and dies; the player, heading back to the middle, doesn't.
+# Iso, 0.25 s apart.
+wait 17
+press right
+wait 0.2
+press right
+wait 0.3
+press down
+press l 6
+shot sink_1
+wait 0.25
+shot sink_2
+wait 0.25
+shot sink_3
+wait 0.25
+shot sink_4
+wait 0.25
+shot sink_5
+wait 0.25
+shot sink_6

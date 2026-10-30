@@ -19,4 +19,11 @@ void hud_draw_boost(const cycle *c);
 // 1st person only: the radar of every trail round eye (the player), turned with the camera
 void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_count);
 
+// The terminal screen's colour (main.c), shared by its text and its cursor
+#define HUD_TERMINAL_GREEN JO_COLOR_RGB(40, 255, 90) // matrix green
+
+// The terminal screen's block cursor: a solid green square over text cell (column, row), the
+// same cells as jo_printf. SGL's text font has no solid block, so it's a VDP1 sprite
+void hud_draw_text_cursor(int column, int row);
+
 #endif

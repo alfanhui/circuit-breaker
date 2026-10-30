@@ -65,7 +65,8 @@ enum
 	PART_MAP_PLAYER,
 	PART_MAP_TRAIL,							   // one per trail colour, MAP_TRAILS_MAX of them
 	PART_MAP_FILL = PART_MAP_TRAIL + MAP_TRAILS_MAX, // one per band of the glass, MAP_STRIPS of them
-	PART_COUNT = PART_MAP_FILL + MAP_STRIPS
+	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
+	PART_COUNT
 };
 
 // Each trail's colour on the map. Another player's goes in the next slot
@@ -171,6 +172,7 @@ void hud_init(void)
 		part_sprites[PART_MAP_TRAIL + i] = make_part(map_trail_colours[i]);
 	for (int k = 0; k < MAP_STRIPS; ++k)
 		part_sprites[PART_MAP_FILL + k] = make_map_strip(k);
+	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
 	minimap_init();
 	prepare_map_disc();
 }
@@ -249,6 +251,16 @@ static void draw_gauge_piece(int part, int side, int k, int t0, int t1)
 	gauge_lerp(gauge_outer[side], k, t1, &ox1, &oy1);
 	gauge_lerp(gauge_inner[side], k, t1, &ix1, &iy1);
 	draw_corners(part, ix0, iy0, ox0, oy0, ox1, oy1, ix1, iy1, GAUGE_DEPTH);
+}
+
+void hud_draw_text_cursor(int column, int row)
+{
+	// The text cell's top left, in pixels from the screen's centre. Text cells are 8 x 8; VDP1
+	// draws a quad's edges inclusive, so corners 7 apart fill exactly 8 pixels
+	int left = column * 8 - JO_TV_WIDTH_2;
+	int top = row * 8 - JO_TV_HEIGHT_2;
+
+	draw_corners(PART_TEXT_CURSOR, left, top, left + 7, top, left + 7, top + 7, left, top + 7, GAUGE_DEPTH);
 }
 
 void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_count)
