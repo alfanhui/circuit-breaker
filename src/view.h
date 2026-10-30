@@ -44,6 +44,8 @@ extern bool view_linear_turn;
 
 void view_turn_left(void);
 void view_turn_right(void);
+// 1st person: turn the head to look aside (-1 left, 1 right) or back ahead (0); it eases there
+void view_look(int direction);
 void view_follow(const cycle *c);
 void view_push_world_matrix(void);
 

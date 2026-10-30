@@ -163,13 +163,13 @@ void floor_fade_distances(bool first_person, int *fade_start, int *fade_end)
 	*fade_end = view->fade_end;
 }
 
-void floor_fade_set_first_person(bool first_person)
+static void rebuild(const floor_fade_view *view)
 {
 	unsigned char levels[JO_TV_HEIGHT];
 
 	if (line_table == JO_NULL)
 		return;
-	floor_fade_rows(first_person ? &first_person_view : &iso_view, levels, JO_TV_HEIGHT);
+	floor_fade_rows(view, levels, JO_TV_HEIGHT);
 
 	// Laid out as described at dma_table
 	for (unsigned int e = 0; e < sizeof(dma_table) / sizeof(dma_table[0]); ++e)
@@ -178,4 +178,17 @@ void floor_fade_set_first_person(bool first_person)
 		unsigned int ratio = (unsigned int)floor_fade_ratio(levels[row < JO_TV_HEIGHT ? row : 0]);
 		dma_table[e] = ratio << 16 | ratio; // both halves: see the top of this file
 	}
+}
+
+void floor_fade_set_first_person(bool first_person)
+{
+	rebuild(first_person ? &first_person_view : &iso_view);
+}
+
+void floor_fade_set_first_person_tilt(int tilt)
+{
+	floor_fade_view view = first_person_view;
+
+	view.tilt = tilt;
+	rebuild(&view);
 }

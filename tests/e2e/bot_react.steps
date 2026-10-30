@@ -2,7 +2,9 @@
 # pulled in beside the player, then watch it in iso turning away from walls and the player's
 # trail, each a reaction time (9-16 frames) after it notices.
 wait 17
-press l 7
+press start
+press x 7
+press start
 press down
 wait 0.5
 shot react_1

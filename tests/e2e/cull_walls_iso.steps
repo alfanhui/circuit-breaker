@@ -1,11 +1,13 @@
-# Culling must not cut walls you can see in iso. Shrinking the arena (L x7: 2000 across) puts
+# Culling must not cut walls you can see in iso. Shrinking the arena (START, X x7, START: 2000 across) puts
 # every wall within 1000 of the cycle; heading south pins it against the south wall, which
 # then stands between the camera and the cycle (walls are taller than the camera).
 wait 17
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3
-press l 7
+press start
+press x 7
+press start
 press right
 press right
 wait 3

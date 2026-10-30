@@ -74,8 +74,15 @@ void debug_pad1(void)
 	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
-static void debug_camera_input(void)
+static void debug_camera_input(unsigned short struck)
 {
+	// X / Y: arena smaller / bigger (L and R are the camera's height here, and look aside in play).
+	// A cycle left outside a shrunk arena is pulled to the edge when play resumes: a crash
+	if (struck & DIGI_X)
+		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
+	if (struck & DIGI_Y)
+		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
+
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
 	else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
@@ -146,7 +153,7 @@ void gamepad_input(void)
 	}
 	if (debug_camera)
 	{
-		debug_camera_input();
+		debug_camera_input(struck);
 		return;
 	}
 
@@ -208,16 +215,19 @@ void gamepad_input(void)
 		debug_next_turn_compare();
 
 	// Tuning, to find the balance of speed and scale by feel. The debug text shows both.
-	// L / R: arena smaller / larger. A cycle left outside a shrunk arena is pulled to the edge next frame
-	if (struck & DIGI_L)
-		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
-	if (struck & DIGI_R)
-		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
-	// B / C: cruise speed down / up
+	// (The arena's size is in the debug camera: START, then X / Y.) B / C: cruise speed down / up
 	if (struck & DIGI_B)
 		cycle_set_cruise_speed(cycle_cruise_speed() - 1);
 	if (struck & DIGI_C)
 		cycle_set_cruise_speed(cycle_cruise_speed() + 1);
 
+	// L / R held: look left / right (1st person; both or neither: ahead). The head eases round
+	{
+		unsigned short held = press_latch_held(&pad1_presses);
+		int left = (held & DIGI_L) != 0;
+		int right = (held & DIGI_R) != 0;
+
+		view_look(left == right ? 0 : left ? -1 : 1);
+	}
 	view_follow(&player1.bike);
 }
