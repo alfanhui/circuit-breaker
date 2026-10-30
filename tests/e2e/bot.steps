@@ -2,6 +2,10 @@
 # The player turns right towards it, sees its orange trail, and crashes into it (other riders'
 # trails stop you too). Then iso, to see both cycles and both trails.
 wait 17
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 shot bot_start
 press right
 wait 0.5

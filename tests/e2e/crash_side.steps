@@ -1,6 +1,10 @@
 # Crash into the cycle's own trail, turn along it and run beside it 25 away (the closest
 # collision allows): the trail beside should reach the screen edge, with nothing showing past it.
 wait 17
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 2
 press right

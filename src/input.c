@@ -31,6 +31,7 @@ static void update_solid_trails(void)
 }
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
+bool debug_no_termination = false; // debug camera Z: a crash only stops the cycle
 
 // Debug: fills the trail with a full-length serpentine across the arena, the worst case for drawing
 static void stress_fill_trail(void)
@@ -85,6 +86,10 @@ static void debug_camera_input(unsigned short struck)
 		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
 	if (struck & DIGI_Y)
 		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
+	// Z: termination on / off. Off, a crash just stops the cycle, as it did before crashes
+	// terminated the player: for the E2E steps that crash on purpose to look at what's left
+	if (struck & DIGI_Z)
+		debug_no_termination = !debug_no_termination;
 
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
@@ -182,7 +187,7 @@ void gamepad_input(void)
 		break;
 	}
 	// A crash terminates the player's process: the terminal screen from the next frame
-	game_update(&game, player1.crashed, 0);
+	game_update(&game, player1.crashed && !debug_no_termination, 0);
 
 	// The bot decides its buttons from what it can see, then rides by the same rules
 	// A crash terminates the bot's process: it stops, and its trail sinks into the floor (and

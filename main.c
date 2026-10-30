@@ -124,7 +124,8 @@ void debug_3d(void)
 	jo_printf(0, 1, "y %d    ", player1.bike.position.y);
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
 	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1.wall));
-	jo_printf(0, 4, "%s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"));
+	jo_printf(0, 4, "%s %s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"),
+			  debug_no_termination ? "NO TERM" : "       "); // debug camera Z: crashes don't terminate
 	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bike.bounded ? "ON" : "OFF", // Y; Z: turn camera
 			  view_linear_turn ? "LINEAR" : "EASE", debug_slow_motion ? "SLOW" : "    ");
 	jo_printf(0, 6, "speed %d  arena %d   ", cycle_cruise_speed(), 2 * arena_half()); // tuning: B/C and L/R

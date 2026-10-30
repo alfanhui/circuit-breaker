@@ -23,6 +23,8 @@ extern bool debug_camera;
 // Debug: the game moves on 1 frame in DEBUG_SLOW_MOTION_FRAMES (the picture is still redrawn every frame)
 #define DEBUG_SLOW_MOTION_FRAMES 8
 extern bool debug_slow_motion;
+// Debug (debug camera, Z): a crash stops the cycle but doesn't terminate the player
+extern bool debug_no_termination;
 
 void init_players(void);
 void debug_pad1(void);

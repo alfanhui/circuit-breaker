@@ -1,6 +1,10 @@
 # 1st person against the arena edge: drive north into the wall and stay pressed against it.
 # The wall should fill the view whole, no pieces missing or bent.
 wait 17
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 15
 shot edge_1st

@@ -1,6 +1,10 @@
 # Crash into the cycle's own trail, then turn along it in slow motion: shots about a game frame
 # apart while the camera eases round with the trail 25 to the side.
 wait 17
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 2
 press right
