@@ -595,7 +595,6 @@ void jo_main(void)
 
 	// Enable low_level_input
 	jo_core_add_vblank_callback(operate_digital_pad1);
-	jo_core_add_vblank_callback(perf_vblank);
 	jo_core_add_vblank_callback(floor_fade_vblank); // restarts the per-row fog each frame
 	jo_core_add_callback(perf_frame_start);
 	jo_core_add_callback(gamepad_input);

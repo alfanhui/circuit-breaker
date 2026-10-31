@@ -1,0 +1,6 @@
+# Game speed whatever the frame rate (input.c, gamepad_input): two shots 3 s apart; at 7 units a
+# step and 60 steps a second the cycle rides ~1260 between them, at 60 fps or slower.
+wait 28
+shot speed_a
+wait 3
+shot speed_b

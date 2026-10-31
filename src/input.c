@@ -3,6 +3,7 @@
 #include "game/camera_shake.h"
 #include "game/attract_route.h"
 #include "sound.h"
+#include "utils/perf.h"
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
@@ -281,21 +282,13 @@ static void debug_next_turn_compare(void)
 	debug_slow_motion = stage == 1 || stage == 2;
 }
 
-void gamepad_input(void)
+/*
+ * One step of the game: a sixtieth of a second. struck: the presses to act on (each acted on in
+ * one step only: the first of a frame's steps; held buttons, like boost, count in every step).
+ */
+static void game_step(unsigned short struck)
 {
-	static unsigned int frame = 0;
-	unsigned short struck;
 	rider_controls controls;
-
-	// Slow motion: skip the game update on most frames. Skipped before the presses are taken,
-	// so a press waits in the latch for the next update rather than being lost
-	++frame;
-	if (debug_slow_motion && (frame & (DEBUG_SLOW_MOTION_FRAMES - 1)) != 0)
-		return;
-
-	// Every press since the last game frame, even if this frame spanned several vblanks.
-	// Taken first and on every frame, so presses can't pile up while the debug camera is on.
-	struck = press_latch_take(&pad1_presses);
 
 	// Terminated: everything is frozen behind the terminal screen (main.c) until a button is
 	// pressed or 3 s pass, then it starts again from the beginning (game/game_state.h)
@@ -407,4 +400,41 @@ void gamepad_input(void)
 		view_look(left == right ? 0 : left ? -1 : 1);
 	}
 	view_follow(&player1.bike);
+}
+
+/*
+ * Each frame: the presses, then as many game steps as the last frame took vblanks. Everything
+ * moves a fixed amount a step (a cycle's speed is units per step), so at a steady 60 frames a
+ * second it's one step a frame. When a frame takes longer (VDP1 can't finish drawing in time),
+ * the game catches up with an extra step or two, and keeps its speed: a slowdown shows as
+ * choppier motion, not as the whole game running slow (it used to: at 45 fps, 75% speed).
+ * At most FRAME_STEPS_MAX steps: a very slow frame mustn't bring on even more work.
+ */
+#define FRAME_STEPS_MAX 3
+
+void gamepad_input(void)
+{
+	static unsigned int frame = 0;
+	unsigned short struck;
+	int steps = perf_last_frame_vblanks;
+
+	// Slow motion: skip the game update on most frames. Skipped before the presses are taken,
+	// so a press waits in the latch for the next update rather than being lost. One step a frame
+	// then: slow motion is for watching it, frame by frame
+	++frame;
+	if (debug_slow_motion)
+	{
+		if ((frame & (DEBUG_SLOW_MOTION_FRAMES - 1)) != 0)
+			return;
+		steps = 1;
+	}
+
+	// Every press since the last frame, even if it spanned several vblanks. Taken first and on
+	// every frame, so presses can't pile up while the debug camera is on.
+	struck = press_latch_take(&pad1_presses);
+
+	if (steps > FRAME_STEPS_MAX)
+		steps = FRAME_STEPS_MAX;
+	for (int i = 0; i < steps; ++i)
+		game_step(i == 0 ? struck : 0);
 }

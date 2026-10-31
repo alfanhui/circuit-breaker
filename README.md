@@ -48,7 +48,9 @@ presses pad buttons from a step script and saves screenshots to `tests/build/e2e
 
 ## Performance
 
-The debug text shows `fps` and `cpu`/`peak`: the master SH-2's time for game logic and 3D setup as a % of one frame.
+The debug text (top left; none on the spectator view) shows `fps` (each frame timed by the SH-2's free running counter), `cpu`/`pk` (the master SH-2's time for game logic and 3D setup as a % of one frame) and `late` (vblanks missed since boot). High `late` with low `cpu` means VDP1 is the bottleneck.
+
+The game steps once per vblank whatever the frame rate: a frame that takes two vblanks is followed by two game steps, so a slowdown shows as choppier motion, not slower play.
 To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_TRAIL` (fills the trail at start).
 
 ## Controls
@@ -61,4 +63,4 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
 - B / C: cruise speed down / up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)
-- Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NO TERM" in the debug text, for testing; A: the prologue's spectator camera on / off, when you leave the debug camera)
+- Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NOTERM" in the debug text, for testing; A: the prologue's spectator camera on / off, when you leave the debug camera)
