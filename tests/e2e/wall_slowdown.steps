@@ -2,7 +2,9 @@
 # SH-2's free running counter, vbl is the old vblank count, to compare). The arena shrinks to
 # 4000 across so the walls and the bot are close; termination off. The cycle rides north to
 # just short of the wall, turns right and runs along it. A shot a second.
-wait 28
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 12.4
 press start
 press z
 press x 6

@@ -1,0 +1,18 @@
+# Hurrying the opening flight (input.c): during it a direction doesn't hit the loop; the first
+# button press (any but START and Z) runs it at x3, and later presses do nothing. The debug line,
+# top left, shows the segment, frame and speed. Once it has landed, a direction hits the loop
+# again (a burst of light)
+wait_boot
+shot hurry_1_x1
+press b
+wait 0.3
+shot hurry_2_x3
+press left
+press right
+wait 0.3
+shot hurry_3_still_x3_no_hit
+wait 3.5
+shot hurry_4_landed
+press left
+wait 0.1
+shot hurry_5_hit

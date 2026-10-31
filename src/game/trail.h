@@ -26,6 +26,9 @@ typedef struct
 // Starts a new wall at start, discarding the old one.
 void trail_reset(trail *t, world_point start);
 
+// Moves the whole wall, every corner and the head, by (dx, dy): the world slid under it
+void trail_shift(trail *t, int dx, int dy);
+
 // Moves the live end of the wall, normally to the cycle position every frame.
 void trail_set_head(trail *t, world_point head);
 

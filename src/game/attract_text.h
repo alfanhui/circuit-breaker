@@ -29,6 +29,16 @@
 #define ATTRACT_TEXT "SEGA SATURN SH-2"
 #define ATTRACT_TEXT_UNIT 100		  // world units per font grid unit: letters 600 x 1000
 #define ATTRACT_TEXT_PERIOD 15000	  // a whole message, plus room for the last word to sink
+// A spelt word sinks into the floor a unit every this many frames: half a dead rider's speed
+// (RIDER_SINK_SPEED, rider.h), so the words linger on the spectator's view. 2 s for a trail
+#define ATTRACT_SINK_FRAMES 2
+// How long the message takes to write, ridden as the game rides it (every message after the
+// first; test_attract_route.c measures it, and fails if the font, route or speeds change it), and
+// so the steady speed the spectator camera pans at: a period in that many frames, x256. The
+// phase: how far west of that steady point the cycle is on average (the pan aims at it)
+#define ATTRACT_TEXT_FRAMES 5301 // 1 min 28 s
+#define ATTRACT_TEXT_PAN_X256 724 // 15000 x 256 / 5301: 2.83 units a frame
+#define ATTRACT_TEXT_PAN_PHASE 601 // the cycle keeps within 1365 of it either way
 #define ATTRACT_TEXT_MAX_WAYPOINTS 256 // enough for the message (~170), with room to spare
 
 typedef struct

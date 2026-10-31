@@ -1,7 +1,9 @@
 # The bot's direction on the radar's rim (game/minimap.h, minimap_direction): an orange arrowhead
 # outside the rim, turning with the view. The bot starts 2000 to the player's right. The player
 # turns right, right (a U-turn), then left; 1 s apart. The debug text's last line is the bot.
-wait 21
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 5.4
 shot mark_1
 press right
 wait 1

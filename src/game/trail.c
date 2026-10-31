@@ -18,6 +18,18 @@ void trail_reset(trail *t, world_point start)
 	t->head = start;
 }
 
+void trail_shift(trail *t, int dx, int dy)
+{
+	for (int i = 0; i < t->corner_count; ++i)
+	{
+		t->corners[i].x = (short)(t->corners[i].x + dx);
+		t->corners[i].y = (short)(t->corners[i].y + dy);
+	}
+	t->head.x = (short)(t->head.x + dx);
+	t->head.y = (short)(t->head.y + dy);
+	t->version++; // the corners moved: a renderer's cached copy is stale
+}
+
 void trail_set_head(trail *t, world_point head)
 {
 	t->head = head;

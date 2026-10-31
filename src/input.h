@@ -32,8 +32,11 @@ extern trail attract_strokes[];
 extern unsigned char attract_stroke_word[];
 extern int attract_stroke_count;
 extern unsigned char attract_word_height[];
+// The opening flight's speed: 1, or 3 once a button has hurried it (input.c)
+extern int intro_hurry;
 // The presses breaking the loop: their burst of light and flash are drawn in main.c
 extern loop_break breaker;
+extern world_point loop_break_at; // where the cycle was when the loop broke (the last burst is there)
 
 void init_players(void);
 void debug_pad1(void);

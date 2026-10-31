@@ -223,3 +223,17 @@ void floor_fade_set_first_person_tilt(int tilt)
 	view.tilt = tilt;
 	rebuild(&view);
 }
+
+void floor_fade_set_camera(int tilt, int eye_height, int focal, int fade_start, int fade_end)
+{
+	floor_fade_view view;
+
+	view.centre_row = JO_TV_HEIGHT_2;
+	view.tilt = tilt;
+	view.eye_height = eye_height;
+	view.focal = focal;
+	view.fade_start = fade_start;
+	view.fade_end = fade_end;
+	view.glow_rows = 0;
+	rebuild(&view);
+}

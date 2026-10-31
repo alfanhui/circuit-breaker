@@ -1,6 +1,8 @@
 # 1st person turn camera eases out: most of the swing straight away, then it settles.
 # Shots straight after a right turn (from north to east); timings are rough (screenshots take time)
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3

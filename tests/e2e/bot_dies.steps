@@ -4,7 +4,9 @@
 # edge when play resumes, a crash, and it dies. (It used to be shrunk later, but the bot now
 # boosts clear before then.) Iso, 0.25 s apart: its trail, in the far corner (top right), sinks
 # over 1 s and is gone by sink_4.
-wait 21
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 5.4
 press start
 press z
 press x 7

@@ -13,6 +13,14 @@ void init_arena_walls(void);
 // grouped into longer pieces with distance from eye (arena.h).
 // camera: the 1st person camera, to keep wall corners in front of it (wall_clip.h); NULL otherwise.
 // cutaway: iso view, where the walls between the camera and the cycle are drawn low.
-void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway);
+// rise: how far the walls have risen out of the floor, 0 to 256 (full height): they rise as the
+// camera comes down into the arena (game/arrival_flight.h)
+void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
+					  int rise);
+
+// Call inside view_push_world_matrix(), with the walls. The raised ground round the arena
+// (game/surround.h), level with the walls' tops and rising with them (rise, as above); in the
+// iso cutaway, as low as the near walls' base behind them. Only drawn where the camera's above it
+void draw_arena_surround(int rise, bool cutaway);
 
 #endif

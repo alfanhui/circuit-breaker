@@ -27,20 +27,30 @@ The prologue hides in plain sight, as the attract mode: the demo every arcade-st
 on its own before you press anything. A cycle runs the arena by itself, on the same route,
 forever. It's the loop.
 
-There's no title screen or main menu. The game starts as a spectator's view of the arena, far
-off, high and shallow, as if you were watching someone else play at the arcades: a lone cycle
-running the same route round an endless floor, no walls, no HUD. Each lap its trail sinks into
-the floor and the lap begins again. No bot: in the loop the CPU is alone.
+There's no title screen or main menu. The game opens face down on the floor, the grid filling
+the screen, as a cycle rides in and lays a trail across it: the first stroke of a message. The
+camera lifts its head off the floor and slowly picks up speed, rides along beside the cycle as
+it writes, and banks round, climbing, into a spectator's seat (`game/intro_flight.h`). You only
+watch it: a press doesn't touch the loop yet, it hurries the flight along (once, to three
+times the speed).
+
+From there it's a spectator's view of the arena, far off, high and shallow, as if you were
+watching someone else play at the arcades: a lone cycle writing "SEGA SATURN SH-2" across an
+endless floor, no walls, no HUD. Each word sinks into the floor once it's spelt, and the message
+begins again. No bot: in the loop the CPU is alone.
 
 1. The player presses a direction, thinking it starts the game. The cycle wavers, and keeps
    to its route.
 2. Again: it wavers harder. The loop is fighting back.
-3. The third press forces the choice. The cycle turns off its route, and something visibly
-   breaks: the picture jolts and glitches, and the camera falls out of the stands into the
-   cycle, 1st person, with no cut. That's the CPU's first free decision: its first act of
-   consciousness is your input, forced through three times.
-4. The game carries on into the arena: the walls, the HUD and the rival appear, as if this
-   had been the game all along.
+3. The third press forces the choice. Something visibly breaks: the picture flashes and
+   jolts, and under the flash the world slides so the cycle that was writing is at the
+   arena's centre, and it turns north: you're given the same cycle you were watching. The
+   camera climbs out of the stands to an overview of the whole arena as its walls rise out
+   of the floor round the cycle, so you see the box you're in, then swoops down behind it into 1st person, with no cut, in 3 s
+   (`arrival_flight.c`). The message sinks away meanwhile. That's the CPU's first free
+   decision: its first act of consciousness is your input, forced through three times.
+4. The game carries on into the arena: the HUD and the rival appear, as if this had been the
+   game all along.
 
 No words are needed. It must be obvious that something strange happened (the loop broke, and
 the SH-2 now chooses for itself), even if first-time players don't yet know what it means.

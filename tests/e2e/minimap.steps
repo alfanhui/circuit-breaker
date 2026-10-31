@@ -1,7 +1,9 @@
 # 1st person radar (bottom right): the trail behind runs straight down from the chevron; turning,
 # the map swings round with the view (slow-motion shots ~a game frame apart), then the trail
 # just laid points down again and the older one runs off to the side.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press c 3
 wait 2
 shot map_straight

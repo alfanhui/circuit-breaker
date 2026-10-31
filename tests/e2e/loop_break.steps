@@ -1,11 +1,12 @@
 # Breaking the prologue's loop (game/loop_break.h): spectating, three direction presses. Each is
 # a hit: a burst of light round the cycle, the screen flashing towards white and the camera
 # jolting, harder each time. Shots straight after each press, while the burst flies out. The
-# third breaks it: 1st person, the cycle turning off its route, the bot coming in.
-wait 21
-press start
-press a
-press start
+# third breaks it: the camera comes down into the cycle at the arena's centre (3 s, arrival.steps),
+# then play in 1st person, the bot coming in.
+wait_boot # the opening flight is up
+# Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
+press b
+wait 3.5
 wait 4
 press left
 shot hit1_a
@@ -21,5 +22,5 @@ press right
 shot hit3_a
 shot hit3_b
 shot hit3_c
-wait 1.5
+wait 3.5
 shot broken

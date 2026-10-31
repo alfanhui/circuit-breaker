@@ -1,9 +1,12 @@
 # The debug readout (main.c, debug_3d): 5 lines top left in play; none on the spectator view;
-# back once the loop is broken.
-wait 28
+# back once the loop is broken and the camera's down in the cycle.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 12.4
 shot debug_play
+# A twice: play -> the opening flight -> the loop (directions don't hit the loop while it flies)
 press start
-press a
+press a 2
 press start
 wait 1
 shot debug_spectate
@@ -12,5 +15,5 @@ wait 0.5
 press left
 wait 0.5
 press left
-wait 1
+wait 3.5 # the camera comes down into the cycle (3 s), then play
 shot debug_after

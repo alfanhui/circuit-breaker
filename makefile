@@ -39,6 +39,9 @@ SRCS=main.c \
 	src/game/attract_route.c \
 	src/game/attract_text.c \
 	src/game/loop_break.c \
+	src/game/intro_flight.c \
+	src/game/arrival_flight.c \
+	src/game/surround.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \

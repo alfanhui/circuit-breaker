@@ -27,6 +27,11 @@ void floor_fade_set_view(int view);
 // dips the head (view.c), which moves the horizon up the screen
 void floor_fade_set_first_person_tilt(int tilt);
 
+// The same for any camera: a moving one (the opening flight, view.c). tilt: tan(pitch below
+// level) x 1000, at most 1732 (60 degrees); focal: (320 / 2) / tan(FOV / 2). Each rebuild works
+// out every row with a division, so call it every few frames, not every frame
+void floor_fade_set_camera(int tilt, int eye_height, int focal, int fade_start, int fade_end);
+
 // Where the floor's fade begins and where it's full, along the floor, for a view: so the walls
 // and trails (object_fog_vdp1.h) fade over the same distances as the floor they stand on.
 // Works whether or not the floor fog is on.

@@ -2,6 +2,7 @@
 #include "game/bot.h"
 #include "game/camera_shake.h"
 #include "game/attract_route.h"
+#include "game/arrival_flight.h"
 #include "sound.h"
 #include "utils/perf.h"
 
@@ -46,6 +47,7 @@ static void update_solid_trails(void)
  */
 #define ATTRACT_ORIGIN_X 7000 // the first letter's bottom left: the message runs east (-x) from
 #define ATTRACT_ORIGIN_Y 500  // here, 13800 long, centred on the arena; letters reach 1000 north
+#define ATTRACT_LINE_Y (ATTRACT_ORIGIN_Y - 5 * ATTRACT_TEXT_UNIT) // the message's centre line
 #define ATTRACT_STROKES_MAX 24 // the message has 21
 #define ATTRACT_WORDS_MAX 4	   // and 3 words
 
@@ -58,6 +60,16 @@ int attract_stroke_count;
 unsigned char attract_word_height[ATTRACT_WORDS_MAX]; // how tall each word's strokes stand
 static unsigned char word_sinking[ATTRACT_WORDS_MAX];
 static int current_word;
+static int message_frames; // since this message began: where the spectator's steady pan is
+
+// The spectator camera's steady point along the message (view.c): from where the message
+// starts, moving east at the message's own average speed (attract_text.h), so the cycle wanders
+// either side of it as it goes back and forth in the letters, but always keeps up
+static void update_pan(void)
+{
+	view_spectate_pan(attract_route_start(&route).x - ((message_frames * ATTRACT_TEXT_PAN_X256) >> 8) +
+					  ATTRACT_TEXT_PAN_PHASE);
+}
 
 // The cycle at the start of the message, facing its first leg, with no trail and nothing
 // written. Its speed carries on, so one message runs into the next with no pause
@@ -70,11 +82,24 @@ static void start_message(void)
 	turn_gate_init(&player1.turns);
 	attract_stroke_count = 0;
 	current_word = 0;
+	message_frames = 0;
+	update_pan();
 	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
 	{
 		attract_word_height[w] = TRAIL_HEIGHT;
 		word_sinking[w] = 0;
 	}
+}
+
+// Spelt words sink a unit every ATTRACT_SINK_FRAMES frames: slower than a dead rider's trail
+// (the mask is a remainder with no division, ATTRACT_SINK_FRAMES being a power of two)
+static void sink_words(void)
+{
+	for (int w = 0; w < ATTRACT_WORDS_MAX && (message_frames & (ATTRACT_SINK_FRAMES - 1)) == 0; ++w)
+		if (word_sinking[w] && attract_word_height[w] > 0)
+			attract_word_height[w] = (unsigned char)(attract_word_height[w] > RIDER_SINK_SPEED
+														 ? attract_word_height[w] - RIDER_SINK_SPEED
+														 : 0);
 }
 
 // One frame of the loop, before the cycle moves: the turn to press and whether to boost, and
@@ -84,11 +109,7 @@ static void attract_frame(rider_controls *controls)
 	int turn;
 	const attract_waypoint *here = attract_route_step(&route, &player1.bike, &turn);
 
-	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
-		if (word_sinking[w] && attract_word_height[w] > 0)
-			attract_word_height[w] = (unsigned char)(attract_word_height[w] > RIDER_SINK_SPEED
-														 ? attract_word_height[w] - RIDER_SINK_SPEED
-														 : 0);
+	sink_words();
 	if (here)
 	{
 		int pen_on = attract_route_pen(&route); // on the leg it rides next
@@ -114,13 +135,20 @@ static void attract_frame(rider_controls *controls)
 		turn = TURN_NONE;
 	}
 	controls->turn = (signed char)turn;
-	controls->boost = (unsigned char)!attract_route_pen(&route); // quicker between strokes
+	// Boosting all the way, the gauge kept full: a full one only lasts 1.5 s (cycle.h), and the
+	// loop's cycle is showing off, not racing
+	controls->boost = 1;
+	player1.bike.gauge = CYCLE_GAUGE_MAX;
+	message_frames++;
+	update_pan();
 }
 
 // Spectating (the prologue's loop) or playing. In the loop the CPU is alone: the bot is taken
 // out of the field, and comes in fresh at its start when play begins (docs/STORY.md)
 static void set_spectating(bool on)
 {
+	view_intro_stop(); // a flight in is started afresh by the caller (enter_scene, hit_the_loop)
+	view_arrival_stop();
 	spectating = on;
 	player1.bike.bounded = !on; // a ghost on the route; solid again when play begins
 	attract_stroke_count = 0;
@@ -136,6 +164,7 @@ static void set_spectating(bool on)
 			origin.y = ATTRACT_ORIGIN_Y;
 			attract_waypoint_count = attract_text_build(ATTRACT_TEXT, origin, attract_waypoints, ATTRACT_TEXT_MAX_WAYPOINTS);
 		}
+		view_spectate_line(ATTRACT_LINE_Y);
 		start_message();
 	}
 	else
@@ -149,13 +178,50 @@ static void set_spectating(bool on)
 /*
  * Breaking the loop (game/loop_break.h, docs/STORY.md): while spectating, a direction pressed is
  * a hit on the loop: a burst of light and a flash (main.c), a synth stab and a jolt of the
- * camera, harder each time. The third breaks it: the cycle turns off its route (the way pressed,
- * or right for up / down), and from there it's the player's. For now the camera cuts straight
- * to 1st person; it'll fall out of the stands into the cycle later.
+ * camera, harder each time. The third breaks it: under its flash the world slides so the cycle
+ * that was writing is at the arena's centre (slide_to_the_centre), it turns to face north, and
+ * the camera flies down out of the stands into it in 3 s (game/arrival_flight.h) while the
+ * arena's walls rise round it and the message sinks away. Everything waits for the camera; then
+ * it's the player's: the same cycle you watched, not a new one.
  */
 loop_break breaker;
+world_point loop_break_at; // where the cycle was when the loop broke: the last burst is there
 static const short hit_shake[LOOP_BREAK_PRESSES + 1] = {0, 364, 637, 910}; // 2, 3.5 and 5 degrees
 #define DIRECTIONS (DIGI_LEFT | DIGI_RIGHT | DIGI_UP | DIGI_DOWN)
+
+// The slide is by whole tiles of the spectator's floor (view.c's SPECTATE_FLOOR_SHIFT: 125 x 8),
+// so the grid under the camera lands on itself and the slide can't be seen. The cycle ends up
+// within half a tile of the centre
+#define SLIDE_STEP 1000
+
+// v to the nearest multiple of SLIDE_STEP. A division, but once, at the break
+static int nearest_step(int v)
+{
+	return (v >= 0 ? v + SLIDE_STEP / 2 : v - SLIDE_STEP / 2) / SLIDE_STEP * SLIDE_STEP;
+}
+
+// The arena is centred on the world's origin, and the flight down is made for a cycle there
+// (it frames the whole arena from the overview, and stays well clear of the walls when low).
+// The loop's cycle could be anywhere along the message, so rather than move the arena, move
+// everything else: the cycle, the message's strokes and the camera, all by the same amount
+static void slide_to_the_centre(void)
+{
+	int dx = -nearest_step(player1.bike.position.x);
+	int dy = -nearest_step(player1.bike.position.y);
+
+	// Mid-stroke, keep the stroke being written: it sinks with the rest of its word
+	if (attract_route_pen(&route) && attract_stroke_count < ATTRACT_STROKES_MAX && current_word < ATTRACT_WORDS_MAX)
+	{
+		trail_set_head(&player1.wall, player1.bike.position);
+		attract_strokes[attract_stroke_count] = player1.wall;
+		attract_stroke_word[attract_stroke_count++] = (unsigned char)current_word;
+	}
+	for (int i = 0; i < attract_stroke_count; ++i)
+		trail_shift(&attract_strokes[i], dx, dy);
+	player1.bike.position.x = (short)(player1.bike.position.x + dx);
+	player1.bike.position.y = (short)(player1.bike.position.y + dy);
+	view_spectate_move(dx, dy);
+}
 
 // A direction pressed while spectating. Returns the presses, changed: the one that breaks the
 // loop becomes a turn (it's the first thing the free cycle does); the others are spent on the hit
@@ -167,15 +233,28 @@ static unsigned short hit_the_loop(unsigned short struck)
 	view_shake(hit_shake[press]);
 	if (press < LOOP_BREAK_PRESSES)
 		return (unsigned short)(struck & ~DIRECTIONS);
-	// Broken: play from here, in 1st person, the bot coming in
-	set_spectating(false);
+	// Broken: play from where the cycle is, in 1st person, the bot coming in, once the camera's down
+	slide_to_the_centre();
+	loop_break_at = player1.bike.position;
+	{
+		int strokes = attract_stroke_count; // the message is left standing, to sink (game_step)
+
+		set_spectating(false);
+		attract_stroke_count = strokes;
+	}
+	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
+		word_sinking[w] = 1; // the word being written too
+	// The same cycle, where it was, but turned north (the way the flight down lands) and with no
+	// trail: its stroke is kept above. From the stands, under the flash, the turn can't be seen
+	{
+		world_point at = player1.bike.position;
+
+		rider_init(&player1, at.x, at.y, HEADING_NORTH);
+	}
 	first_person = true;
+	view_arrival_start(&player1.bike);
 	view_init(&player1.bike);
-	// A fresh trail from here: turning off the route, it mustn't run into the stroke it was writing
-	trail_reset(&player1.wall, player1.bike.position);
-	if (!(struck & (DIGI_LEFT | DIGI_RIGHT)))
-		struck |= DIGI_RIGHT; // up or down: it still turns off the route
-	return (unsigned short)(struck & ~(DIGI_UP | DIGI_DOWN)); // not a view switch
+	return (unsigned short)(struck & ~DIRECTIONS); // spent on the hit: it starts riding straight
 }
 
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
@@ -203,18 +282,69 @@ static void stress_fill_trail(void)
 	}
 }
 
-void init_players(void)
+/*
+ * The parts of the game, in the order they're played:
+ *   SCENE_INTRO  the camera flies down to the floor and in to the spectator's seat (view.c),
+ *                while the CPU starts writing its message
+ *   SCENE_LOOP   the spectator's view of the loop, until three presses break it
+ *   SCENE_PLAY   play, in 1st person, the bot in the arena
+ * The game boots into BOOT_SCENE. To work on a later part, set it to that part and build;
+ * or, while it runs, jump: START (the debug camera), then A for the next part, START again.
+ * The E2E scripts that test play jump there first (tests/e2e/run.sh: skip_prologue)
+ */
+typedef enum
+{
+	SCENE_INTRO,
+	SCENE_LOOP,
+	SCENE_PLAY,
+	SCENE_COUNT
+} scene;
+#define BOOT_SCENE SCENE_INTRO
+
+/*
+ * During the opening flight you're only watching: the loop can't be hit until the camera has
+ * landed in the spectator's seat. Any button instead hurries the flight along, once: it runs at
+ * INTRO_HURRY_SPEED from then, the whole game stepping that many times a frame, so the cycle
+ * writes faster too and the flight lands where it always does. Further presses do nothing. Not
+ * START (the debug camera, which the E2E scripts use to jump past it) nor Z (the slow motion,
+ * to film it)
+ */
+#define INTRO_HURRY_SPEED 3
+#define INTRO_HURRY_BUTTONS (DIGI_LEFT | DIGI_RIGHT | DIGI_UP | DIGI_DOWN | DIGI_A | DIGI_B | DIGI_C | DIGI_X | DIGI_Y | DIGI_L | DIGI_R)
+int intro_hurry = 1; // the flight's speed: 1, or INTRO_HURRY_SPEED once hurried (main.c shows it)
+
+static scene current_scene(void)
+{
+	if (!spectating)
+		return SCENE_PLAY;
+	return view_intro_flying() ? SCENE_INTRO : SCENE_LOOP;
+}
+
+// A part of the game from its start: the terminal screen gone, the riders at their starts
+// (the player's put on the message's route if it's the CPU's turn), and the camera set for it.
+// In the debug camera the camera's left alone: it takes effect on leaving (view_init there)
+static void enter_scene(scene part)
 {
 	game_init(&game);
 	status_init(&status);
 	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
 	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
-	update_solid_trails();
-	view_init(&player1.bike);
+	set_spectating(part != SCENE_PLAY);
+	intro_hurry = 1;
+	if (part == SCENE_INTRO)
+		view_intro_start(&player1.bike);
+	if (!debug_camera)
+		view_init(&player1.bike);
 #ifdef PERF_STRESS_TRAIL
-	stress_fill_trail();
+	if (part == SCENE_PLAY)
+		stress_fill_trail();
 #endif
+}
+
+void init_players(void)
+{
+	enter_scene(BOOT_SCENE);
 }
 
 void debug_pad1(void)
@@ -239,11 +369,10 @@ static void debug_camera_input(unsigned short struck)
 	// terminated the player: for the E2E steps that crash on purpose to look at what's left
 	if (struck & DIGI_Z)
 		debug_no_termination = !debug_no_termination;
-	// A: the spectator camera on / off (the prologue's, view.c), taking effect on leaving the
-	// debug camera. Until the prologue's done the game starts in 1st person, so the E2E steps
-	// written for that still work
+	// A: jump to the next part of the game (intro, loop, play, then the intro again), taking
+	// effect on leaving the debug camera
 	if (struck & DIGI_A)
-		set_spectating(!spectating);
+		enter_scene((scene)((current_scene() + 1) % SCENE_COUNT));
 
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
@@ -295,7 +424,7 @@ static void game_step(unsigned short struck)
 	if (game.phase == GAME_TERMINATED)
 	{
 		if (game_update(&game, 0, struck != 0))
-			init_players();
+			enter_scene(SCENE_PLAY); // straight back to play: the prologue is only at boot
 		return;
 	}
 
@@ -314,7 +443,24 @@ static void game_step(unsigned short struck)
 	if (!jo_is_pad1_available())
 		return;
 
+	// The opening flight: the first press hurries it; nothing else acts on it (but Z, below)
+	if (spectating && view_intro_flying() && (struck & INTRO_HURRY_BUTTONS))
+	{
+		intro_hurry = INTRO_HURRY_SPEED;
+		struck &= (unsigned short)~INTRO_HURRY_BUTTONS;
+	}
 	loop_break_update(&breaker);
+	// The camera coming down into the cycle: everyone waits for it, and the pad does nothing.
+	// Only the message sinks away (gone before it lands, as nobody rides through it)
+	if (view_arriving())
+	{
+		message_frames++;
+		sink_words();
+		view_follow(&player1.bike);
+		if (!view_arriving())
+			attract_stroke_count = 0; // landed: it's sunk
+		return;
+	}
 	if (spectating && (struck & DIRECTIONS))
 		struck = hit_the_loop(struck);
 
@@ -435,6 +581,11 @@ void gamepad_input(void)
 
 	if (steps > FRAME_STEPS_MAX)
 		steps = FRAME_STEPS_MAX;
-	for (int i = 0; i < steps; ++i)
+	// Hurried, the opening flight takes 3 times the steps; back to normal once it lands
+	for (int i = 0; i < steps * (view_intro_flying() ? intro_hurry : 1); ++i)
+	{
+		if (i >= steps && !view_intro_flying())
+			break;
 		game_step(i == 0 ? struck : 0);
+	}
 }

@@ -1,6 +1,8 @@
 # Does the bot boost on its own? Its gauge is on the debug text's last line (boost 180 = full;
 # it falls while it boosts). The player cruises north without boosting; shots 1 s apart.
-wait 16
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 0.4
 shot bboost_1
 wait 1
 shot bboost_2

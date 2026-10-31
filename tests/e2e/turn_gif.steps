@@ -1,6 +1,8 @@
 # Records a right turn in slow motion (1/8 speed) with each turn camera, for turn_gif.ps1.
 # Z: EASE -> EASE SLOW -> LINEAR SLOW. Shots are taken back to back (~10 a second).
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3

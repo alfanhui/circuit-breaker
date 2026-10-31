@@ -218,6 +218,31 @@ static void drawn_head_matches_live_segment_end(void)
 	CHECK(!trail_get_drawn_head(&t, 25, &head));
 }
 
+// The loop's break slides the world (input.c): the wall keeps its shape, just somewhere else
+static void shift_moves_every_corner_and_the_head(void)
+{
+	trail t;
+	world_point p = {100, -200};
+	unsigned short version;
+
+	trail_reset(&t, p);
+	p.x = 400;
+	trail_set_head(&t, p);
+	trail_add_corner(&t);
+	p.y = 50;
+	trail_set_head(&t, p);
+	version = t.version;
+	trail_shift(&t, -1000, 2000);
+	CHECK_EQ(2, t.corner_count);
+	CHECK_EQ(-900, t.corners[0].x);
+	CHECK_EQ(1800, t.corners[0].y);
+	CHECK_EQ(-600, t.corners[1].x);
+	CHECK_EQ(1800, t.corners[1].y);
+	CHECK_EQ(-600, t.head.x);
+	CHECK_EQ(2050, t.head.y);
+	CHECK(t.version != version);
+}
+
 void run_trail_tests(void)
 {
 	RUN(version_changes_only_when_corners_change);
@@ -232,4 +257,5 @@ void run_trail_tests(void)
 	RUN(head_gap_longer_than_segment_hides_it);
 	RUN(out_of_range_index_rejected);
 	RUN(full_trail_drops_oldest_corner);
+	RUN(shift_moves_every_corner_and_the_head);
 }

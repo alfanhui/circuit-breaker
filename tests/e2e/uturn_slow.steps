@@ -1,7 +1,9 @@
 # Tight U-turn (double tap) in slow motion: the presses land about a game frame apart, so the
 # turn gate holds the second until the 50-unit gap. Shots every ~game frame as the camera
 # swings round, then back at full speed running beside the trail.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press c 3
 wait 3
 press z

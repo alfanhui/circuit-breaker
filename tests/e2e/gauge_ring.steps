@@ -1,6 +1,8 @@
 # The boost gauge as the radar's rim (bottom centre). Full and amber; boosting (white) as it drains
 # down both sides; the pause after (dim amber); refilling; then iso, where the rim shows alone.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press c 3
 wait 2
 shot ring_full

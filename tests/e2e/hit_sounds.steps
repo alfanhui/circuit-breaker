@@ -2,10 +2,10 @@
 # direction presses hit the loop, 3 s apart, to check each sound plays at the right speed and
 # straight away. The press times show in the log (shots).
 record_sound
-wait 28 # boot, then the sounds load from the CD
-press start
-press a
-press start
+wait_boot # the opening flight is up
+# Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
+press b
+wait 3.5
 wait 2
 shot press1
 press left

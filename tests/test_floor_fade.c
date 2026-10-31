@@ -68,6 +68,24 @@ static void tilted_camera_fades_the_top_of_the_screen(void)
 		CHECK(levels[row] >= levels[row + 1]); // fades more towards the top
 }
 
+// The spectator view (floor_fade_vdp2.c): 3804 up, 25 degrees down, a 30 degree FOV. Its
+// eye_height x focal x 1000 is past what 32 bits hold (3804 x 597000 = 2.27 billion): worked
+// out that way it wrapped negative, read as "under the camera", and nothing was fogged
+static void high_camera_fades_the_top_of_the_screen(void)
+{
+	static const floor_fade_view spectator = {
+		.centre_row = 112, .tilt = 466, .eye_height = 3804, .focal = 597,
+		.fade_start = 9700, .fade_end = 20000, .glow_rows = 0};
+
+	floor_fade_rows(&spectator, levels, ROWS);
+	// Top row: 3804 * (597000 + 466 * 112) / (466 * 597 - 112000) = 14700 away: about half way
+	CHECK(levels[0] >= 6 && levels[0] <= 8);
+	CHECK_EQ(0, levels[112]);	   // the centre: 8157 away, before the fade
+	CHECK_EQ(0, levels[ROWS - 1]); // bottom: nearer still
+	for (int row = 0; row < ROWS - 1; ++row)
+		CHECK(levels[row] >= levels[row + 1]); // fades more towards the top
+}
+
 static void ratio_spans_none_to_almost_all_fog(void)
 {
 	CHECK_EQ(0, floor_fade_ratio(0)); // near floor: untouched
@@ -88,4 +106,5 @@ void run_floor_fade_tests(void)
 	RUN(glow_fades_out_above_the_horizon);
 	RUN(horizon_off_screen_draws_no_fade);
 	RUN(tilted_camera_fades_the_top_of_the_screen);
+	RUN(high_camera_fades_the_top_of_the_screen);
 }

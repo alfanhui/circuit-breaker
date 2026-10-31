@@ -1,7 +1,9 @@
 # Busy play: a staircase of turns every 0.6 s for ~2 minutes fills the player's trail with short
 # segments near the camera, like real play (the bot chases meanwhile). The debug readout shows
 # polygons, cpu, fps and late frames as it fills.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press left
 wait 0.6
 press right

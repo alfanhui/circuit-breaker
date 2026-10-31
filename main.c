@@ -31,6 +31,8 @@
 #include "src/object_fog_vdp1.h"
 #include "src/hud.h"
 #include "src/sound.h"
+#include "src/game/intro_flight.h"
+#include "src/game/arrival_flight.h"
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
 // Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
@@ -57,10 +59,7 @@
 #define FLOOR_TEXELS 256
 #define FLOOR_TILE_UNITS 125
 #define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
-// Spectating (view.c), the floor is drawn this many times larger: 1000 unit tiles. From 6000
-// away a 125 unit tile is ~12 pixels, and its thin lines are sampled so sparsely (VDP2 has no
-// mipmaps) that the grid broke up into dashes. Nobody's riding yet, so the ruler can change
-#define FLOOR_SPECTATE_SHIFT 3
+// (Spectating, it's drawn larger: view_floor_shift, view.c)
 #define PLAYER_HALF 25
 #define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
 #define TRAIL_HEAD_GAP PLAYER_HALF // the wall starts at the back of the cycle
@@ -169,6 +168,66 @@ void debug_3d(bool show)
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
 	jo_printf(0, 4, "bot %d %d %c boost %d     ", bot1.bike.position.x, bot1.bike.position.y,
 			  compass[bot1.bike.heading], bot1.bike.gauge);
+}
+
+/*
+ * The opening flight's debug line, top left, while it flies (and blanked once it lands):
+ *     FLIGHT 2/4 alongside>bank 300 x3
+ *     cycle 6400 500 cam 7100 1800 400
+ * the segment playing (of 4), the keys it's between (game/intro_flight.c), the frame (of 512)
+ * and how hurried it is (input.c); then where the cycle is, and the camera (x, y, height), to
+ * place the keys by. false: no lines, as a player would see it
+ */
+#define SHOW_FLIGHT_DEBUG true
+
+static void debug_flight(void)
+{
+	static int frames_until_refresh = 0;
+	static bool shown = false;
+	int frame = view_intro_frame();
+	int arriving = view_arrival_frame();
+
+	if (arriving >= 0)
+		frame = arriving;
+	if (frame < 0 || !SHOW_FLIGHT_DEBUG)
+	{
+		if (shown)
+		{
+			jo_printf(0, 0, DEBUG_BLANK);
+			jo_printf(0, 1, DEBUG_BLANK);
+		}
+		shown = false;
+		frames_until_refresh = 0;
+		return;
+	}
+	shown = true;
+	if (--frames_until_refresh > 0)
+		return;
+	frames_until_refresh = DEBUG_TEXT_INTERVAL;
+	if (arriving >= 0)
+	{
+		int segment = 0; // the key it's leaving: a few subtractions, not a division
+
+		while (frame >= ARRIVAL_SEGMENT_FRAMES && segment < ARRIVAL_KEYS - 2)
+		{
+			frame -= ARRIVAL_SEGMENT_FRAMES;
+			segment++;
+		}
+		jo_printf(0, 0, "ARRIVE %d/%d %s>%s %d walls %d          ", segment + 1, ARRIVAL_KEYS - 1,
+				  arrival_key_name(segment), arrival_key_name(segment + 1), arriving, view_wall_rise());
+		jo_printf(0, 1, "cam %d %d %d     ", view_x, view_y, -view_z);
+		return;
+	}
+	{
+		int segment = frame >> INTRO_SEGMENT_SHIFT; // the key it's leaving
+
+		if (segment > INTRO_FLIGHT_KEYS - 2)
+			segment = INTRO_FLIGHT_KEYS - 2; // the very last frame: still the last segment
+		jo_printf(0, 0, "FLIGHT %d/%d %s>%s %d x%d          ", segment + 1, INTRO_FLIGHT_KEYS - 1,
+				  intro_flight_key_name(segment), intro_flight_key_name(segment + 1), frame, intro_hurry);
+		jo_printf(0, 1, "cycle %d %d cam %d %d %d     ", player1.bike.position.x, player1.bike.position.y, view_x,
+				  view_y, -view_z);
+	}
 }
 
 void draw_hud(void)
@@ -358,16 +417,31 @@ void draw_3d(void)
 		//  FLOOR
 		jo_3d_push_matrix();
 		{
-			const FIXED floor_scale = spectating ? FLOOR_SCALE << FLOOR_SPECTATE_SHIFT : FLOOR_SCALE;
+			const FIXED floor_scale = FLOOR_SCALE << view_floor_shift;
 
 			slScale(floor_scale, floor_scale, JO_FIXED_1); // only x and y: the plane is flat
 			jo_background_3d_plane_a_draw(true);
 		}
 		jo_3d_pop_matrix();
 
-		// Spectating: no walls, so the arena seems to go on for ever (view.c)
+		// Spectating: no walls, so the arena seems to go on for ever (view.c). They rise out of the
+		// floor as the camera comes down into the cycle; meanwhile they're cut finer near the camera
+		// (its spot on the floor), not near the cycle
 		if (!spectating)
-			draw_arena_walls(&visible_walls, &player1.bike.position, clip, !first_person && !debug_camera);
+		{
+			world_point wall_eye = player1.bike.position;
+
+			if (view_arriving())
+			{
+				wall_eye.x = (short)view_x;
+				wall_eye.y = (short)view_y;
+			}
+			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, view_wall_rise());
+			// The ground round the arena, raised level with the walls' tops: the arena's sunk into
+			// it, and the floor's grid is only seen inside. It rises with the walls, from the
+			// break's flash (flat on the floor till then, hiding the grid outside)
+			draw_arena_surround(view_wall_rise(), !first_person && !debug_camera);
+		}
 
 		if (enable_trails)
 		{
@@ -405,22 +479,27 @@ void draw_3d(void)
 			trail_mesh_end(&attract_mesh);
 		}
 
-		if (!first_person)
-			draw_cycle(player1.bike.position); // in 1st person the camera is inside it
+		// In 1st person the camera is inside it; coming down into it, it's seen until the camera's close
+		if (!first_person || spectating ||
+			(view_arriving() && JO_ABS(view_x - player1.bike.position.x) + JO_ABS(view_y - player1.bike.position.y) > 150))
+			draw_cycle(player1.bike.position);
 		// Where the cycle is on screen, for the burst of light round it (draw_loop_break): SGL
 		// works it out through the camera, so it has to be asked in here. In 1st person the
 		// camera's inside it: the middle of the screen
 		burst_x = 0;
 		burst_y = 0;
-		if (spectating)
+		if (spectating || view_arriving())
 		{
-			FIXED middle[XYZ] = {jo_int2fixed(player1.bike.position.x), jo_int2fixed(player1.bike.position.y),
-								 jo_int2fixed(PLAYER_HALF)};
+			// Coming down, the last burst stays where the cycle was when the loop broke
+			world_point at = spectating ? player1.bike.position : loop_break_at;
+			FIXED middle[XYZ] = {jo_int2fixed(at.x), jo_int2fixed(at.y), jo_int2fixed(PLAYER_HALF)};
 			Sint32 on_screen[XY];
 
 			slConvert3Dto2D(middle, on_screen);
-			burst_x = on_screen[X];
-			burst_y = on_screen[Y];
+			// Kept on the screen: in the opening flight the cycle can be off it (or behind the
+			// camera), and a burst drawn round a point far outside it would wrap into spikes
+			burst_x = JO_MAX(-JO_TV_WIDTH_2, JO_MIN(JO_TV_WIDTH_2, on_screen[X]));
+			burst_y = JO_MAX(-JO_TV_HEIGHT_2, JO_MIN(JO_TV_HEIGHT_2, on_screen[Y]));
 		}
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
@@ -430,10 +509,12 @@ void draw_3d(void)
 	jo_3d_pop_matrix();
 
 	draw_loop_break();
-	// Spectating, you're only watching: no HUD (the gauge, the radar and the status line)
-	if (spectating)
+	// Spectating, you're only watching: no HUD (the gauge, the radar and the status line), nor
+	// while the camera comes down into the cycle: it appears as you take over
+	if (spectating || view_arriving())
 	{
 		debug_3d(false);
+		debug_flight();
 		perf_frame_end();
 		return;
 	}
