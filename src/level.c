@@ -168,8 +168,8 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 	// this kind, but SGL reads them during jo_3d_mesh_draw below, before the next strip changes them
 	if (object_fog_enabled)
 		for (int j = 0; j < count; ++j)
-			strip->mesh.data.attbl[j].gstb = object_fog_quad(fog_levels[j], fog_levels[j + 1],
-															 fog_levels[j + 1], fog_levels[j]);
+			object_fog_set_quad(&strip->mesh.data.attbl[j], fog_levels[j], fog_levels[j + 1], fog_levels[j + 1],
+								fog_levels[j]);
 	strip->mesh.data.nbPoint = (count + 1) * 2;
 	strip->mesh.data.nbPolygon = count;
 	jo_3d_mesh_draw(&strip->mesh);

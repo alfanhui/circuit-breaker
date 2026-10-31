@@ -1,0 +1,22 @@
+# The slowdown along the arena wall with the bot beside (the fps readout: fps is timed by the
+# SH-2's free running counter, vbl is the old vblank count, to compare). The arena shrinks to
+# 4000 across so the walls and the bot are close; termination off. The cycle rides north to
+# just short of the wall, turns right and runs along it. A shot a second.
+wait 28
+press start
+press z
+press x 6
+press start
+wait 3.6
+press right
+shot wall_1
+wait 1
+shot wall_2
+wait 1
+shot wall_3
+wait 1
+shot wall_4
+wait 1
+shot wall_5
+wait 1
+shot wall_6

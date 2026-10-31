@@ -14,9 +14,8 @@
  * rewritten every frame. Quads with no fog at any corner share one table that changes nothing.
  *
  * Usage, when object_fog_enabled:
- *   - quads that may be fogged: ATTR.atrb |= CL_Gouraud, once, at start-up
  *   - every frame, before drawing: object_fog_begin_frame
- *   - for each corner: object_fog_level; for each quad: ATTR.gstb = object_fog_quad(...)
+ *   - for each corner: object_fog_level; for each quad: object_fog_set_quad(&its ATTR, ...)
  */
 
 extern bool object_fog_enabled; // set by object_fog_init: false and nothing here does anything
@@ -37,5 +36,9 @@ int object_fog_level(int x, int y);
 // A Gouraud table for one quad, its corners' levels in the quad's vertex order (Vertices[0..3]).
 // Returns the value for that quad's ATTR.gstb.
 unsigned short object_fog_quad(int level0, int level1, int level2, int level3);
+
+// The same, put in the quad's attribute: its table, and Gouraud shading on only if a corner is
+// fogged. (Off, VDP1 draws the quad far quicker: it matters for the big ones close to the camera)
+void object_fog_set_quad(ATTR *attribute, int level0, int level1, int level2, int level3);
 
 #endif

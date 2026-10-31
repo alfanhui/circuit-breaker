@@ -95,3 +95,16 @@ unsigned short object_fog_quad(int level0, int level1, int level2, int level3)
 	table[3] = colours[level3];
 	return table_gstb(next_table++);
 }
+
+void object_fog_set_quad(ATTR *attribute, int level0, int level1, int level2, int level3)
+{
+	attribute->gstb = object_fog_quad(level0, level1, level2, level3);
+	// Gouraud only where there's fog to shade: with the flag on, VDP1 works out every pixel's
+	// shade even from the table that changes nothing, and on the huge near wall pieces that cost
+	// a quarter of the frame rate (60 fps fell to ~45 riding along the wall). Near pieces are
+	// never fogged (the fog starts hundreds of units out), so they draw as plain textures
+	if ((level0 | level1 | level2 | level3) == 0)
+		attribute->atrb &= ~CL_Gouraud;
+	else
+		attribute->atrb |= CL_Gouraud;
+}
