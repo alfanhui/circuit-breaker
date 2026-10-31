@@ -38,13 +38,18 @@
 #define VDP2_VCNT ((volatile unsigned short *)0x25F8000A)	 // the row counter, as latched
 #define VDP2_CCRR_PHYSICAL 0x05F8010C						 // RBG0's colour calculation ratio
 
-// SCU DMA level 2 registers (SCU manual): the level SGL is least likely to use
-#define SCU_D2R ((volatile unsigned int *)0x25FE0040)  // read address
-#define SCU_D2W ((volatile unsigned int *)0x25FE0044)  // write address
-#define SCU_D2C ((volatile unsigned int *)0x25FE0048)  // bytes per transfer
-#define SCU_D2AD ((volatile unsigned int *)0x25FE004C) // address steps
-#define SCU_D2EN ((volatile unsigned int *)0x25FE0050) // enable
-#define SCU_D2MD ((volatile unsigned int *)0x25FE0054) // mode and start factor
+// SCU DMA level 0 registers (SCU manual). SGL uses all three levels (found by searching
+// LIBSGL.A for their addresses): level 2 to stream PCM sound to the sound CPU while a sample
+// plays (sglI00.o: PCM_Trans), level 1 for its own transfers (DMA_Trans), level 0 only for CD
+// reads (GFS) and DMA_ScuMemCopy, and nothing here reads the CD once the game is running.
+// The fog was on level 2 until 2026-10-31: every sound took the channel over and the fog
+// stopped, flickered or came out shifted until the sound ended
+#define SCU_D0R ((volatile unsigned int *)0x25FE0000)  // read address
+#define SCU_D0W ((volatile unsigned int *)0x25FE0004)  // write address
+#define SCU_D0C ((volatile unsigned int *)0x25FE0008)  // bytes per transfer
+#define SCU_D0AD ((volatile unsigned int *)0x25FE000C) // address steps
+#define SCU_D0EN ((volatile unsigned int *)0x25FE0010) // enable
+#define SCU_D0MD ((volatile unsigned int *)0x25FE0014) // mode and start factor
 #define PHYSICAL(address) ((unsigned int)(address) & 0x07FFFFFF)
 
 // NTSC: 263 rows a frame. The picture is 224 or 240 of them, so at most 39 are blank
@@ -117,6 +122,23 @@ static unsigned int hblanks_before_picture(unsigned int row)
 	return row >= 0x100 ? 0x200 - row : FRAME_ROWS - row; // in vertical sync, or before it
 }
 
+/*
+ * The DMA: one 4-byte entry per HBlank, from the table (the read address moves on, ready for
+ * the next row) to CCRR and CCRLB, 2 bytes apart (CCRLB holds the line colour and back
+ * screen ratios, which this blend doesn't use). The write address goes back each time.
+ * from: the entry the next HBlank copies. Six register writes
+ */
+static void arm_dma(const unsigned int *from)
+{
+	*SCU_D0EN = 0;
+	*SCU_D0R = PHYSICAL(from);
+	*SCU_D0W = VDP2_CCRR_PHYSICAL;
+	*SCU_D0C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
+	*SCU_D0AD = DMA_SCU_R4 | DMA_SCU_W2;
+	*SCU_D0MD = DMA_SCU_DIR | (DMA_SCU_REN << DMA_DXMD_DXRUP) | (DMA_SCU_KEEP << DMA_DXMD_DXWUP) | DMA_SCU_F_HBLK_IN;
+	*SCU_D0EN = 1 << DMA_DXEN_DXEN; // armed: starts on every HBlank from now on
+}
+
 void floor_fade_init(void)
 {
 	// One colour RAM entry: the colour every line blends towards
@@ -145,16 +167,7 @@ void floor_fade_init(void)
 	slLineColDisp(RBG0ON);					// insert the line colour under the floor...
 	slColorCalc(CC_RATE | CC_TOP | RBG0ON); // ...and blend by RBG0's ratio (CCRR), set per row below
 
-	// The DMA: one 4-byte entry per HBlank, from the table (the read address moves on, ready for
-	// the next row) to CCRR and CCRLB, 2 bytes apart (CCRLB holds the line colour and back
-	// screen ratios, which this blend doesn't use). The write address goes back each time
-	*SCU_D2EN = 0;
-	*SCU_D2R = PHYSICAL(dma_table);
-	*SCU_D2W = VDP2_CCRR_PHYSICAL;
-	*SCU_D2C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
-	*SCU_D2AD = DMA_SCU_R4 | DMA_SCU_W2;
-	*SCU_D2MD = DMA_SCU_DIR | (DMA_SCU_REN << DMA_DXMD_DXRUP) | (DMA_SCU_KEEP << DMA_DXMD_DXWUP) | DMA_SCU_F_HBLK_IN;
-	*SCU_D2EN = 1 << DMA_DXEN_DXEN; // armed: starts on every HBlank from now on
+	arm_dma(dma_table);
 }
 
 void floor_fade_vblank(void)
@@ -168,7 +181,9 @@ void floor_fade_vblank(void)
 	left = hblanks_before_picture(current_row());
 	if (left > MAX_BLANK_ROWS)
 		return; // still in the picture (shouldn't happen in a VBlank callback): leave it running
-	*SCU_D2R = PHYSICAL(&dma_table[MAX_BLANK_ROWS - left]);
+	// The whole channel, not just its read address: a CD read (GFS) sets up this same level for
+	// itself and leaves it that way. Six register writes a frame, so nothing can stop the fog for good
+	arm_dma(&dma_table[MAX_BLANK_ROWS - left]);
 }
 
 void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
