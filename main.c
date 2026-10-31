@@ -119,35 +119,56 @@ void initCamera(jo_camera *curCam)
 // The text layer keeps its contents, and jo_printf formatting is costly, so refresh 5 times a second
 #define DEBUG_TEXT_INTERVAL 10
 
-void debug_3d(void)
+/*
+ * The debug readout, top left, 5 lines:
+ *     fps 60 cpu 15% pk 28% late 0       frame rate, master SH-2 load (average, worst) and
+ *                                        vblanks missed since boot (utils/perf.h)
+ *     poly 81/78 vert 92                 polygons sent to SGL / passed on to VDP1, vertices
+ *     1ST 0 -5592 N boost 180            the view, the cycle (or the debug camera) and its gauge
+ *     spd 7 arena 16000 NOTERM GHOST     tuning, and any debug switch that's on: NOTERM (debug
+ *                                        camera Z), GHOST (Y: no collision), LIN (Z: linear
+ *                                        turn camera), SLOW (slow motion)
+ *     bot -2000 -7011 N boost 72         the bot
+ * show: false clears it (the prologue's spectator view, a "main menu", shows none)
+ */
+#define DEBUG_LINES 5
+#define DEBUG_BLANK "                                        " // a whole row: 40 characters
+
+void debug_3d(bool show)
 {
 	static const char compass[4] = {'N', 'E', 'S', 'W'};
 	static int frames_until_refresh = 0;
+	static bool shown = false;
 
+	if (!show)
+	{
+		if (shown)
+			for (int row = 0; row < DEBUG_LINES; ++row)
+				jo_printf(0, row, DEBUG_BLANK);
+		shown = false;
+		frames_until_refresh = 0; // straight back when it's shown again
+		return;
+	}
+	shown = true;
 	if (--frames_until_refresh > 0)
 		return;
 	frames_until_refresh = DEBUG_TEXT_INTERVAL;
 
-	jo_printf(20, 0, "Compass: %c", compass[player1.bike.heading]);
-	jo_printf(20, 1, "Boost: %d  ", player1.bike.gauge);
-	jo_printf(0, 0, "x %d    ", player1.bike.position.x);
-	jo_printf(0, 1, "y %d    ", player1.bike.position.y);
-	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
-	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1.wall));
-	jo_printf(0, 4, "%s %s  ", debug_camera ? "DEBUG CAM" : spectating ? "SPECTATE" : (first_person ? "1ST" : "ISO"),
-			  debug_no_termination ? "NO TERM" : "       "); // debug camera Z: crashes don't terminate
-	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bike.bounded ? "ON" : "OFF", // Y; Z: turn camera
-			  view_linear_turn ? "LINEAR" : "EASE", debug_slow_motion ? "SLOW" : "    ");
-	jo_printf(0, 6, "speed %d  arena %d   ", cycle_cruise_speed(), 2 * arena_half()); // tuning: B/C and L/R
-
-	//FPS and 3D counts
-	jo_printf(0, 7, "polygons %d   ", jo_3d_get_polygon_count());
-	jo_printf(0, 8, "displayed %d   ", perf_displayed_polygons); // after SGL drops off-screen ones
-	jo_printf(0, 9, "vertices %d   ", jo_3d_get_vertices_count());
-	jo_printf(0, 10, "fps %d  cpu %d%% peak %d%%  ", perf_fps, perf_cpu_average, perf_cpu_peak);
-	jo_printf(0, 11, "late %d  ", perf_late_frames);
-	jo_printf(0, 12, "bot %d %d %c boost %d   ", bot1.bike.position.x, bot1.bike.position.y, compass[bot1.bike.heading],
-			  bot1.bike.gauge); // its gauge falls while it boosts
+	// Each line ends in spaces, to cover the end of a longer one printed there before
+	jo_printf(0, 0, "fps %d cpu %d%% pk %d%% late %d     ", perf_fps, perf_cpu_average, perf_cpu_peak,
+			  perf_late_frames);
+	jo_printf(0, 1, "poly %d/%d vert %d     ", jo_3d_get_polygon_count(), perf_displayed_polygons,
+			  jo_3d_get_vertices_count());
+	if (debug_camera)
+		jo_printf(0, 2, "CAM %d %d %d          ", view_x, view_y, view_z);
+	else
+		jo_printf(0, 2, "%s %d %d %c boost %d     ", first_person ? "1ST" : "ISO", player1.bike.position.x,
+				  player1.bike.position.y, compass[player1.bike.heading], player1.bike.gauge);
+	jo_printf(0, 3, "spd %d arena %d%s%s%s%s     ", cycle_cruise_speed(), 2 * arena_half(),
+			  debug_no_termination ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
+			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
+	jo_printf(0, 4, "bot %d %d %c boost %d     ", bot1.bike.position.x, bot1.bike.position.y,
+			  compass[bot1.bike.heading], bot1.bike.gauge);
 }
 
 void draw_hud(void)
@@ -412,7 +433,7 @@ void draw_3d(void)
 	// Spectating, you're only watching: no HUD (the gauge, the radar and the status line)
 	if (spectating)
 	{
-		debug_3d();
+		debug_3d(false);
 		perf_frame_end();
 		return;
 	}
@@ -432,7 +453,7 @@ void draw_3d(void)
 		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
 	}
 	draw_status();
-	debug_3d();
+	debug_3d(true);
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text
 }

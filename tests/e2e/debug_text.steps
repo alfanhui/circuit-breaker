@@ -1,0 +1,16 @@
+# The debug readout (main.c, debug_3d): 5 lines top left in play; none on the spectator view;
+# back once the loop is broken.
+wait 28
+shot debug_play
+press start
+press a
+press start
+wait 1
+shot debug_spectate
+press left
+wait 0.5
+press left
+wait 0.5
+press left
+wait 1
+shot debug_after
