@@ -74,6 +74,22 @@ static const floor_fade_view iso_view = {
 	.glow_rows = 0,
 };
 
+// Must match view.c's spectator camera: 25 degrees below level, 9000 from the cycle along its
+// line of sight (3804 up, 8157 back), through a 30 degree telephoto FOV. The top of the screen
+// sees the floor ~14800 away; the fog starts past the cycle, so the play stays clear and the far
+// floor dims into the dark, as if the arena went on for ever
+static const floor_fade_view spectator_view = {
+	.centre_row = JO_TV_HEIGHT_2,
+	.tilt = 466,		 // 25 degrees below level: tan 25 = 0.466
+	.eye_height = 3804,	 // 9000 x sin 25
+	.focal = 597,		 // 30 degree FOV: 160 / tan(15)
+	.fade_start = 9700,	 // 1500 past the cycle (8157 away along the floor)
+	.fade_end = 20000,	 // past the top of the screen: about half strength there
+	.glow_rows = 0,
+};
+
+static const floor_fade_view *const views[] = {&first_person_view, &iso_view, &spectator_view};
+
 static jo_palette fog_palette;
 static unsigned short *line_table; // one colour RAM number per screen line, in VDP2 VRAM
 
@@ -115,7 +131,7 @@ void floor_fade_init(void)
 	line_table = (unsigned short *)jo_vdp2_malloc(JO_VDP2_RAM_CELL_RBG0, JO_TV_HEIGHT * sizeof(unsigned short));
 	for (int row = 0; row < JO_TV_HEIGHT; ++row)
 		line_table[row] = fog_colour; // the same colour on every row: only the ratio varies
-	floor_fade_set_first_person(false);
+	floor_fade_set_view(FLOOR_VIEW_ISO);
 
 	// jo sets up the floor's rotation coefficient table with K_LINECOL, which makes VDP2 take
 	// the floor's line colour from each coefficient (all 0 = black) instead of our per-line
@@ -155,9 +171,9 @@ void floor_fade_vblank(void)
 	*SCU_D2R = PHYSICAL(&dma_table[MAX_BLANK_ROWS - left]);
 }
 
-void floor_fade_distances(bool first_person, int *fade_start, int *fade_end)
+void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
 {
-	const floor_fade_view *view = first_person ? &first_person_view : &iso_view;
+	const floor_fade_view *view = views[view_index];
 
 	*fade_start = view->fade_start;
 	*fade_end = view->fade_end;
@@ -180,9 +196,9 @@ static void rebuild(const floor_fade_view *view)
 	}
 }
 
-void floor_fade_set_first_person(bool first_person)
+void floor_fade_set_view(int view)
 {
-	rebuild(first_person ? &first_person_view : &iso_view);
+	rebuild(views[view]);
 }
 
 void floor_fade_set_first_person_tilt(int tilt)

@@ -124,8 +124,30 @@ static void a_dead_riders_trail_sinks_and_is_removed(void)
 	CHECK_EQ(0, rider_sink(&r)); // and stays gone
 }
 
+// A removed rider is gone at once: dead, no trail to draw or hit, and nothing to sink.
+// rider_init brings it back whole
+static void a_removed_rider_is_gone_at_once(void)
+{
+	rider r;
+
+	setup();
+	rider_init(&r, 0, 0, HEADING_NORTH);
+	for (int i = 0; i < 20; ++i)
+		step(&r, LEFT); // a few corners in its trail
+	rider_remove(&r);
+	CHECK_EQ(0, r.alive);
+	CHECK_EQ(0, r.trail_height);
+	CHECK_EQ(0, trail_segment_count(&r.wall));
+	CHECK_EQ(0, rider_sink(&r));
+
+	rider_init(&r, 0, 0, HEADING_NORTH);
+	CHECK_EQ(1, r.alive);
+	CHECK_EQ(TRAIL_HEIGHT, r.trail_height);
+}
+
 void run_rider_tests(void)
 {
+	RUN(a_removed_rider_is_gone_at_once);
 	RUN(a_dead_riders_trail_sinks_and_is_removed);
 	RUN(it_moves_and_the_trail_follows);
 	RUN(a_turn_pins_a_corner);

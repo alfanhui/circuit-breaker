@@ -8,6 +8,8 @@
 #   keydown BUTTON      press a button and keep it down (shots can be taken meanwhile)...
 #   keyup BUTTON        ...until this lets it go
 #   shot NAME           save the screen to /out/NAME.png
+#   record_sound        (anywhere in the script) record the game's sound to /out/sound.wav: the
+#                       container has no speakers, so it plays to SDL's silent "dummy" output
 # Buttons: up down left right a b c x y z l r start  (Mednafen's default keyboard mapping)
 set -e
 export DISPLAY=:99 MEDNAFEN_HOME=/tmp/mednafen PATH="$PATH:/usr/games"
@@ -26,7 +28,14 @@ key_for() {
 
 Xvfb :99 -screen 0 1024x768x24 >/dev/null 2>&1 &
 sleep 1
-mednafen -sound 0 -video.driver softfb -video.fs 0 \
+sound="-sound 0"
+if grep -q '^record_sound' "$1"; then
+	export SDL_AUDIODRIVER=dummy
+	rm -f /out/sound.wav # Mednafen won't record over an old one
+	sound="-sound 1 -sound.driver sdl -soundrecord /out/sound.wav"
+fi
+# $sound is several options, so it's left unquoted to split into them
+mednafen $sound -video.driver softfb -video.fs 0 \
 	-ss.bios_jp /bios/bios.bin -ss.bios_na_eu /bios/bios.bin -ss.bios_sanity 0 \
 	-ss.region_autodetect 0 -ss.region_default jp \
 	/game/game.cue >/out/mednafen.log 2>&1 &
@@ -38,7 +47,7 @@ xdotool windowfocus "$window"
 
 while read -r command arg1 arg2; do
 	case "$command" in
-	'' | '#'*) ;;
+	'' | '#'* | record_sound) ;;
 	wait) sleep "$arg1" ;;
 	press)
 		k=$(key_for "$arg1")

@@ -68,6 +68,7 @@ enum
 	PART_MAP_TRAIL,							   // one per trail colour, MAP_TRAILS_MAX of them
 	PART_MAP_FILL = PART_MAP_TRAIL + MAP_TRAILS_MAX, // one per band of the glass, MAP_STRIPS of them
 	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
+	PART_BURST,										 // the prologue's burst of light
 	PART_COUNT
 };
 
@@ -175,6 +176,7 @@ void hud_init(void)
 	for (int k = 0; k < MAP_STRIPS; ++k)
 		part_sprites[PART_MAP_FILL + k] = make_map_strip(k);
 	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
+	part_sprites[PART_BURST] = make_part(JO_COLOR_RGB(255, 255, 255));
 	minimap_init();
 	prepare_map_disc();
 }
@@ -359,4 +361,47 @@ void hud_draw_boost(const cycle *c)
 				draw_gauge_piece(PART_BACK, side, k, lit - start, 16);
 			}
 		}
+}
+
+/*
+ * The prologue's burst of light (game/loop_break.h): BURST_RAYS rays round (cx, cy), from inner to
+ * outer pixels out, every other one shorter, like the star of a hit in The Wind Waker. Each ray
+ * is a thin spike: BURST_WIDTH across at its inner end, to a point at its outer end (a quad with
+ * its two outer corners together).
+ * The directions are a table, x64 (the ray's length then >> 6): no trigonometry at runtime
+ */
+#define BURST_RAYS 12
+#define BURST_WIDTH 2 // pixels either side of the ray at its inner end
+// Deeper than the rest of the HUD: SGL drops anything nearer than its screen distance / 128
+// (slZdspLevel 7), and through the spectator camera's 30 degree FOV that's 160 / tan 15 / 128 =
+// 4.7. At the gauge's 3 the burst vanished while spectating. Still far nearer than the world
+#define BURST_DEPTH (6 * JO_FIXED_1)
+static const signed char burst_directions[BURST_RAYS][2] = {
+	// cos, sin x 64, every 30 degrees, starting 15 degrees round so none is level or upright
+	{62, 17}, {45, 45}, {17, 62}, {-17, 62}, {-45, 45}, {-62, 17},
+	{-62, -17}, {-45, -45}, {-17, -62}, {17, -62}, {45, -45}, {62, -17},
+};
+
+void hud_draw_burst(int cx, int cy, int inner, int outer)
+{
+	for (int i = 0; i < BURST_RAYS; ++i)
+	{
+		const int dx = burst_directions[i][0];
+		const int dy = burst_directions[i][1];
+		const int reach = (i & 1) ? (outer * 3) >> 2 : outer; // every other ray three quarters as long
+		const int start = (i & 1) ? (inner * 3) >> 2 : inner;
+		// Across the ray: its direction turned 90 degrees, x BURST_WIDTH / 64
+		const int wx = (-dy * BURST_WIDTH) >> 6;
+		const int wy = (dx * BURST_WIDTH) >> 6;
+		const int ix = cx + ((dx * start) >> 6);
+		const int iy = cy + ((dy * start) >> 6);
+		const int ox = cx + ((dx * reach) >> 6);
+		const int oy = cy + ((dy * reach) >> 6);
+
+		if (reach <= start)
+			continue;
+		// Corners: inner left, outer, outer, inner right; at least a pixel wide where it starts
+		draw_corners(PART_BURST, ix + wx - (wx == 0), iy + wy - (wy == 0), ox, oy, ox, oy, ix - wx + (wx == 0),
+					 iy - wy + (wy == 0), BURST_DEPTH);
+	}
 }

@@ -27,13 +27,29 @@ The prologue hides in plain sight, as the attract mode: the demo every arcade-st
 on its own before you press anything. A cycle runs the arena by itself, on the same route,
 forever. It's the loop.
 
-1. The player presses a button, thinking it's "press start".
-2. The cycle turns, off its route. That's the CPU's first free decision: its first act of
-   consciousness is your first input.
-3. The game carries straight on into the arena, as if nothing happened.
+There's no title screen or main menu. The game starts as a spectator's view of the arena, far
+off, high and shallow, as if you were watching someone else play at the arcades: a lone cycle
+running the same route round an endless floor, no walls, no HUD. Each lap its trail sinks into
+the floor and the lap begins again. No bot: in the loop the CPU is alone.
 
-No words are needed, and first-time players won't notice. Those who come back will. The title
-gets a second meaning: you break the loop, not just the circuit.
+1. The player presses a direction, thinking it starts the game. The cycle wavers, and keeps
+   to its route.
+2. Again: it wavers harder. The loop is fighting back.
+3. The third press forces the choice. The cycle turns off its route, and something visibly
+   breaks: the picture jolts and glitches, and the camera falls out of the stands into the
+   cycle, 1st person, with no cut. That's the CPU's first free decision: its first act of
+   consciousness is your input, forced through three times.
+4. The game carries on into the arena: the walls, the HUD and the rival appear, as if this
+   had been the game all along.
+
+No words are needed. It must be obvious that something strange happened (the loop broke, and
+the SH-2 now chooses for itself), even if first-time players don't yet know what it means.
+Those who come back will. The title gets a second meaning: you break the loop, not just the
+circuit.
+
+**Player 2** joins without a menu: a second cycle in player 2's colour waits at the edge of
+the arena, idling. A press on pad 2, while spectating or in the arena level, brings it in, and
+the game is multiplayer from there.
 
 ## The disguise: it starts as a snake game
 

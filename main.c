@@ -30,6 +30,7 @@
 #include "src/floor_fade_vdp2.h"
 #include "src/object_fog_vdp1.h"
 #include "src/hud.h"
+#include "src/sound.h"
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
 // Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
@@ -56,6 +57,10 @@
 #define FLOOR_TEXELS 256
 #define FLOOR_TILE_UNITS 125
 #define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
+// Spectating (view.c), the floor is drawn this many times larger: 1000 unit tiles. From 6000
+// away a 125 unit tile is ~12 pixels, and its thin lines are sampled so sparsely (VDP2 has no
+// mipmaps) that the grid broke up into dashes. Nobody's riding yet, so the ruler can change
+#define FLOOR_SPECTATE_SHIFT 3
 #define PLAYER_HALF 25
 #define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
 #define TRAIL_HEAD_GAP PLAYER_HALF // the wall starts at the back of the cycle
@@ -73,6 +78,11 @@ bool enable_trails = true;
 
 static trail_mesh player1_trail_mesh;
 static trail_mesh bot1_trail_mesh;
+static trail_mesh attract_mesh; // the prologue loop's message, every stroke (input.c)
+// The cycle's place on screen this frame, in pixels from the middle (+y down): for the burst of
+// light when a press hits the prologue's loop (draw_loop_break)
+static int burst_x;
+static int burst_y;
 // 1st person: the trails near the camera that can hide parts of others behind them (game/trail_occlusion.h)
 static trail_occluders occluders;
 
@@ -124,7 +134,7 @@ void debug_3d(void)
 	jo_printf(0, 1, "y %d    ", player1.bike.position.y);
 	jo_printf(0, 2, "view %d %d %d    ", view_x, view_y, view_z);
 	jo_printf(0, 3, "segments %d  ", trail_segment_count(&player1.wall));
-	jo_printf(0, 4, "%s %s  ", debug_camera ? "DEBUG CAM" : (first_person ? "1ST" : "ISO"),
+	jo_printf(0, 4, "%s %s  ", debug_camera ? "DEBUG CAM" : spectating ? "SPECTATE" : (first_person ? "1ST" : "ISO"),
 			  debug_no_termination ? "NO TERM" : "       "); // debug camera Z: crashes don't terminate
 	jo_printf(0, 5, "bounds %s  turn %s %s  ", player1.bike.bounded ? "ON" : "OFF", // Y; Z: turn camera
 			  view_linear_turn ? "LINEAR" : "EASE", debug_slow_motion ? "SLOW" : "    ");
@@ -248,6 +258,37 @@ static void draw_status(void)
 		hud_draw_text_cursor(column + count, STATUS_ROW);
 }
 
+
+// SGL's world-to-screen projection (sl_def.h); jo's headers don't declare it
+extern FIXED slConvert3Dto2D(FIXED pos[XYZ], Sint32 ans[XY]);
+
+/*
+ * The presses breaking the prologue's loop (game/loop_break.h): the burst of light round the
+ * cycle, and the whole screen flashing towards white. The flash is VDP2's colour offset: every
+ * screen's colours (the floor, the sprites, the text) have the same amount added, by the hardware,
+ * with nothing more to draw. It's turned off again once the flash is over
+ */
+static void draw_loop_break(void)
+{
+	static bool flashing = false;
+	int flash = loop_break_flash(&breaker);
+	int inner;
+	int outer;
+
+	if (flash > 0)
+	{
+		jo_set_screen_color_filter_a(JO_ALL_SCROLL_SCREEN, flash, flash, flash);
+		flashing = true;
+	}
+	else if (flashing)
+	{
+		jo_disable_screen_color_filter(JO_ALL_SCROLL_SCREEN);
+		flashing = false;
+	}
+	if (loop_break_burst(&breaker, &inner, &outer))
+		hud_draw_burst(burst_x, burst_y, inner, outer);
+}
+
 void draw_3d(void)
 {
 	// Terminated: only the terminal text. The world isn't drawn at all
@@ -296,12 +337,16 @@ void draw_3d(void)
 		//  FLOOR
 		jo_3d_push_matrix();
 		{
-			slScale(FLOOR_SCALE, FLOOR_SCALE, JO_FIXED_1); // only x and y: the plane is flat
+			const FIXED floor_scale = spectating ? FLOOR_SCALE << FLOOR_SPECTATE_SHIFT : FLOOR_SCALE;
+
+			slScale(floor_scale, floor_scale, JO_FIXED_1); // only x and y: the plane is flat
 			jo_background_3d_plane_a_draw(true);
 		}
 		jo_3d_pop_matrix();
 
-		draw_arena_walls(&visible_walls, &player1.bike.position, clip, !first_person && !debug_camera);
+		// Spectating: no walls, so the arena seems to go on for ever (view.c)
+		if (!spectating)
+			draw_arena_walls(&visible_walls, &player1.bike.position, clip, !first_person && !debug_camera);
 
 		if (enable_trails)
 		{
@@ -325,10 +370,37 @@ void draw_3d(void)
 			if (bot1.trail_height > 0)
 				trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, bot1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
 								&visible_trails, clip, hide);
+			// The prologue's loop: the finished strokes of its message, each as tall as its word
+			// stands (sinking once it's spelt). All of them in one mesh, drawn once (trail_render.h)
+			trail_mesh_begin(&attract_mesh);
+			for (int i = 0; i < attract_stroke_count; ++i)
+			{
+				int height = attract_word_height[attract_stroke_word[i]];
+
+				if (height > 0)
+					trail_mesh_add(&attract_mesh, &attract_strokes[i], height, 0, player1.bike.position,
+								   &visible_trails, clip, hide);
+			}
+			trail_mesh_end(&attract_mesh);
 		}
 
 		if (!first_person)
 			draw_cycle(player1.bike.position); // in 1st person the camera is inside it
+		// Where the cycle is on screen, for the burst of light round it (draw_loop_break): SGL
+		// works it out through the camera, so it has to be asked in here. In 1st person the
+		// camera's inside it: the middle of the screen
+		burst_x = 0;
+		burst_y = 0;
+		if (spectating)
+		{
+			FIXED middle[XYZ] = {jo_int2fixed(player1.bike.position.x), jo_int2fixed(player1.bike.position.y),
+								 jo_int2fixed(PLAYER_HALF)};
+			Sint32 on_screen[XY];
+
+			slConvert3Dto2D(middle, on_screen);
+			burst_x = on_screen[X];
+			burst_y = on_screen[Y];
+		}
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
 		if (bot1.alive && (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
@@ -336,6 +408,14 @@ void draw_3d(void)
 	}
 	jo_3d_pop_matrix();
 
+	draw_loop_break();
+	// Spectating, you're only watching: no HUD (the gauge, the radar and the status line)
+	if (spectating)
+	{
+		debug_3d();
+		perf_frame_end();
+		return;
+	}
 	hud_draw_boost(&player1.bike); // on top of the world: screen pixels, no perspective
 	if (!debug_camera) // both views: in iso it turns with the iso camera (hud.h)
 	{
@@ -496,6 +576,7 @@ void jo_main(void)
 
 	load_arena_textures();
 	hud_init();
+	sound_init();
 	// After the textures (it checks they leave room for its tables), before the walls and trails
 	// (they set their quads up for fog only if it's on)
 	if (WALL_TRAIL_FOG)
@@ -505,6 +586,7 @@ void jo_main(void)
 	load_player_model();
 	trail_mesh_init(&player1_trail_mesh, JO_COLOR_RGB(0, 220, 255));
 	trail_mesh_init(&bot1_trail_mesh, JO_COLOR_RGB(255, 120, 0)); // the radar's second colour (hud.c)
+	trail_mesh_init(&attract_mesh, JO_COLOR_RGB(0, 220, 255)); // the player's: it's writing it
 
 	init_3d_planes();
 	init_terminal(); // after every image palette, so its bank is one of its own

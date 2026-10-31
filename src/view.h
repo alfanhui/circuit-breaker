@@ -15,6 +15,9 @@
  */
 
 extern bool first_person;
+// The prologue's camera: the arena from far off, as a spectator (view.c). It wins over the
+// other two; view_init applies a change
+extern bool spectating;
 
 // Camera focus in world space and the floor height relative to the camera (old pos.x/y/z)
 extern int view_x;
@@ -49,6 +52,9 @@ void view_look(int direction);
 // Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
 // In iso it's half the size: the whole arena swinging is too much
 void view_shake(int strength);
+// Spectating: move the camera dx along x at once, with the cycle (the prologue's loop jumping
+// back to its start, input.c), so the jump doesn't show as a pan
+void view_spectate_shift(int dx);
 void view_follow(const cycle *c);
 void view_push_world_matrix(void);
 

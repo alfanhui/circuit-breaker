@@ -20,6 +20,8 @@ typedef struct
 	POINT points[TRAIL_DRAW_COLUMNS_MAX * 2]; // bottom and top of every column
 	POLYGON polygons[TRAIL_DRAW_PIECES_MAX];
 	ATTR attributes[TRAIL_DRAW_PIECES_MAX];
+	int columns_used; // between trail_mesh_begin and _end: what's filled so far this frame
+	int pieces_used;
 } trail_mesh;
 
 void trail_mesh_init(trail_mesh *m, jo_color color);
@@ -31,5 +33,15 @@ void trail_mesh_init(trail_mesh *m, jo_color color);
 // height: how tall it stands (TRAIL_HEIGHT; less while a dead rider's trail sinks, rider.h)
 void trail_mesh_draw(trail_mesh *m, const trail *t, int height, int head_gap, world_point focus,
 					 const world_rect *view, const wall_clip_camera *camera, const trail_occluders *occluders);
+
+// Several trails as one mesh, drawn with a single slPutPolygon: begin, add each (the same
+// arguments as trail_mesh_draw), then end. A mesh mustn't be filled again for another draw in
+// the same frame: SGL can still be reading it (the prologue's message drew each of its strokes
+// through one mesh, and some came out as spikes and stray diagonals). Up to
+// TRAIL_DRAW_COLUMNS_MAX columns between them; past that, the rest aren't drawn
+void trail_mesh_begin(trail_mesh *m);
+void trail_mesh_add(trail_mesh *m, const trail *t, int height, int head_gap, world_point focus,
+					const world_rect *view, const wall_clip_camera *camera, const trail_occluders *occluders);
+void trail_mesh_end(trail_mesh *m);
 
 #endif

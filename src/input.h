@@ -6,6 +6,7 @@
 #include "game/rider.h"
 #include "game/game_state.h"
 #include "game/status_message.h"
+#include "game/loop_break.h"
 #include "game/arena.h"
 #include "game/trail.h"
 #include "view.h"
@@ -25,6 +26,14 @@ extern bool debug_camera;
 extern bool debug_slow_motion;
 // Debug (debug camera, Z): a crash stops the cycle but doesn't terminate the player
 extern bool debug_no_termination;
+// The prologue's loop (input.c): the strokes of "SEGA SATURN SH-2" written so far, each with
+// its word, and how tall each word's strokes stand (they sink once it's spelt)
+extern trail attract_strokes[];
+extern unsigned char attract_stroke_word[];
+extern int attract_stroke_count;
+extern unsigned char attract_word_height[];
+// The presses breaking the loop: their burst of light and flash are drawn in main.c
+extern loop_break breaker;
 
 void init_players(void);
 void debug_pad1(void);

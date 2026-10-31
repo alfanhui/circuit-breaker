@@ -22,6 +22,8 @@ void run_trail_occlusion_tests(void);
 void run_game_state_tests(void);
 void run_camera_shake_tests(void);
 void run_status_message_tests(void);
+void run_attract_route_tests(void);
+void run_loop_break_tests(void);
 
 int main(void)
 {
@@ -44,6 +46,8 @@ int main(void)
 	run_game_state_tests();
 	run_camera_shake_tests();
 	run_status_message_tests();
+	run_attract_route_tests();
+	run_loop_break_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

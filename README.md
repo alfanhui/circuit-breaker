@@ -61,4 +61,4 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
 - B / C: cruise speed down / up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)
-- Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NO TERM" in the debug text, for testing)
+- Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NO TERM" in the debug text, for testing; A: the prologue's spectator camera on / off, when you leave the debug camera)

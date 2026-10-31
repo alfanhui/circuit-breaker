@@ -15,6 +15,13 @@ void rider_kill(rider *r)
 	r->alive = 0;
 }
 
+void rider_remove(rider *r)
+{
+	r->alive = 0;
+	r->trail_height = 0;
+	trail_reset(&r->wall, r->bike.position); // a lone point: no segments to draw or hit
+}
+
 int rider_sink(rider *r)
 {
 	if (r->alive || r->trail_height == 0)

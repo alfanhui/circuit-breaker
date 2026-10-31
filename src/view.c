@@ -50,7 +50,52 @@
 // 644 / sqrt(2) = 456 on each axis. Change ISO_Z or ISO_RX and this needs working out again.
 #define ISO_FOLLOW_OFFSET 456
 
+/*
+ * Spectating (the prologue's camera): the arena seen from far off, as if watching someone else
+ * play at the arcades. High, shallow and telephoto: 9000 away along its line of sight, 25 degrees
+ * below level, through a 30 degree FOV. A narrow FOV from far away flattens the depth, like a
+ * long lens; a wide one from close up would look like iso. The floor stretches off into the fog
+ * with no walls, as if it went on for ever.
+ * It faces 30 degrees east of north and keeps that angle, so the message the cycle writes
+ * across the floor (input.c) reads left to right, leaning a little like italics. Trails are walls
+ * with no thickness: facing straight north, every north-south stroke was edge-on, a 1 pixel
+ * hairline, and the letters read as dashes. 30 degrees round shows both kinds of stroke a face;
+ * turned east (not west), the words already written are on the near side, bigger.
+ * (It used to circle round the cycle, but then the cycle seemed to drift sideways and curve,
+ * though it ran straight. 6000 away was too close to feel like watching from the stands.)
+ * It pans after the cycle, easing a share of the way each frame, rather than sitting on it: the
+ * cycle goes back and forth inside each letter, and the camera following that would jitter.
+ *
+ *         camera
+ *           *  .
+ *      3804 |      .  9000 (line of sight)
+ *           |  25 deg  .
+ *    floor  +-------------- cycle
+ *                8157
+ */
+#define SPECTATE_FOV 30
+#define SPECTATE_HEIGHT 3804		// 9000 x sin 25
+#define SPECTATE_BACK 8157			// 9000 x cos 25: how far behind the cycle along the floor
+#define SPECTATE_RX DEGtoANG(65.0)	// from straight down: 25 degrees below level
+#define SPECTATE_RZ DEGtoANG(30.0)	// 30 degrees round from north towards east (a right turn)
+// Where it stands from the cycle: SPECTATE_BACK behind it, the way it faces. Facing is
+// (-sin, -cos) (heading 0 is north, -y), so behind is (+sin 30, +cos 30) x 8157. Worked out
+// here, as ISO_FOLLOW_OFFSET is, so there's no trigonometry at runtime: change RZ and redo them
+#define SPECTATE_BACK_X 4079 // 8157 x sin 30
+#define SPECTATE_BACK_Y 7064 // 8157 x cos 30
+// It looks at a point SPECTATE_LEAD_X west (+x) of the cycle, not at the cycle: the message runs
+// east, so what's been written is west of it. The cycle rides on the right of the screen, with
+// the word so far laid out on the left (looking at the cycle, half the screen was empty floor)
+#define SPECTATE_LEAD_X 1200
+// What's drawn, round the point it looks at (view_visible_rect): a little more than the screen
+// shows along the message, and the message's height with room to spare across it
+#define SPECTATE_VIEW_X 3000
+#define SPECTATE_VIEW_Y 1500
+#define SPECTATE_PAN_SHARE 1		// sixteenths of the way to the cycle each frame
+#define SPECTATE_PAN_MIN_STEP 1
+
 bool first_person = true; // the game starts in 1st person; Down switches to iso
+bool spectating = false;  // the prologue's far-off camera (above); it wins over the other two
 bool view_linear_turn = false;
 int view_x;
 int view_y;
@@ -96,8 +141,19 @@ static void apply_view(const cycle *c)
 {
 	int fade_start;
 	int fade_end;
+	int floor_view;
 
-	if (first_person)
+	if (spectating)
+	{
+		jo_3d_perspective_angle(SPECTATE_FOV);
+		view_z = -SPECTATE_HEIGHT;
+		view_rx = SPECTATE_RX;
+		view_rz = SPECTATE_RZ;
+		view_x = c->position.x + SPECTATE_LEAD_X + SPECTATE_BACK_X; // straight there, not easing in from wherever it was
+		view_y = c->position.y + SPECTATE_BACK_Y;
+		floor_view = FLOOR_VIEW_SPECTATOR;
+	}
+	else if (first_person)
 	{
 		jo_3d_perspective_angle(FIRST_PERSON_FOV);
 		fov_now = FIRST_PERSON_FOV_ANGLE;
@@ -106,7 +162,8 @@ static void apply_view(const cycle *c)
 		view_rx = FIRST_PERSON_RX;
 		heading_current = heading_target;
 		look_now = look_target;
-		fog_tilt = 0; // floor_fade_set_first_person (below) builds it level
+		fog_tilt = 0; // floor_fade_set_view (below) builds it level
+		floor_view = FLOOR_VIEW_FIRST_PERSON;
 	}
 	else
 	{
@@ -114,10 +171,11 @@ static void apply_view(const cycle *c)
 		view_z = ISO_Z;
 		view_rx = ISO_RX;
 		view_rz = ISO_RZ;
+		floor_view = FLOOR_VIEW_ISO;
 	}
-	floor_fade_set_first_person(first_person); // each camera sees the floor at different distances
+	floor_fade_set_view(floor_view); // each camera sees the floor at different distances
 	// Walls and trails fade over the same distances as the floor, so they fade together
-	floor_fade_distances(first_person, &fade_start, &fade_end);
+	floor_fade_distances(floor_view, &fade_start, &fade_end);
 	object_fog_set_distances(fade_start, fade_end);
 	view_follow(c);
 }
@@ -139,6 +197,23 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 {
 	view_cull_mode mode;
 
+	if (spectating && !free_camera)
+	{
+		// Only round the point it's looking at (the middle of the screen): SPECTATE_VIEW_X along
+		// the message either way, SPECTATE_VIEW_Y across it. Not "everything in range": through
+		// the narrow FOV, a stroke thousands of units to the side lands over 1000 pixels off the
+		// screen's centre, past what VDP1 can hold, and was drawn as a spike. Every corner of
+		// this box stays within ~250 pixels of the centre; the trails are cut to it
+		world_rect r;
+		int look_x = view_x - SPECTATE_BACK_X;
+		int look_y = view_y - SPECTATE_BACK_Y;
+
+		r.x_min = (short)(look_x - SPECTATE_VIEW_X);
+		r.x_max = (short)(look_x + SPECTATE_VIEW_X);
+		r.y_min = (short)(look_y - SPECTATE_VIEW_Y);
+		r.y_max = (short)(look_y + SPECTATE_VIEW_Y);
+		return r;
+	}
 	if (free_camera)
 		mode = VIEW_CULL_ALL;
 	else if (!first_person)
@@ -157,7 +232,7 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 	// Where the camera faces now: mid-turn, looking aside or shaking
 	ANGLE yaw = (ANGLE)(heading_current + look_now + shake_yaw);
 
-	if (free_camera || !first_person)
+	if (free_camera || spectating || !first_person)
 		return false;
 	out->eye = c->position;
 	// Heading 0 faces north (-y) and turning right goes east (-x): forward = (-sin, -cos).
@@ -178,7 +253,11 @@ bool view_fog_camera(bool free_camera, world_point *eye, int *forward_x, int *fo
 	// Heading 0 faces north (-y), turning right goes east (-x): forward = (-sin, -cos), x1024
 	*forward_x = -(slSin(view_rz) >> 6);
 	*forward_y = -(slCos(view_rz) >> 6);
-	return !free_camera; // the debug camera looks anywhere, so the fog's distances don't fit it
+	// No fog for the debug camera: it looks anywhere, so the fog's distances don't fit it.
+	// None spectating either: the prologue's message stands about where the floor's fog only
+	// begins, and with the fog's Gouraud shading on, its strokes going off the left of the screen
+	// (from that far, through the narrow FOV) were drawn as spikes. Without it they're clean
+	return !free_camera && !spectating;
 }
 
 void view_turn_left(void)
@@ -201,13 +280,28 @@ void view_shake(int strength)
 	camera_shake_start(&shake, strength);
 }
 
+void view_spectate_shift(int dx)
+{
+	view_x += dx;
+}
+
 void view_follow(const cycle *c)
 {
 	int shake_pitch;
 
 	// This frame's jolt (0, 0 when still), then it dies away a little
 	camera_shake_step(&shake, &shake_yaw, &shake_pitch);
-	if (first_person)
+	if (spectating)
+	{
+		// Easing after the cycle, from SPECTATE_BACK behind it
+		view_x = ease_out_step(view_x, c->position.x + SPECTATE_LEAD_X + SPECTATE_BACK_X, SPECTATE_PAN_SHARE, SPECTATE_PAN_MIN_STEP);
+		view_y = ease_out_step(view_y, c->position.y + SPECTATE_BACK_Y, SPECTATE_PAN_SHARE, SPECTATE_PAN_MIN_STEP);
+		// The jolt of a press breaking at the loop (input.c), at full size: through the narrow FOV
+		// it swings the picture a tenth of the screen, a hit
+		view_rz = (ANGLE)(SPECTATE_RZ + shake_yaw);
+		view_rx = (ANGLE)(SPECTATE_RX + shake_pitch);
+	}
+	else if (first_person)
 	{
 		view_x = c->position.x;
 		view_y = c->position.y;

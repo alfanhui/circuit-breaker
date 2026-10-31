@@ -1,6 +1,8 @@
 #include "input.h"
 #include "game/bot.h"
 #include "game/camera_shake.h"
+#include "game/attract_route.h"
+#include "sound.h"
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
@@ -29,6 +31,152 @@ static void update_solid_trails(void)
 	if (bot1.alive)
 		solid_trails[solid_trail_count++] = &bot1.wall;
 }
+/*
+ * The prologue's loop (docs/STORY.md): while spectating, the cycle writes "SEGA SATURN SH-2"
+ * across the floor with its trail, by itself, for ever (game/attract_text.h builds the route).
+ * The trail is only laid on a letter's strokes (pen down); between them the cycle rides with
+ * none, boosting. Each finished stroke is kept in strokes[], and once a word is spelt its
+ * strokes start to sink into the floor (as a dead bot's trail does) while the next word is
+ * written. It rides as a ghost: strokes touch and cross, and there's nothing to crash into.
+ *
+ * At the end of the message it's put back one ATTRACT_TEXT_PERIOD west, at the start, and so is
+ * the camera: the floor's grid looks the same there, and the last word has sunk, so the jump
+ * can't be seen.
+ */
+#define ATTRACT_ORIGIN_X 7000 // the first letter's bottom left: the message runs east (-x) from
+#define ATTRACT_ORIGIN_Y 500  // here, 13800 long, centred on the arena; letters reach 1000 north
+#define ATTRACT_STROKES_MAX 24 // the message has 21
+#define ATTRACT_WORDS_MAX 4	   // and 3 words
+
+static attract_waypoint attract_waypoints[ATTRACT_TEXT_MAX_WAYPOINTS];
+static int attract_waypoint_count;
+static attract_route route;
+trail attract_strokes[ATTRACT_STROKES_MAX]; // the finished strokes, standing or sinking
+unsigned char attract_stroke_word[ATTRACT_STROKES_MAX]; // the word each belongs to
+int attract_stroke_count;
+unsigned char attract_word_height[ATTRACT_WORDS_MAX]; // how tall each word's strokes stand
+static unsigned char word_sinking[ATTRACT_WORDS_MAX];
+static int current_word;
+
+// The cycle at the start of the message, facing its first leg, with no trail and nothing
+// written. Its speed carries on, so one message runs into the next with no pause
+static void start_message(void)
+{
+	attract_route_init(&route, attract_waypoints, attract_waypoint_count);
+	player1.bike.position = attract_route_start(&route);
+	player1.bike.heading = (unsigned char)attract_route_start_heading(&route);
+	trail_reset(&player1.wall, player1.bike.position);
+	turn_gate_init(&player1.turns);
+	attract_stroke_count = 0;
+	current_word = 0;
+	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
+	{
+		attract_word_height[w] = TRAIL_HEIGHT;
+		word_sinking[w] = 0;
+	}
+}
+
+// One frame of the loop, before the cycle moves: the turn to press and whether to boost, and
+// the strokes and words as each waypoint is reached
+static void attract_frame(rider_controls *controls)
+{
+	int turn;
+	const attract_waypoint *here = attract_route_step(&route, &player1.bike, &turn);
+
+	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
+		if (word_sinking[w] && attract_word_height[w] > 0)
+			attract_word_height[w] = (unsigned char)(attract_word_height[w] > RIDER_SINK_SPEED
+														 ? attract_word_height[w] - RIDER_SINK_SPEED
+														 : 0);
+	if (here)
+	{
+		int pen_on = attract_route_pen(&route); // on the leg it rides next
+
+		// It was put on the waypoint exactly: so is its trail, so the corner is square
+		trail_set_head(&player1.wall, player1.bike.position);
+		if (here->pen && !pen_on && attract_stroke_count < ATTRACT_STROKES_MAX)
+		{
+			// A stroke's done: keep it (a copy: ~270 bytes, 21 times a message)
+			attract_strokes[attract_stroke_count] = player1.wall;
+			attract_stroke_word[attract_stroke_count++] = (unsigned char)current_word;
+		}
+		if (!here->pen && pen_on)
+			trail_reset(&player1.wall, player1.bike.position); // the pen goes down: a new stroke
+		if (here->word_end && current_word < ATTRACT_WORDS_MAX)
+			word_sinking[current_word++] = 1; // spelt: it starts to sink
+	}
+	if (attract_route_done(&route))
+	{
+		// Back a period west, to the start; the camera jumps with it (view.c)
+		view_spectate_shift(ATTRACT_TEXT_PERIOD);
+		start_message();
+		turn = TURN_NONE;
+	}
+	controls->turn = (signed char)turn;
+	controls->boost = (unsigned char)!attract_route_pen(&route); // quicker between strokes
+}
+
+// Spectating (the prologue's loop) or playing. In the loop the CPU is alone: the bot is taken
+// out of the field, and comes in fresh at its start when play begins (docs/STORY.md)
+static void set_spectating(bool on)
+{
+	spectating = on;
+	player1.bike.bounded = !on; // a ghost on the route; solid again when play begins
+	attract_stroke_count = 0;
+	if (on)
+	{
+		world_point origin;
+
+		rider_remove(&bot1);
+		loop_break_init(&breaker);
+		if (attract_waypoint_count == 0) // built once
+		{
+			origin.x = ATTRACT_ORIGIN_X;
+			origin.y = ATTRACT_ORIGIN_Y;
+			attract_waypoint_count = attract_text_build(ATTRACT_TEXT, origin, attract_waypoints, ATTRACT_TEXT_MAX_WAYPOINTS);
+		}
+		start_message();
+	}
+	else
+	{
+		rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
+		bot_init(&bot1_mind, 1);
+	}
+	update_solid_trails();
+}
+
+/*
+ * Breaking the loop (game/loop_break.h, docs/STORY.md): while spectating, a direction pressed is
+ * a hit on the loop: a burst of light and a flash (main.c), a synth stab and a jolt of the
+ * camera, harder each time. The third breaks it: the cycle turns off its route (the way pressed,
+ * or right for up / down), and from there it's the player's. For now the camera cuts straight
+ * to 1st person; it'll fall out of the stands into the cycle later.
+ */
+loop_break breaker;
+static const short hit_shake[LOOP_BREAK_PRESSES + 1] = {0, 364, 637, 910}; // 2, 3.5 and 5 degrees
+#define DIRECTIONS (DIGI_LEFT | DIGI_RIGHT | DIGI_UP | DIGI_DOWN)
+
+// A direction pressed while spectating. Returns the presses, changed: the one that breaks the
+// loop becomes a turn (it's the first thing the free cycle does); the others are spent on the hit
+static unsigned short hit_the_loop(unsigned short struck)
+{
+	int press = loop_break_press(&breaker);
+
+	sound_play_hit(press);
+	view_shake(hit_shake[press]);
+	if (press < LOOP_BREAK_PRESSES)
+		return (unsigned short)(struck & ~DIRECTIONS);
+	// Broken: play from here, in 1st person, the bot coming in
+	set_spectating(false);
+	first_person = true;
+	view_init(&player1.bike);
+	// A fresh trail from here: turning off the route, it mustn't run into the stroke it was writing
+	trail_reset(&player1.wall, player1.bike.position);
+	if (!(struck & (DIGI_LEFT | DIGI_RIGHT)))
+		struck |= DIGI_RIGHT; // up or down: it still turns off the route
+	return (unsigned short)(struck & ~(DIGI_UP | DIGI_DOWN)); // not a view switch
+}
+
 bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 bool debug_no_termination = false; // debug camera Z: a crash only stops the cycle
@@ -90,6 +238,11 @@ static void debug_camera_input(unsigned short struck)
 	// terminated the player: for the E2E steps that crash on purpose to look at what's left
 	if (struck & DIGI_Z)
 		debug_no_termination = !debug_no_termination;
+	// A: the spectator camera on / off (the prologue's, view.c), taking effect on leaving the
+	// debug camera. Until the prologue's done the game starts in 1st person, so the E2E steps
+	// written for that still work
+	if (struck & DIGI_A)
+		set_spectating(!spectating);
 
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
@@ -168,6 +321,10 @@ void gamepad_input(void)
 	if (!jo_is_pad1_available())
 		return;
 
+	loop_break_update(&breaker);
+	if (spectating && (struck & DIRECTIONS))
+		struck = hit_the_loop(struck);
+
 	if (struck & DIGI_DOWN)
 		view_toggle(&player1.bike);
 
@@ -177,6 +334,9 @@ void gamepad_input(void)
 	// pressed together land in the same frame
 	controls.turn = (struck & DIGI_LEFT) ? TURN_LEFT : (struck & DIGI_RIGHT) ? TURN_RIGHT : TURN_NONE;
 	controls.boost = (press_latch_held(&pad1_presses) & DIGI_UP) != 0;
+	// Spectating, the loop rides the cycle, not the pad (the presses that break it: next step)
+	if (spectating)
+		attract_frame(&controls);
 	switch (rider_step(&player1, controls, solid_trails, solid_trail_count))
 	{
 	case TURN_LEFT:
@@ -188,6 +348,10 @@ void gamepad_input(void)
 	}
 	// A crash terminates the player's process: the terminal screen from the next frame
 	game_update(&game, player1.crashed && !debug_no_termination, 0);
+
+	// The loop: between strokes (pen up) it lays no trail: just a point that follows it
+	if (spectating && !attract_route_pen(&route))
+		trail_reset(&player1.wall, player1.bike.position);
 
 	// The bot decides its buttons from what it can see, then rides by the same rules
 	// A crash terminates the bot's process: it stops, and its trail sinks into the floor (and
