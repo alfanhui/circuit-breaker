@@ -18,6 +18,7 @@ rider bots[BOT_COUNT_MAX];
 game_state game;
 status_message status;
 rounds arena_rounds;
+wall_flicker arena_flicker;
 static bot_mind bot_minds[BOT_COUNT_MAX]; // what each bot remembers between frames (game/bot.h)
 // How hard the bots play (game/bot.h: BOT_EASY, _MEDIUM, _HARD): A in play steps through them.
 // Kept through rounds and restarts
@@ -208,6 +209,7 @@ static void enter_round_layout(void)
 {
 	arena_set_inset(0);
 	arena_set_layout(rounds_layout(&arena_rounds));
+	wall_flicker_set_round(&arena_flicker, arena_rounds.number); // somewhere else each round
 }
 
 // Each game frame: the last round's walls lunging in (rounds.h), the camera rumbling while they
@@ -408,7 +410,9 @@ static void stress_fill_trail(void)
  *   SCENE_PLAY   play, in 1st person, the bot in the arena
  * The game boots into BOOT_SCENE. To work on a later part, set it to that part and build;
  * or, while it runs, jump: START (the debug camera), then A for the next part, START again.
- * The E2E scripts that test play jump there first (tests/e2e/run.sh: skip_prologue)
+ * For now it boots straight into play, the prologue left out (it's the game's opening, its
+ * "menu"): set SCENE_INTRO to have it back. The E2E scripts find their way from whichever it
+ * boots into (tests/e2e/run.sh reads this line: skip_prologue, start_intro)
  */
 typedef enum
 {
@@ -417,7 +421,7 @@ typedef enum
 	SCENE_PLAY,
 	SCENE_COUNT
 } scene;
-#define BOOT_SCENE SCENE_INTRO
+#define BOOT_SCENE SCENE_PLAY
 
 /*
  * During the opening flight you're only watching: the loop can't be hit until the camera has
@@ -564,6 +568,7 @@ static void between_rounds(void)
 		break;
 	}
 	close_in();
+	wall_flicker_step(&arena_flicker);
 	// Your trail sinks and rises with the walls
 	if (arena_rounds.phase != ROUND_PLAYING)
 		player1.trail_height = (unsigned char)((TRAIL_HEIGHT * rounds_wall_rise(&arena_rounds)) >> 8);
@@ -766,10 +771,21 @@ static void game_step(unsigned short struck)
 	if (struck & DIGI_Z)
 		debug_next_turn_compare();
 
+	// B (debug): every bot riding is terminated, as if it had crashed: the jolt, the status line,
+	// its trail sinking. With none left the round's won, so it skips through the rounds to the
+	// one being worked on
+	if ((struck & DIGI_B) && bots_alive() > 0)
+	{
+		for (int i = 0; i < BOT_COUNT_MAX; ++i)
+			if (bots[i].alive)
+				rider_kill(&bots[i]);
+		view_shake(CAMERA_SHAKE_BOT_KILL);
+		status_show(&status, STATUS_ENEMY_ELIMINATED);
+		update_solid_trails(); // their trails stop nobody from now on
+	}
 	// Tuning, to find the balance of speed and scale by feel. The debug text shows both.
-	// (The arena's size is in the debug camera: START, then X / Y.) B / C: cruise speed down / up
-	if (struck & DIGI_B)
-		cycle_set_cruise_speed(cycle_cruise_speed() - 1);
+	// (The arena's size is in the debug camera: START, then X / Y.) C: cruise speed up (B turned it
+	// down, before it terminated the bots)
 	if (struck & DIGI_C)
 		cycle_set_cruise_speed(cycle_cruise_speed() + 1);
 

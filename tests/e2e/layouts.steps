@@ -4,6 +4,7 @@
 # arrival.steps) so the flight down shows the whole arena from above as its walls and blocks
 # rise, then 1st person at the layout's start, looking right, then iso, then a few seconds on.
 wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
 # Hurry it to x3: it lands in about 3 s
 press b
 wait 5.5

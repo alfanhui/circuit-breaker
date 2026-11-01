@@ -3,6 +3,7 @@
 # top left, shows the segment, frame and speed. Once it has landed, a direction hits the loop
 # again (a burst of light)
 wait_boot
+start_intro # the opening flight, from wherever the game boots (run.sh)
 shot hurry_1_x1
 press b
 wait 0.3

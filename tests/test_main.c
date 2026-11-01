@@ -28,6 +28,7 @@ void run_intro_flight_tests(void);
 void run_arrival_flight_tests(void);
 void run_surround_tests(void);
 void run_rounds_tests(void);
+void run_wall_flicker_tests(void);
 
 int main(void)
 {
@@ -56,6 +57,7 @@ int main(void)
 	run_arrival_flight_tests();
 	run_surround_tests();
 	run_rounds_tests();
+	run_wall_flicker_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

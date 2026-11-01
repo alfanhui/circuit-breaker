@@ -3,6 +3,7 @@
 # straight away. The press times show in the log (shots).
 record_sound
 wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
 # Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
 press b
 wait 3.5

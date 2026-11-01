@@ -318,13 +318,16 @@ static bool draw_terminal(void)
 					  // just above the radar, sat on the horizon's pink glow: green on pink was hard to read)
 #define STATUS_BLANK "                                        " // a whole row: 40 characters
 
-static void draw_status(void)
+// hidden: the HUD's off (the prologue, the flight down): any text left on the row is wiped. It's
+// printed on VDP2's text layer, which keeps it until it's written over, so leaving play for the
+// prologue (the debug camera's A) left the last message showing
+static void draw_status(bool hidden)
 {
 	static int printed = 0; // characters on screen now
 	int count = status_typed_chars(&status);
 	int column = (40 - status.length) >> 1; // centred on the 40 character row
 
-	if (!status_visible(&status))
+	if (hidden || !status_visible(&status))
 	{
 		if (printed > 0)
 			jo_printf(0, STATUS_ROW, STATUS_BLANK);
@@ -446,7 +449,8 @@ void draw_3d(void)
 				wall_eye.x = (short)view_x;
 				wall_eye.y = (short)view_y;
 			}
-			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, arena_wall_rise());
+			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, arena_wall_rise(),
+							 &arena_flicker);
 			// The ground round the arena, raised level with the walls' tops: the arena's sunk into
 			// it, and the floor's grid is only seen inside. It rises with the walls, from the
 			// break's flash (flat on the floor till then, hiding the grid outside). Between rounds,
@@ -539,6 +543,7 @@ void draw_3d(void)
 	// while the camera comes down into the cycle: it appears as you take over
 	if (spectating || view_arriving())
 	{
+		draw_status(true);
 		debug_3d(false);
 		debug_flight();
 		perf_frame_end();
@@ -560,7 +565,7 @@ void draw_3d(void)
 			}
 		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
 	}
-	draw_status();
+	draw_status(false);
 	debug_3d(true);
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text

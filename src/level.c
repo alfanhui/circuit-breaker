@@ -63,6 +63,9 @@ static wall_side sides[4] = {
 	{.along_x = true, .fixed = 1, .dir = 1},	// south: east (-x) to west (+x)
 	{.along_x = false, .fixed = 1, .dir = -1}, // west: south (+y) to north (-y)
 };
+// The flicker's side, after its section (draw_side): one mesh can't be filled twice in a frame
+static wall_strip flicker_after_low;
+static wall_strip flicker_after_high;
 
 /*
  * The raised ground round the arena (game/surround.h): plain coloured quads, no texture, so
@@ -142,6 +145,8 @@ void init_arena_walls(void)
 		init_strip(&sides[s].low, low_attributes);
 		init_strip(&sides[s].high, high_attributes);
 	}
+	init_strip(&flicker_after_low, low_attributes);
+	init_strip(&flicker_after_high, high_attributes);
 
 	// The surround: its corners and quads are filled in each frame (draw_arena_surround)
 	for (int q = 0; q < SURROUND_QUADS_MAX; ++q)
@@ -254,61 +259,17 @@ static int run_columns(bool along_x, int wall, int start, int dir, int pieces, c
 	return count;
 }
 
-static void draw_side(wall_side *side, const world_rect *view, const world_point *eye,
-					  const wall_clip_camera *camera, bool cutaway, int rise)
-{
-	const int half = arena_half();
-	const int grid = arena_grid_half();
-	world_point columns[ARENA_WALL_COLUMNS_MAX];
-	// The wall's line on the other axis, and column 0 at the side's left end: on the grid from the
-	// middle, at or past the corner (they're the same until the last round closes in)
-	const int count = run_columns(side->along_x, side->fixed * half, -side->dir * grid, side->dir,
-								  arena_grid_pieces(), view, eye, columns);
-
-	if (count == 0)
-		return;
-	// Closing in, the corners are inside the grid's ends: the end pieces are cut back to them
-	// (less than a piece each). The columns between stay where they are, so as the wall slides in
-	// its texture slides with it, not along it
-	if (grid != half)
-		for (int i = 0; i <= count; ++i)
-		{
-			short *along = side->along_x ? &columns[i].x : &columns[i].y;
-
-			if (*along > half)
-				*along = (short)half;
-			else if (*along < -half)
-				*along = (short)-half;
-		}
-	if (cutaway)
-	{
-		// Just the glowing base, using the low strip's buffers with the base texture
-		side->low.mesh.data.attbl = base_attributes;
-		draw_strip(&side->low, columns, count, WALL_BOTTOM_Z, WALL_BASE_TOP_Z, camera, LOW_MIN_FORWARD);
-		side->low.mesh.data.attbl = low_attributes;
-		return;
-	}
-	// Rising: both strips squashed to the same share of their height, so the whole wall grows up
-	// out of the floor, its grid rows spreading apart as it does (VDP1 stretches each texture over
-	// its quad). A multiply and a shift a side, not a vertex
-	{
-		int split = (WALL_SPLIT_Z * rise) >> 8;
-		int top = (WALL_TOP_Z * rise) >> 8;
-
-		draw_strip(&side->low, columns, count, WALL_BOTTOM_Z, split, camera, LOW_MIN_FORWARD);
-		draw_strip(&side->high, columns, count, split, top, camera, HIGH_MIN_FORWARD);
-	}
-}
-
 /*
- * The blocks inside the arena (arena.h's layouts), as tall as its walls and textured the same.
- * Every face of every block goes into one mesh per band (the low strip, the high strip), filled
- * and then drawn once: SGL may still be reading a mesh after it's drawn, so one can't be refilled
- * for the next face in the same frame (SKILLS.md). Each face's pieces are appended with their own
- * polygons (pointing at their own columns) and attributes (copied from the band's texture).
+ * The blocks inside the arena (arena.h's layouts), as tall as its walls and textured the same,
+ * and the flicker's pieces (below). Every face of every block, and every piece of the flicker,
+ * goes into one mesh per band (the low strip, the high strip), filled and then drawn once: SGL
+ * may still be reading a mesh after it's drawn, so one can't be refilled for the next face in the
+ * same frame (SKILLS.md). Each face's pieces are appended with their own polygons (pointing at
+ * their own columns) and attributes (copied from the band's texture).
  */
-#define BLOCK_PIECES_MAX 96 // the rooms seen from inside one: ~60 pieces at full detail
-#define BLOCK_POINTS_MAX (2 * (BLOCK_PIECES_MAX + 4 * ARENA_BLOCKS_MAX)) // and each face's last column
+#define BLOCK_PIECES_MAX 112 // the rooms seen from inside one: ~60 pieces at full detail; the flicker, 10
+// And each run's last column: a block's face, or one of the flicker's pieces (each a run of its own)
+#define BLOCK_POINTS_MAX (2 * (BLOCK_PIECES_MAX + 4 * ARENA_BLOCKS_MAX + WALL_FLICKER_PIECES_MAX))
 
 typedef struct
 {
@@ -373,6 +334,164 @@ static void block_band_draw(block_band *band)
 		jo_3d_mesh_draw(&band->mesh);
 }
 
+// One run of a side: its pieces inside view (whose along range may be cut short of the whole
+// view, either side of the flicker), drawn into the low and high strips given
+static void draw_side_run(const wall_side *side, wall_strip *low, wall_strip *high, const world_rect *view,
+						  const world_point *eye, const wall_clip_camera *camera, bool cutaway, int rise)
+{
+	const int half = arena_half();
+	const int grid = arena_grid_half();
+	world_point columns[ARENA_WALL_COLUMNS_MAX];
+	// The wall's line on the other axis, and column 0 at the side's left end: on the grid from the
+	// middle, at or past the corner (they're the same until the last round closes in)
+	const int count = run_columns(side->along_x, side->fixed * half, -side->dir * grid, side->dir,
+								  arena_grid_pieces(), view, eye, columns);
+
+	if (count == 0)
+		return;
+	// Closing in, the corners are inside the grid's ends: the end pieces are cut back to them
+	// (less than a piece each). The columns between stay where they are, so as the wall slides in
+	// its texture slides with it, not along it
+	if (grid != half)
+		for (int i = 0; i <= count; ++i)
+		{
+			short *along = side->along_x ? &columns[i].x : &columns[i].y;
+
+			if (*along > half)
+				*along = (short)half;
+			else if (*along < -half)
+				*along = (short)-half;
+		}
+	if (cutaway)
+	{
+		// Just the glowing base, using the low strip's buffers with the base texture
+		low->mesh.data.attbl = base_attributes;
+		draw_strip(low, columns, count, WALL_BOTTOM_Z, WALL_BASE_TOP_Z, camera, LOW_MIN_FORWARD);
+		low->mesh.data.attbl = low_attributes;
+		return;
+	}
+	// Rising: both strips squashed to the same share of their height, so the whole wall grows up
+	// out of the floor, its grid rows spreading apart as it does (VDP1 stretches each texture over
+	// its quad). A multiply and a shift a side, not a vertex
+	{
+		int split = (WALL_SPLIT_Z * rise) >> 8;
+		int top = (WALL_TOP_Z * rise) >> 8;
+
+		draw_strip(low, columns, count, WALL_BOTTOM_Z, split, camera, LOW_MIN_FORWARD);
+		draw_strip(high, columns, count, split, top, camera, HIGH_MIN_FORWARD);
+	}
+}
+
+/*
+ * The flicker (game/wall_flicker.h): a section of one side whose pieces glitch. That side is
+ * drawn as three: the run before the section (its own strips), the run after it (the strips
+ * below: one mesh can't be filled twice in a frame), and the section's pieces one by one,
+ * appended to the blocks' bands (draw_blocks), so each can be left out (hidden: a hole, the
+ * outside showing through) or drawn as a glow (flashed: the base texture, its glowing line,
+ * stretched up the whole wall). Full detail at any distance: round 5's must be seen from afar
+ */
+
+// The along range of view on a side's axis
+static void view_along(const wall_side *side, const world_rect *view, int *along_min, int *along_max)
+{
+	*along_min = side->along_x ? view->x_min : view->y_min;
+	*along_max = side->along_x ? view->x_max : view->y_max;
+}
+
+// view, with its along range on side's axis cut to [along_min, along_max]
+static world_rect view_cut(const wall_side *side, const world_rect *view, int along_min, int along_max)
+{
+	world_rect cut = *view;
+
+	if (side->along_x)
+	{
+		cut.x_min = (short)along_min;
+		cut.x_max = (short)along_max;
+	}
+	else
+	{
+		cut.y_min = (short)along_min;
+		cut.y_max = (short)along_max;
+	}
+	return cut;
+}
+
+static void add_flicker_section(const wall_side *side, const wall_flicker *flicker, const world_rect *view,
+								const wall_clip_camera *camera, bool cutaway, int rise)
+{
+	const int wall = side->fixed * arena_half();
+	const int split = (WALL_SPLIT_Z * rise) >> 8;
+	const int top = (WALL_TOP_Z * rise) >> 8;
+	const int across_min = side->along_x ? view->y_min : view->x_min;
+	const int across_max = side->along_x ? view->y_max : view->x_max;
+	int along_min, along_max;
+
+	if (wall < across_min || wall > across_max)
+		return; // the wall's line isn't in view
+	view_along(side, view, &along_min, &along_max);
+	for (int i = 0; i < flicker->count; ++i)
+	{
+		const int a = flicker->along_min + i * WALL_FLICKER_PIECE;
+		const int b = a + WALL_FLICKER_PIECE;
+		world_point columns[2];
+
+		if ((flicker->hidden >> i) & 1)
+			continue; // dropped out this step
+		if (b < along_min || a > along_max)
+			continue;
+		// Left to right as seen from inside the arena, as the rest of the side (dir)
+		for (int k = 0; k < 2; ++k)
+		{
+			const int along = (side->dir > 0) == (k == 0) ? a : b;
+
+			columns[k].x = (short)(side->along_x ? along : wall);
+			columns[k].y = (short)(side->along_x ? wall : along);
+		}
+		if (cutaway)
+			block_band_add(&block_low, &base_attributes[0], columns, 1, WALL_BOTTOM_Z, WALL_BASE_TOP_Z, camera,
+						   LOW_MIN_FORWARD);
+		else if ((flicker->flashed >> i) & 1)
+			block_band_add(&block_low, &base_attributes[0], columns, 1, WALL_BOTTOM_Z, top, camera, HIGH_MIN_FORWARD);
+		else
+		{
+			block_band_add(&block_low, &low_attributes[0], columns, 1, WALL_BOTTOM_Z, split, camera, LOW_MIN_FORWARD);
+			block_band_add(&block_high, &high_attributes[0], columns, 1, split, top, camera, HIGH_MIN_FORWARD);
+		}
+	}
+}
+
+// A side, with the flicker's section in it if it's on this side
+static void draw_side(wall_side *side, int s, const world_rect *view, const world_point *eye,
+					  const wall_clip_camera *camera, bool cutaway, int rise, const wall_flicker *flicker)
+{
+	int along_min, along_max;
+	int section_min, section_max;
+
+	if (flicker == JO_NULL || flicker->count == 0 || flicker->side != s)
+	{
+		draw_side_run(side, &side->low, &side->high, view, eye, camera, cutaway, rise);
+		return;
+	}
+	// Either side of the section: 1 short of its ends, so the piece each end falls on (a piece
+	// is picked by where a point lies: arena_visible_pieces) stays the section's
+	view_along(side, view, &along_min, &along_max);
+	section_min = flicker->along_min;
+	section_max = wall_flicker_along_max(flicker);
+	if (along_min <= section_min - 1)
+	{
+		const world_rect before = view_cut(side, view, along_min, along_max < section_min - 1 ? along_max : section_min - 1);
+
+		draw_side_run(side, &side->low, &side->high, &before, eye, camera, cutaway, rise);
+	}
+	if (along_max >= section_max + 1)
+	{
+		const world_rect after = view_cut(side, view, along_min > section_max + 1 ? along_min : section_max + 1, along_max);
+
+		draw_side_run(side, &flicker_after_low, &flicker_after_high, &after, eye, camera, cutaway, rise);
+	}
+	add_flicker_section(side, flicker, view, camera, cutaway, rise);
+}
+
 // One face of a block: its strips added to the bands (as draw_side draws an outer side)
 static void add_block_face(bool along_x, int wall, int start, int dir, int length, const world_rect *view,
 						   const world_point *eye, const wall_clip_camera *camera, bool cutaway, int rise)
@@ -415,10 +534,6 @@ static void draw_blocks(const world_rect *view, const world_point *eye, const wa
 	const world_rect *blocks = arena_blocks(&count);
 	const bool cull = camera != JO_NULL;
 
-	if (count == 0)
-		return;
-	block_band_begin(&block_low);
-	block_band_begin(&block_high);
 	for (int i = 0; i < count; ++i)
 	{
 		const world_rect *b = &blocks[i];
@@ -438,21 +553,25 @@ static void draw_blocks(const world_rect *view, const world_point *eye, const wa
 		if (!cull || eye->x > b->x_max)
 			add_block_face(false, b->x_max, b->y_min, 1, depth, view, eye, camera, cutaway, rise);
 	}
-	block_band_draw(&block_low);
-	block_band_draw(&block_high);
 }
 
 void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
-					  int rise)
+					  int rise, const wall_flicker *flicker)
 {
 	if (rise <= 0)
 		return; // still flat in the floor
+	// The blocks' bands take the flicker's pieces as well as the blocks' faces: filled by both,
+	// then drawn once
+	block_band_begin(&block_low);
+	block_band_begin(&block_high);
 	for (int s = 0; s < 4; ++s)
 		// Cutaway: the south and west walls stand between the iso camera (which sits on the +x, +y
 		// side of the cycle) and the cycle. Full height they'd hide it, and their tops would rise
 		// behind the camera. Just the glowing base, lower than the cycle, still marks the edge
-		draw_side(&sides[s], view, eye, camera, cutaway && sides[s].fixed > 0, rise);
+		draw_side(&sides[s], s, view, eye, camera, cutaway && sides[s].fixed > 0, rise, flicker);
 	draw_blocks(view, eye, camera, cutaway, rise);
+	block_band_draw(&block_low);
+	block_band_draw(&block_high);
 }
 
 // A flat coloured quad's attribute, as jo_3d_set_mesh_polygon_color sets one, but sorted by its

@@ -2,6 +2,7 @@
 # SH-2" across the floor, the camera panning after it; each word sinks once it's spelt, and
 # after the message it jumps back (unseen) and writes it again. A shot every 6 s.
 wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
 # Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
 press b
 wait 3.5

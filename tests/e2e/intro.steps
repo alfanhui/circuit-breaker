@@ -1,7 +1,8 @@
-# The opening flight (view.c, game/intro_flight.h): the game boots into it. Face down to the
-# floor over the first stroke, then alongside the cycle as it writes, and banking round into the
-# spectator's seat. A shot every half second, from just before the game starts
-wait 14.5
+# The opening flight (view.c, game/intro_flight.h; start_intro gets there, wherever the game
+# boots). Face down to the floor over the first stroke, then alongside the cycle as it writes,
+# and banking round into the spectator's seat. A shot every half second, from the flight's start
+wait_boot
+start_intro # the opening flight, from wherever the game boots (run.sh)
 shot intro_01
 wait 0.37
 shot intro_02

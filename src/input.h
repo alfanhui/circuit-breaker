@@ -8,6 +8,7 @@
 #include "game/status_message.h"
 #include "game/loop_break.h"
 #include "game/rounds.h"
+#include "game/wall_flicker.h"
 #include "game/arena.h"
 #include "game/trail.h"
 #include "view.h"
@@ -22,6 +23,7 @@ int bot_skill_now(void);	 // how hard they play this round: the pick, or the rou
 extern game_state game; // playing, or terminated after a crash (game/game_state.h)
 extern status_message status; // a line typed out during play (game/status_message.h)
 extern rounds arena_rounds; // which round, and the walls sinking and rising between them (game/rounds.h)
+extern wall_flicker arena_flicker; // the round's glitching section of outer wall (game/wall_flicker.h)
 #define FIELD_TRAIL_COUNT (1 + BOT_COUNT_MAX) // you, then the bots: the radar's colours in order
 extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trail: the radar's colours
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)

@@ -1,6 +1,7 @@
 # The opening flight (view.c, game/intro_flight.h) in 1/8 slow motion (Z), for a GIF: the game
 # boots into it. A shot every 0.5 s is ~4 game frames: at 15 frames a second, about real speed
 wait_boot
+start_intro # the opening flight, from wherever the game boots (run.sh)
 press z
 shot flight_001
 wait 0.37

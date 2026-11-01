@@ -12,13 +12,40 @@
 #                       container has no speakers, so it plays to SDL's silent "dummy" output
 #   wait_boot           wait until the game is up (its floor fills the screen), however long
 #                       the BIOS took: put it before the first press
-#   skip_prologue       jump from the opening flight (where the game boots) straight to play,
-#                       fresh at the start: START (the debug camera), A twice (intro -> loop ->
-#                       play), START. The game must have booted (~15 s) or the presses are lost
+#   skip_prologue       jump to play, fresh at the start, from wherever the game boots
+#                       (BOOT_SCENE in src/input.c): START (the debug camera), A for each part
+#                       to go round (intro -> loop -> play -> intro), START. From the intro
+#                       that's A twice; booted into play, three times (round to play afresh).
+#                       The game must have booted (~15 s) or the presses are lost
+#   start_intro         jump to the opening flight's start, for the scripts about the prologue
+#                       (nothing to do when the game boots there)
 # Buttons: up down left right a b c x y z l r start  (Mednafen's default keyboard mapping)
 set -e
 export DISPLAY=:99 MEDNAFEN_HOME=/tmp/mednafen PATH="$PATH:/usr/games"
 mkdir -p "$MEDNAFEN_HOME" /out
+
+# Which part of the game it boots into, read from the source the game was built from
+boot_scene=$(sed -n 's/^#define BOOT_SCENE \(SCENE_[A-Z]*\).*/\1/p' /game/src/input.c)
+
+# How many times A (the next part, in the debug camera) gets from the boot scene to $1, going
+# round intro -> loop -> play -> intro. Play to play is 3: round again to start it afresh
+scene_number() {
+	case "$1" in SCENE_INTRO) echo 0 ;; SCENE_LOOP) echo 1 ;; SCENE_PLAY) echo 2 ;; *) echo 0 ;; esac
+}
+presses_to() {
+	n=$(( ($(scene_number "$1") - $(scene_number "$boot_scene") + 3) % 3 ))
+	[ "$n" -eq 0 ] && [ "$1" = SCENE_PLAY ] && n=3
+	echo "$n"
+}
+
+# START, A n times, START: through the debug camera to another part of the game
+jump_scenes() {
+	[ "$1" -eq 0 ] && return
+	for b in start $(i=0; while [ "$i" -lt "$1" ]; do echo a; i=$((i + 1)); done) start; do
+		k=$(key_for "$b")
+		xdotool keydown "$k"; sleep 0.07; xdotool keyup "$k"; sleep 0.07
+	done
+}
 
 key_for() {
 	case "$1" in
@@ -80,12 +107,8 @@ while read -r command arg1 arg2; do
 		echo "booted after ~$((t * 55 / 100)) s of polling"
 		sleep 0.3 # a few frames more, so the game is reading the pad
 		;;
-	skip_prologue)
-		for b in start a a start; do
-			k=$(key_for "$b")
-			xdotool keydown "$k"; sleep 0.07; xdotool keyup "$k"; sleep 0.07
-		done
-		;;
+	skip_prologue) jump_scenes "$(presses_to SCENE_PLAY)" ;;
+	start_intro) jump_scenes "$(presses_to SCENE_INTRO)" ;;
 	hold) k=$(key_for "$arg1"); xdotool keydown "$k"; sleep "$arg2"; xdotool keyup "$k" ;;
 	keydown) xdotool keydown "$(key_for "$arg1")" ;;
 	keyup) xdotool keyup "$(key_for "$arg1")" ;;

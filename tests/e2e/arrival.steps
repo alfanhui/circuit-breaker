@@ -3,6 +3,7 @@
 # cycle into 1st person, in 3 s. The cycle starts at the arena's centre, facing north, wherever
 # the message had got to. Shots every ~0.25 s through it, then play.
 wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
 # Hurry it to x3: it lands in about 3 s
 press b
 wait 3.5

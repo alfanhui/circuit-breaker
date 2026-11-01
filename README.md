@@ -44,7 +44,7 @@ presses pad buttons from a step script and saves screenshots to `tests/build/e2e
 
 - Needs Docker and a Saturn BIOS (defaults to `Emulators/YabaSanshiro/bios.bin`; it is mounted, never copied into the image).
 - Steps live in `tests/e2e/*.steps`: `wait`, `press`, `hold` and `shot` (see `tests/e2e/run.sh`).
-- The game boots into the opening flight: scripts that test play start with `skip_prologue`, which jumps to play once it's booted. `intro.steps` films the flight; `intro_gif.steps` does it in slow motion for a GIF.
+- Scripts that test play start with `skip_prologue`, which jumps to play afresh once the game's booted; scripts about the prologue start with `start_intro`, which jumps to the opening flight. Both work from whichever part the game boots into (`run.sh` reads `BOOT_SCENE`). `intro.steps` films the flight; `intro_gif.steps` does it in slow motion for a GIF.
 - `level_bounds.steps` checks the arena boundary, the Y toggle and the debug camera height limits.
 
 ## Performance
@@ -62,7 +62,8 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - L / R (hold): look left / right (1st person)
 - A: the bots' difficulty: Easy, Medium, Hard (a toggle for now; the status line says which, the debug text's last line shows E / M / H). Rounds 4 and 5 are at least Medium whatever's picked
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
-- B / C: cruise speed down / up (tuning; units per frame)
+- B: terminate every bot riding (debug): the round's won, so it skips on to the next round
+- C: cruise speed up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)
 - Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NOTERM" in the debug text, for testing; A: jump to the next part of the game, intro flight -> spectator loop -> play -> intro, when you leave the debug camera)
-- The game boots into the opening flight (`BOOT_SCENE` in `src/input.c`: set it to `SCENE_LOOP` or `SCENE_PLAY` to boot into a later part). During the flight, the first press of any button but START and Z runs it at x3 (once: later presses do nothing); once it has landed, a direction is a hit on the loop, and the third breaks it: the camera flies down from the stands (an overview of the arena as its walls rise) into the cycle at its start in 3 s, and play begins. The loop's cycle boosts all the way. A debug line shows the flight's segment (the opening flight's, or `ARRIVE` and the walls' rise for the flight down), frame and speed, and where the cycle and camera are (`SHOW_FLIGHT_DEBUG` in `main.c`)
+- For now the game boots straight into play, round 1 (`BOOT_SCENE` in `src/input.c`: set it to `SCENE_INTRO` for the opening flight, the game's opening, or reach it from play with the debug camera's A). During the flight, the first press of any button but START and Z runs it at x3 (once: later presses do nothing); once it has landed, a direction is a hit on the loop, and the third breaks it: the camera flies down from the stands (an overview of the arena as its walls rise) into the cycle at its start in 3 s, and play begins. The loop's cycle boosts all the way. A debug line shows the flight's segment (the opening flight's, or `ARRIVE` and the walls' rise for the flight down), frame and speed, and where the cycle and camera are (`SHOW_FLIGHT_DEBUG` in `main.c`)

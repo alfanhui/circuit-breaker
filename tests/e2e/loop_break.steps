@@ -4,6 +4,7 @@
 # third breaks it: the camera comes down into the cycle at the arena's centre (3 s, arrival.steps),
 # then play in 1st person, the bot coming in.
 wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
 # Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
 press b
 wait 3.5
