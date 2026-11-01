@@ -177,7 +177,7 @@ void debug_3d(bool show)
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
 	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d %c     ", bots[0].bike.position.x, bots[0].bike.position.y,
 			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
-			  "EMH"[bot_skill_level]);
+			  "EMH"[bot_skill_now()]);
 }
 
 /*
@@ -466,6 +466,15 @@ void draw_3d(void)
 			if (clip)
 			{
 				trail_occluders_begin(&occluders, clip->eye);
+				// The blocks first (the donut's, the pillars, the rooms' walls), once they're up:
+				// rising or sinking, they're lower than a trail, so they may not hide it all
+				if (arena_wall_rise() >= ROUND_WALLS_FULL)
+				{
+					int block_count;
+					const world_rect *blocks = arena_blocks(&block_count);
+
+					trail_occluders_add_blocks(&occluders, blocks, block_count, &visible_trails);
+				}
 				// Only trails standing full height: a sinking one is lower than the eye, hiding nothing
 				for (int i = 0; i < solid_trail_count; ++i)
 					trail_occluders_add(&occluders, solid_trails[i], TRAIL_HEAD_GAP, &visible_trails);

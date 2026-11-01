@@ -52,6 +52,9 @@ void view_look(int direction);
 // Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
 // In iso it's half the size: the whole arena swinging is too much
 void view_shake(int strength);
+// Keep the camera rumbling at least this hard (ANGLE), called every frame while it should
+// (camera_shake_hold): it dies away once the calls stop
+void view_rumble(int strength);
 // Spectating: move the camera dx along x at once, with the cycle (the prologue's loop jumping
 // back to its start, input.c), so the jump doesn't show as a pan
 void view_spectate_shift(int dx);

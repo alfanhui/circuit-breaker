@@ -1,6 +1,8 @@
 #include "hud.h"
 #include "view.h"
 #include "game/minimap.h"
+#include "game/arena.h"
+#include "input.h" // arena_wall_rise
 
 /*
  * The HUD: one instrument at the bottom centre of the screen. A radar of the trails round the
@@ -69,6 +71,7 @@ enum
 	PART_MAP_FILL = PART_MAP_TRAIL + MAP_TRAILS_MAX, // one per band of the glass, MAP_STRIPS of them
 	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
 	PART_BURST,										 // the prologue's burst of light
+	PART_MAP_WALL,									 // the arena's walls and blocks on the map
 	PART_COUNT
 };
 
@@ -177,6 +180,7 @@ void hud_init(void)
 		part_sprites[PART_MAP_FILL + k] = make_map_strip(k);
 	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
 	part_sprites[PART_BURST] = make_part(JO_COLOR_RGB(255, 255, 255));
+	part_sprites[PART_MAP_WALL] = make_part(JO_COLOR_RGB(170, 150, 255)); // pale violet: not any rider's
 	minimap_init();
 	prepare_map_disc();
 }
@@ -299,10 +303,23 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 	const int forward_x = -(slSin(view_rz) >> 6);
 	const int forward_y = -(slCos(view_rz) >> 6);
 	int n;
+	int walls;
+	int block_count;
 
 	if (trail_count > MAP_TRAILS_MAX)
 		trail_count = MAP_TRAILS_MAX;
 	n = minimap_build(trails, trail_count, eye, forward_x, forward_y, map_lines, MINIMAP_LINES_MAX);
+	// The walls round you, as you need to know them weaving between the blocks (and as the last
+	// round closes in). Thin lines, drawn first: under the trails, as structure not riders
+	// Between rounds, sunk flat into the floor, there's nothing there
+	walls = 0;
+	if (arena_wall_rise() > 0)
+	{
+		const world_rect *blocks = arena_blocks(&block_count);
+
+		walls = minimap_build_walls(blocks, block_count, arena_half(), eye, forward_x, forward_y, &map_lines[n],
+									MINIMAP_LINES_MAX - n);
+	}
 
 	// The glass as a mesh: VDP1 draws every other pixel, in a checkerboard, and the world shows
 	// through the gaps. A Saturn's composite or RF picture blurs that into see-through glass (a
@@ -312,6 +329,8 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 	draw_map_glass();
 	jo_sprite_disable_screen_doors_filter();
 
+	for (int i = n; i < n + walls; ++i)
+		draw_map_line(PART_MAP_WALL, map_lines[i].x0, map_lines[i].y0, map_lines[i].x1, map_lines[i].y1);
 	for (int i = 0; i < n; ++i)
 		draw_thick_map_line(PART_MAP_TRAIL + map_lines[i].trail, map_lines[i].x0, map_lines[i].y0, map_lines[i].x1,
 							map_lines[i].y1);

@@ -413,6 +413,11 @@ void view_shake(int strength)
 	camera_shake_start(&shake, strength);
 }
 
+void view_rumble(int strength)
+{
+	camera_shake_hold(&shake, strength);
+}
+
 void view_spectate_shift(int dx)
 {
 	view_x += dx;

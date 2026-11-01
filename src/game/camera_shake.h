@@ -42,6 +42,11 @@ void camera_shake_init(camera_shake *s);
 // crashes close together don't make it smaller
 void camera_shake_start(camera_shake *s, int strength);
 
+// Keep a shake going at least this strong, without starting it afresh: a rumble, called every
+// frame while something goes on (the last round's walls moving in). Start would put it back on
+// the + side every frame: a steady tilt, not a shake
+void camera_shake_hold(camera_shake *s, int strength);
+
 // One frame: this frame's yaw and pitch to add to the camera (ANGLE), then it dies away a little.
 // Both are 0 once it's still
 void camera_shake_step(camera_shake *s, int *yaw, int *pitch);

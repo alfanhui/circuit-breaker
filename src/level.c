@@ -157,15 +157,16 @@ void init_arena_walls(void)
 	surround_mesh.data.nbPolygon = 0;
 }
 
-// Draws pieces [0, pieces) of columns as one strip from z_bottom to z_top. With a camera, the
+// Works out a strip's corners for pieces [0, pieces) of columns, from z_bottom to z_top, into
+// points (column k: its bottom, then its top) and each column's fog level. With a camera, the
 // strip is first cut to the run of pieces that are in view and min_forward in front of it.
-static void draw_strip(wall_strip *strip, const world_point *columns, int pieces, int z_bottom, int z_top,
-					   const wall_clip_camera *camera, int min_forward)
+// Returns how many pieces are left (0: nothing to draw)
+static int fill_strip(POINT *points, unsigned char *fog_levels, const world_point *columns, int pieces, int z_bottom,
+					  int z_top, const wall_clip_camera *camera, int min_forward)
 {
 	int first = 0;
 	int count = pieces;
 	wall_clip_run run;
-	unsigned char fog_levels[ARENA_WALL_COLUMNS_MAX]; // per column: its top and bottom are equally far
 
 	if (camera != JO_NULL)
 	{
@@ -174,7 +175,7 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 		count = run.count;
 	}
 	if (count == 0)
-		return;
+		return 0;
 
 	for (int i = 0; i <= count; ++i)
 	{
@@ -185,15 +186,27 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 		else if (camera != JO_NULL && i == count)
 			p = run.end;
 
-		strip->points[i * 2][X] = jo_int2fixed(p.x);
-		strip->points[i * 2][Y] = jo_int2fixed(p.y);
-		strip->points[i * 2][Z] = jo_int2fixed(z_bottom);
-		strip->points[i * 2 + 1][X] = strip->points[i * 2][X];
-		strip->points[i * 2 + 1][Y] = strip->points[i * 2][Y];
-		strip->points[i * 2 + 1][Z] = jo_int2fixed(z_top);
+		points[i * 2][X] = jo_int2fixed(p.x);
+		points[i * 2][Y] = jo_int2fixed(p.y);
+		points[i * 2][Z] = jo_int2fixed(z_bottom);
+		points[i * 2 + 1][X] = points[i * 2][X];
+		points[i * 2 + 1][Y] = points[i * 2][Y];
+		points[i * 2 + 1][Z] = jo_int2fixed(z_top);
 		if (object_fog_enabled)
 			fog_levels[i] = (unsigned char)object_fog_level(p.x, p.y);
 	}
+	return count;
+}
+
+// Draws pieces [0, pieces) of columns as one strip from z_bottom to z_top (fill_strip)
+static void draw_strip(wall_strip *strip, const world_point *columns, int pieces, int z_bottom, int z_top,
+					   const wall_clip_camera *camera, int min_forward)
+{
+	unsigned char fog_levels[ARENA_WALL_COLUMNS_MAX]; // per column: its top and bottom are equally far
+	int count = fill_strip(strip->points, fog_levels, columns, pieces, z_bottom, z_top, camera, min_forward);
+
+	if (count == 0)
+		return;
 	// Each piece's Gouraud table, its corners in Vertices order (init_arena_walls):
 	// left top, right top, right bottom, left bottom. The attributes are shared by every strip of
 	// this kind, but SGL reads them during jo_3d_mesh_draw below, before the next strip changes them
@@ -206,37 +219,67 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 	jo_3d_mesh_draw(&strip->mesh);
 }
 
-static void draw_side(wall_side *side, const world_rect *view, const world_point *eye,
-					  const wall_clip_camera *camera, bool cutaway, int rise)
+/*
+ * The columns of one straight run of wall: an outer side, or one face of a block (arena.h).
+ * along_x: the run lies along the x axis. wall: its line on the other axis. start, dir, pieces:
+ * its first column, the way its columns run (left to right as seen from the side it faces, so
+ * the texture's upright and unmirrored), and how many 250 pieces long it is. Only the pieces
+ * inside view are kept, spaced by distance from the eye (250 apart nearby, longer far away).
+ * Returns the number of pieces (columns - 1), 0 when none of it's in view
+ */
+static int run_columns(bool along_x, int wall, int start, int dir, int pieces, const world_rect *view,
+					   const world_point *eye, world_point *columns)
 {
-	const int half = arena_half();
-	const int wall = side->fixed * half; // the wall's line on the other axis
-	const int start = -side->dir * half; // column 0, at the side's left end
-	// The view rectangle on this side's own axes
-	const int along_min = side->along_x ? view->x_min : view->y_min;
-	const int along_max = side->along_x ? view->x_max : view->y_max;
-	const int across_min = side->along_x ? view->y_min : view->x_min;
-	const int across_max = side->along_x ? view->y_max : view->x_max;
-	world_point columns[ARENA_WALL_COLUMNS_MAX];
+	// The view rectangle on the run's own axes
+	const int along_min = along_x ? view->x_min : view->y_min;
+	const int along_max = along_x ? view->x_max : view->y_max;
+	const int across_min = along_x ? view->y_min : view->x_min;
+	const int across_max = along_x ? view->y_max : view->x_max;
 	short along[ARENA_WALL_COLUMNS_MAX];
 	int first;
 	int count;
 
 	if (wall < across_min || wall > across_max)
-		return; // the wall's line isn't in view
-	count = arena_visible_pieces(start, side->dir, along_min, along_max, &first);
+		return 0; // the wall's line isn't in view
+	count = arena_visible_pieces_of(start, dir, pieces, along_min, along_max, &first);
 	if (count == 0)
-		return;
-
-	// Columns spaced by distance from the eye: 250 apart nearby, further apart far away
-	count = arena_wall_columns(start, side->dir, first, count,
-							   side->along_x ? eye->x : eye->y, (side->along_x ? eye->y : eye->x) - wall,
+		return 0;
+	count = arena_wall_columns(start, dir, first, count, along_x ? eye->x : eye->y, (along_x ? eye->y : eye->x) - wall,
 							   along, ARENA_WALL_COLUMNS_MAX) - 1; // pieces = columns - 1
 	for (int i = 0; i <= count; ++i)
 	{
-		columns[i].x = side->along_x ? along[i] : (short)wall;
-		columns[i].y = side->along_x ? (short)wall : along[i];
+		columns[i].x = along_x ? along[i] : (short)wall;
+		columns[i].y = along_x ? (short)wall : along[i];
 	}
+	return count;
+}
+
+static void draw_side(wall_side *side, const world_rect *view, const world_point *eye,
+					  const wall_clip_camera *camera, bool cutaway, int rise)
+{
+	const int half = arena_half();
+	const int grid = arena_grid_half();
+	world_point columns[ARENA_WALL_COLUMNS_MAX];
+	// The wall's line on the other axis, and column 0 at the side's left end: on the grid from the
+	// middle, at or past the corner (they're the same until the last round closes in)
+	const int count = run_columns(side->along_x, side->fixed * half, -side->dir * grid, side->dir,
+								  arena_grid_pieces(), view, eye, columns);
+
+	if (count == 0)
+		return;
+	// Closing in, the corners are inside the grid's ends: the end pieces are cut back to them
+	// (less than a piece each). The columns between stay where they are, so as the wall slides in
+	// its texture slides with it, not along it
+	if (grid != half)
+		for (int i = 0; i <= count; ++i)
+		{
+			short *along = side->along_x ? &columns[i].x : &columns[i].y;
+
+			if (*along > half)
+				*along = (short)half;
+			else if (*along < -half)
+				*along = (short)-half;
+		}
 	if (cutaway)
 	{
 		// Just the glowing base, using the low strip's buffers with the base texture
@@ -257,6 +300,148 @@ static void draw_side(wall_side *side, const world_rect *view, const world_point
 	}
 }
 
+/*
+ * The blocks inside the arena (arena.h's layouts), as tall as its walls and textured the same.
+ * Every face of every block goes into one mesh per band (the low strip, the high strip), filled
+ * and then drawn once: SGL may still be reading a mesh after it's drawn, so one can't be refilled
+ * for the next face in the same frame (SKILLS.md). Each face's pieces are appended with their own
+ * polygons (pointing at their own columns) and attributes (copied from the band's texture).
+ */
+#define BLOCK_PIECES_MAX 96 // the rooms seen from inside one: ~60 pieces at full detail
+#define BLOCK_POINTS_MAX (2 * (BLOCK_PIECES_MAX + 4 * ARENA_BLOCKS_MAX)) // and each face's last column
+
+typedef struct
+{
+	jo_3d_mesh mesh;
+	POINT points[BLOCK_POINTS_MAX];
+	POLYGON polygons[BLOCK_PIECES_MAX];
+	ATTR attributes[BLOCK_PIECES_MAX];
+} block_band;
+
+static block_band block_low;
+static block_band block_high;
+
+static void block_band_begin(block_band *band)
+{
+	band->mesh.data.pntbl = band->points;
+	band->mesh.data.pltbl = band->polygons;
+	band->mesh.data.attbl = band->attributes;
+	band->mesh.data.nbPoint = 0;
+	band->mesh.data.nbPolygon = 0;
+}
+
+// One face's strip, appended to the band, textured as `texture` (one of the bands' attribute
+// tables: low, high or base). Stops at a piece that wouldn't fit: a gap far off, not a crash
+static void block_band_add(block_band *band, const ATTR *texture, const world_point *columns, int pieces, int z_bottom,
+						   int z_top, const wall_clip_camera *camera, int min_forward)
+{
+	unsigned char fog_levels[ARENA_WALL_COLUMNS_MAX];
+	const int base = band->mesh.data.nbPoint;
+	int polygon = band->mesh.data.nbPolygon;
+	int count;
+
+	if (polygon + pieces > BLOCK_PIECES_MAX)
+		pieces = BLOCK_PIECES_MAX - polygon;
+	if (pieces <= 0)
+		return;
+	count = fill_strip(&band->points[base], fog_levels, columns, pieces, z_bottom, z_top, camera, min_forward);
+	for (int j = 0; j < count; ++j, ++polygon)
+	{
+		POLYGON *q = &band->polygons[polygon];
+
+		q->norm[X] = JO_FIXED_0; // unused: the walls are unlit
+		q->norm[Y] = JO_FIXED_1;
+		q->norm[Z] = JO_FIXED_0;
+		// As init_arena_walls: left top, right top, right bottom, left bottom
+		q->Vertices[0] = (Uint16)(base + j * 2 + 1);
+		q->Vertices[1] = (Uint16)(base + j * 2 + 3);
+		q->Vertices[2] = (Uint16)(base + j * 2 + 2);
+		q->Vertices[3] = (Uint16)(base + j * 2);
+		band->attributes[polygon] = *texture;
+		if (object_fog_enabled)
+			object_fog_set_quad(&band->attributes[polygon], fog_levels[j], fog_levels[j + 1], fog_levels[j + 1],
+								fog_levels[j]);
+	}
+	if (count > 0)
+		band->mesh.data.nbPoint = (Uint16)(base + (count + 1) * 2);
+	band->mesh.data.nbPolygon = (Uint16)polygon;
+}
+
+static void block_band_draw(block_band *band)
+{
+	if (band->mesh.data.nbPolygon > 0)
+		jo_3d_mesh_draw(&band->mesh);
+}
+
+// One face of a block: its strips added to the bands (as draw_side draws an outer side)
+static void add_block_face(bool along_x, int wall, int start, int dir, int length, const world_rect *view,
+						   const world_point *eye, const wall_clip_camera *camera, bool cutaway, int rise)
+{
+	world_point columns[ARENA_WALL_COLUMNS_MAX];
+	// A face is whole 250 pieces (arena.c lays them out so). A division, but once per face, a
+	// handful a frame, as arena_visible_pieces does once per side
+	const int count = run_columns(along_x, wall, start, dir, length / (2 * ARENA_PIECE_HALF), view, eye, columns);
+
+	if (count == 0)
+		return;
+	if (cutaway)
+	{
+		block_band_add(&block_low, &base_attributes[0], columns, count, WALL_BOTTOM_Z, WALL_BASE_TOP_Z, camera,
+					   LOW_MIN_FORWARD);
+		return;
+	}
+	{
+		int split = (WALL_SPLIT_Z * rise) >> 8;
+		int top = (WALL_TOP_Z * rise) >> 8;
+
+		block_band_add(&block_low, &low_attributes[0], columns, count, WALL_BOTTOM_Z, split, camera,
+					   LOW_MIN_FORWARD);
+		block_band_add(&block_high, &high_attributes[0], columns, count, split, top, camera, HIGH_MIN_FORWARD);
+	}
+}
+
+/*
+ * Every block's faces. In 1st person (a camera) only the faces turned towards the eye: the
+ * others are hidden behind the block, so they'd be drawn for nothing (at most 2 of 4 a block).
+ * In the iso and debug cameras the eye isn't the camera, so all four are drawn. Iso (cutaway)
+ * draws them all as the glowing base, as it does the near outer walls: full height they'd hide
+ * the cycles round them. Each face's columns run left to right as seen from outside the block,
+ * as an outer side's are seen from inside the arena (north is -y, east -x: world.h)
+ */
+static void draw_blocks(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
+						int rise)
+{
+	int count;
+	const world_rect *blocks = arena_blocks(&count);
+	const bool cull = camera != JO_NULL;
+
+	if (count == 0)
+		return;
+	block_band_begin(&block_low);
+	block_band_begin(&block_high);
+	for (int i = 0; i < count; ++i)
+	{
+		const world_rect *b = &blocks[i];
+		const int width = b->x_max - b->x_min;
+		const int depth = b->y_max - b->y_min;
+
+		// North face (y_min), seen from the north: east (-x) on the left, as the south side's
+		if (!cull || eye->y < b->y_min)
+			add_block_face(true, b->y_min, b->x_min, 1, width, view, eye, camera, cutaway, rise);
+		// South face (y_max), seen from the south: west (+x) on the left, as the north side's
+		if (!cull || eye->y > b->y_max)
+			add_block_face(true, b->y_max, b->x_max, -1, width, view, eye, camera, cutaway, rise);
+		// East face (x_min), seen from the east: south (+y) on the left, as the west side's
+		if (!cull || eye->x < b->x_min)
+			add_block_face(false, b->x_min, b->y_max, -1, depth, view, eye, camera, cutaway, rise);
+		// West face (x_max), seen from the west: north (-y) on the left, as the east side's
+		if (!cull || eye->x > b->x_max)
+			add_block_face(false, b->x_max, b->y_min, 1, depth, view, eye, camera, cutaway, rise);
+	}
+	block_band_draw(&block_low);
+	block_band_draw(&block_high);
+}
+
 void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
 					  int rise)
 {
@@ -267,6 +452,7 @@ void draw_arena_walls(const world_rect *view, const world_point *eye, const wall
 		// side of the cycle) and the cycle. Full height they'd hide it, and their tops would rise
 		// behind the camera. Just the glowing base, lower than the cycle, still marks the edge
 		draw_side(&sides[s], view, eye, camera, cutaway && sides[s].fixed > 0, rise);
+	draw_blocks(view, eye, camera, cutaway, rise);
 }
 
 // A flat coloured quad's attribute, as jo_3d_set_mesh_polygon_color sets one, but sorted by its

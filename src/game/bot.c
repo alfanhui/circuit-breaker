@@ -56,7 +56,7 @@ static unsigned int next_random(bot_mind *mind)
 // its cycle asks every frame before moving (collision.h)
 static int free_ahead(const rider *me, int heading, int distance, const trail *const *trails, int trail_count)
 {
-	return collision_free_distance(me->bike.position, heading, distance, arena_player_limit(), trails, trail_count);
+	return collision_arena(me->bike.position, heading, distance, trails, trail_count);
 }
 
 // A way blocked within sight: is there a way out of it? From the last point it could still turn
@@ -73,8 +73,8 @@ static int way_out(const rider *me, int heading, int room, int look, int side_lo
 
 	at.x = (short)(at.x + WORLD_HEADING_DX(heading) * run);
 	at.y = (short)(at.y + WORLD_HEADING_DY(heading) * run);
-	left = collision_free_distance(at, (heading + 3) & 3, side_look, arena_player_limit(), trails, trail_count);
-	right = collision_free_distance(at, (heading + 1) & 3, side_look, arena_player_limit(), trails, trail_count);
+	left = collision_arena(at, (heading + 3) & 3, side_look, trails, trail_count);
+	right = collision_arena(at, (heading + 1) & 3, side_look, trails, trail_count);
 	return left > right ? left : right;
 }
 
@@ -148,7 +148,7 @@ static int find_target(bot_mind *mind, const rider *me, const rider *const *riva
 	// (In a PC simulation, heading for them by the radar drove it into the knot of trails a
 	// weaving player leaves; aiming nowhere, it wandered and spiralled into its own trail)
 	if (travelled > 0 &&
-		collision_free_distance(mind->rival_seen, heading, travelled, arena_player_limit(), trails, trail_count) <
+		collision_arena(mind->rival_seen, heading, travelled, trails, trail_count) <
 			travelled)
 	{
 		target->x = 0;
@@ -171,7 +171,7 @@ static int find_target(bot_mind *mind, const rider *me, const rider *const *riva
 		// Far enough ahead to get there first. But if something already blocks their way before
 		// that point (usually its own trail, just laid across it), they're cut off: done. Without
 		// this it crossed their line again and again, in a square wave in front of them
-		if (collision_free_distance(at, heading, ahead, arena_player_limit(), trails, trail_count) < ahead)
+		if (collision_arena(at, heading, ahead, trails, trail_count) < ahead)
 			return 0;
 		// Otherwise aim for the point on their line straight across from it
 		target->x = (short)(at.x + dx * ahead);

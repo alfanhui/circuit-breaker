@@ -112,4 +112,13 @@ int minimap_half_width(int across);
 int minimap_build(const trail *const *trails, int trail_count, world_point eye, int forward_x, int forward_y,
 				  minimap_line *out, int max_lines);
 
+/*
+ * The arena's walls on the radar: its outer square (half: centre to wall) and each block inside
+ * it (arena.h), as their outlines. Every edge runs N/S/E/W, so they're clipped and turned exactly
+ * as trail segments are. Each line's `trail` is MINIMAP_WALL. Returns how many were written
+ */
+#define MINIMAP_WALL 255
+int minimap_build_walls(const world_rect *blocks, int block_count, int half, world_point eye, int forward_x,
+						int forward_y, minimap_line *out, int max_lines);
+
 #endif

@@ -4,8 +4,9 @@
 #include "trail.h"
 
 /*
- * Which parts of a trail are completely hidden behind a nearer trail, in the 1st person view,
- * so they're not drawn at all. Pure C, unit-tested on the PC.
+ * Which parts of a trail are completely hidden behind a nearer trail, or a block standing in the
+ * arena (as tall as its walls), in the 1st person view, so they're not drawn at all. Pure C,
+ * unit-tested on the PC.
  *
  * Why: VDP1 has no depth buffer. SGL draws polygons back to front, judging each by its centre's
  * depth: its distance straight ahead of the camera. Riding alongside two parallel trails, a
@@ -59,6 +60,11 @@ void trail_occluders_begin(trail_occluders *o, world_point eye);
 // Adds a trail's segments inside view (drawn with head_gap, as trail_pieces.h) to the list,
 // up to TRAIL_OCCLUDERS_MAX
 void trail_occluders_add(trail_occluders *o, const trail *t, int head_gap, const world_rect *view);
+
+// Adds the faces of the arena's blocks (arena.h) turned towards the eye, at most two a block: a
+// face is a straight N/S/E/W line, like a trail segment, and as tall as the walls, so it hides
+// what's behind it as a nearer trail does. Add them first: they hide the most
+void trail_occluders_add_blocks(trail_occluders *o, const world_rect *blocks, int count, const world_rect *view);
 
 /*
  * The parts of the segment from -> to between steps s0 and s1 (steps along it, as in

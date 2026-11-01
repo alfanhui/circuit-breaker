@@ -1,7 +1,16 @@
 #include "rounds.h"
+#include "arena.h"
+#include "bot.h"
 
 // Each round's rivals (STORY.md). Rounds 4 and 5 are the Watchdog's: 1 for now, as it isn't built
 static const unsigned char round_rivals[ROUND_COUNT] = {1, 2, 3, 1, 1};
+
+// Each round's arena (STORY.md): a different layout each time round, the last the first's again
+static const unsigned char round_layouts[ROUND_COUNT] = {ARENA_OPEN, ARENA_DONUT, ARENA_PILLARS, ARENA_ROOMS,
+														 ARENA_OPEN};
+
+// Each round's least bot skill: Medium for the last two
+static const unsigned char round_min_skills[ROUND_COUNT] = {BOT_EASY, BOT_EASY, BOT_EASY, BOT_MEDIUM, BOT_MEDIUM};
 
 // The status line's words for each round: each round is one more time round the loop
 static const char *const round_titles[ROUND_COUNT] = {
@@ -27,7 +36,8 @@ void rounds_restart(rounds *r)
 
 int rounds_update(rounds *r, int rivals_alive)
 {
-	r->frames++;
+	if (r->frames < 0xffff) // held there, not wrapped back to 0: round 5 would open out again
+		r->frames++;
 	switch (r->phase)
 	{
 	case ROUND_PLAYING:
@@ -90,4 +100,55 @@ int rounds_rivals(const rounds *r)
 const char *rounds_title(const rounds *r)
 {
 	return round_titles[r->number];
+}
+
+int rounds_min_skill(const rounds *r)
+{
+	return round_min_skills[r->number];
+}
+
+int rounds_layout(const rounds *r)
+{
+	return round_layouts[r->number];
+}
+
+// Where the last round is in its lunges: the beat it's on, and how far through the moving half
+// of that beat, 0 to 254 (-1 in the still half, or once it's closed all the way, or not closing)
+static int lunge(const rounds *r, int *beat)
+{
+	int within;
+
+	*beat = 0;
+	if (r->number != ROUND_COUNT - 1 || r->phase != ROUND_PLAYING)
+		return -1;
+	*beat = r->frames >> ROUND_LUNGE_SHIFT;
+	if (*beat * ROUND_LUNGE_DISTANCE >= ROUND_CLOSE_MAX)
+		return -1;
+	within = r->frames & ((1 << ROUND_LUNGE_SHIFT) - 1);
+	if (within < (1 << (ROUND_LUNGE_SHIFT - 1)))
+		return -1; // the still half: it starts with one, so the round opens quietly
+	return (within - (1 << (ROUND_LUNGE_SHIFT - 1))) << (9 - ROUND_LUNGE_SHIFT); // 0..254
+}
+
+int rounds_closing(const rounds *r)
+{
+	int beat;
+	int u = lunge(r, &beat);
+	int closed = beat * ROUND_LUNGE_DISTANCE; // every lunge before this beat's
+
+	if (u >= 0)
+		closed += (ROUND_LUNGE_DISTANCE * smooth(u)) >> 8; // part way through this one, eased
+	return closed < ROUND_CLOSE_MAX ? closed : ROUND_CLOSE_MAX;
+}
+
+int rounds_rumble(const rounds *r)
+{
+	int beat;
+	int u = lunge(r, &beat);
+
+	if (u < 0)
+		return 0;
+	// The walls' speed, as a bump: u (256 - u) is 0 at either end and 16384 in the middle,
+	// >> 6 makes that 256. The same shape as smoothstep's slope
+	return (ROUND_RUMBLE_MAX * ((u * (256 - u)) >> 6)) >> 8;
 }

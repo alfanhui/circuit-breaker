@@ -259,6 +259,31 @@ static void direction_on_the_rim(void)
 	CHECK_EQ(9, k);
 }
 
+
+// A block near the player shows as its outline, as walls; the outer square only when it's in range
+static void walls_and_blocks_are_outlined(void)
+{
+	world_rect block = {PX(4), PX(-12), PX(12), PX(-4)}; // ahead and to the left, facing north
+	minimap_line out[16];
+	int n;
+
+	minimap_init();
+	n = minimap_build_walls(&block, 1, 8000, pt(0, 0), FACING_NORTH, out, 16);
+	CHECK_EQ(4, n); // the square's 8000 out: off the map; the block's four sides on it
+	for (int i = 0; i < n; ++i)
+		CHECK_EQ(MINIMAP_WALL, out[i].trail);
+	// Its north side, 12 pixels ahead: up the map. West (+x) is on the left facing north
+	CHECK_EQ(-12, out[0].y0);
+	CHECK_EQ(-12, out[0].y1);
+	CHECK_EQ(-4, out[0].x0);
+	CHECK_EQ(-12, out[0].x1);
+	// Near the outer wall, its line shows too
+	n = minimap_build_walls(&block, 0, PX(20), pt(0, 0), FACING_NORTH, out, 16);
+	CHECK_EQ(4, n);
+	// And it stops when the lines run out
+	CHECK_EQ(2, minimap_build_walls(&block, 1, PX(20), pt(0, 0), FACING_NORTH, out, 2));
+}
+
 void run_minimap_tests(void)
 {
 	RUN(direction_on_the_rim);
@@ -276,4 +301,5 @@ void run_minimap_tests(void)
 	RUN(long_trail_is_clipped_to_the_circle);
 	RUN(far_trail_is_not_drawn);
 	RUN(every_trail_and_corner_is_drawn);
+	RUN(walls_and_blocks_are_outlined);
 }

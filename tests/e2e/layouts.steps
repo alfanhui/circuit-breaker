@@ -1,0 +1,28 @@
+# Each round's layout (game/arena.h): the blocks standing inside the square. Film it with
+# tests\e2e\film_round.ps1 -Round N (2 the donut, 3 the pillars, 4 the four rooms, 5 the square
+# closing in), which builds the game booting into that round. The loop's broken (as
+# arrival.steps) so the flight down shows the whole arena from above as its walls and blocks
+# rise, then 1st person at the layout's start, looking right, then iso, then a few seconds on.
+wait_boot # the opening flight is up
+# Hurry it to x3: it lands in about 3 s
+press b
+wait 5.5
+press left
+wait 0.6
+press left
+wait 0.6
+press left
+wait 0.7
+shot layout_0_overview_rising
+wait 0.4
+shot layout_1_overview
+wait 2.5
+shot layout_2_ahead
+hold r 0.8
+shot layout_3_look_right
+press down
+wait 0.5
+shot layout_4_iso
+press down
+wait 6
+shot layout_5_later

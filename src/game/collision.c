@@ -1,4 +1,5 @@
 #include "collision.h"
+#include "arena.h"
 
 /*
  * Every check works in two coordinates relative to the heading, so one piece of code covers all
@@ -146,4 +147,32 @@ int collision_free_distance(world_point from, int heading, int distance, int lim
 	for (int i = 0; i < trail_count; ++i)
 		distance = collision_trail(from, heading, distance, trails[i]);
 	return distance;
+}
+
+int collision_blocks(world_point from, int heading, int distance, const world_rect *blocks, int count)
+{
+	for (int i = 0; i < count; ++i)
+	{
+		// A block is a fattened segment from one corner to the other: collision_segment works
+		// with each end's along and across, the smaller and the bigger, which for opposite
+		// corners are the block's sides. Inside it, with any of it ahead, is a crash, as inside
+		// a trail is
+		world_point a, b;
+
+		a.x = blocks[i].x_min;
+		a.y = blocks[i].y_min;
+		b.x = blocks[i].x_max;
+		b.y = blocks[i].y_max;
+		distance = collision_segment(from, heading, distance, a, b, ARENA_WALL_CLEARANCE);
+	}
+	return distance;
+}
+
+int collision_arena(world_point from, int heading, int distance, const trail *const *trails, int trail_count)
+{
+	int count;
+	const world_rect *blocks = arena_blocks(&count);
+
+	distance = collision_blocks(from, heading, distance, blocks, count);
+	return collision_free_distance(from, heading, distance, arena_player_limit(), trails, trail_count);
 }

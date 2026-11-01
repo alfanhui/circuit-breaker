@@ -94,11 +94,13 @@ int cycle_update(cycle *c, int boosting, const trail *const *trails, int trail_c
 	// at cruise 7 added 0.66 of a unit: nothing
 	distance = c->speed + ((c->speed * CYCLE_BOOST_SHARE * c->boost + 128) >> 8);
 
-	// Ask before moving how far it can go: the arena edge and trails (collision.h). Unbounded
+	// Ask before moving how far it can go: the arena edge, its blocks and trails (collision.h). Unbounded
 	// (debug, Y) is a ghost: through trails and out of the arena, up to the short overflow guard
 	limit = (short)(c->bounded ? arena_player_limit() : WORLD_COORD_LIMIT);
-	allowed = collision_free_distance(c->position, c->heading, distance, limit,
-								   c->bounded ? trails : 0, c->bounded ? trail_count : 0);
+	if (c->bounded)
+		allowed = collision_arena(c->position, c->heading, distance, trails, trail_count); // and the blocks
+	else
+		allowed = collision_edge(c->position, c->heading, distance, limit);
 	c->position.x = (short)(c->position.x + WORLD_HEADING_DX(c->heading) * allowed);
 	c->position.y = (short)(c->position.y + WORLD_HEADING_DY(c->heading) * allowed);
 

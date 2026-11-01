@@ -310,6 +310,42 @@ static void fast_trail_check_matches_segment_by_segment(void)
 	CHECK_EQ(0, differ);
 }
 
+
+// A block stops a cycle its clearance short, as a wall does; beside it, it rides past
+static void block_stops_the_cycle_short(void)
+{
+	world_rect block = {-500, -2000, 500, -1000}; // x -500..500, y -2000..-1000: north of the origin
+	world_point from = {0, 0};
+
+	CHECK_EQ(1000 - ARENA_WALL_CLEARANCE, collision_blocks(from, HEADING_NORTH, 5000, &block, 1));
+	CHECK_EQ(5000, collision_blocks(from, HEADING_SOUTH, 5000, &block, 1)); // behind it
+	from.x = 500 + ARENA_WALL_CLEARANCE; // just clear of its west side (+x)
+	CHECK_EQ(5000, collision_blocks(from, HEADING_NORTH, 5000, &block, 1));
+	from.x = 500 + ARENA_WALL_CLEARANCE - 1; // just inside the clearance
+	CHECK(collision_blocks(from, HEADING_NORTH, 5000, &block, 1) < 5000);
+}
+
+// A bounded cycle runs into the layout's blocks; a ghost (unbounded) rides through them
+static void cycles_hit_blocks_unless_ghosts(void)
+{
+	cycle c;
+	int crashed = 0;
+
+	arena_set_layout(ARENA_DONUT); // the block's south side is at y = 3000
+	cycle_init(&c, 0, 5000, HEADING_NORTH);
+	for (int i = 0; i < 2000 && !crashed; ++i)
+		crashed = cycle_update(&c, 0, 0, 0);
+	CHECK(crashed);
+	CHECK_EQ(3000 + ARENA_WALL_CLEARANCE, c.position.y);
+
+	cycle_init(&c, 0, 5000, HEADING_NORTH);
+	c.bounded = 0;
+	for (int i = 0; i < 500; ++i)
+		cycle_update(&c, 0, 0, 0);
+	CHECK(c.position.y < 3000 + ARENA_WALL_CLEARANCE);
+	arena_set_layout(ARENA_OPEN);
+}
+
 void run_collision_tests(void)
 {
 	RUN(fast_trail_check_matches_segment_by_segment);
@@ -331,4 +367,6 @@ void run_collision_tests(void)
 	RUN(crashed_cycle_builds_back_up_after_turning);
 	RUN(ghost_cycle_passes_through_trails);
 	RUN(arena_edge_is_a_crash_too);
+	RUN(block_stops_the_cycle_short);
+	RUN(cycles_hit_blocks_unless_ghosts);
 }

@@ -60,7 +60,7 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - Up: boost
 - Down: switch between isometric and 1st person view
 - L / R (hold): look left / right (1st person)
-- A: the bots' difficulty: Easy, Medium, Hard (a toggle for now; the status line says which, the debug text's last line shows E / M / H)
+- A: the bots' difficulty: Easy, Medium, Hard (a toggle for now; the status line says which, the debug text's last line shows E / M / H). Rounds 4 and 5 are at least Medium whatever's picked
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
 - B / C: cruise speed down / up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)

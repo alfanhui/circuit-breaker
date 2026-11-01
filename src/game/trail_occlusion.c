@@ -75,6 +75,38 @@ void trail_occluders_begin(trail_occluders *o, world_point eye)
 	o->count = 0;
 }
 
+// Wholly outside the view rectangle: it can't hide anything that's drawn
+static int outside(world_point from, world_point to, const world_rect *view)
+{
+	return (from.x < view->x_min && to.x < view->x_min) || (from.x > view->x_max && to.x > view->x_max) ||
+		   (from.y < view->y_min && to.y < view->y_min) || (from.y > view->y_max && to.y > view->y_max);
+}
+
+// One segment onto the list, if it can hide anything and there's room
+static void add_segment(trail_occluders *o, world_point from, world_point to, const world_rect *view)
+{
+	line_view v;
+	int d1;
+	int along_min;
+	int along_max;
+
+	if (o->count >= TRAIL_OCCLUDERS_MAX || outside(from, to, view))
+		return;
+	if (!view_of(from, to, o->eye, &v))
+		return; // diagonal: hides nothing
+	if (v.across == 0)
+		return; // on the eye's own line: seen end on, it hides nothing (and d1 can't be 0)
+	d1 = v.across < 0 ? -v.across : v.across;
+	along_min = clamp(v.from_along < v.to_along ? v.from_along : v.to_along, ALONG_LIMIT);
+	along_max = clamp(v.from_along < v.to_along ? v.to_along : v.from_along, ALONG_LIMIT);
+	o->along_x[o->count] = (unsigned char)v.runs_along_x;
+	o->across[o->count] = v.across;
+	// The only divisions: two per segment listed, at most TRAIL_OCCLUDERS_MAX a frame
+	o->slope_min[o->count] = div_ceil(along_min << SLOPE_SHIFT, d1);
+	o->slope_max[o->count] = div_floor(along_max << SLOPE_SHIFT, d1);
+	o->count++;
+}
+
 void trail_occluders_add(trail_occluders *o, const trail *t, int head_gap, const world_rect *view)
 {
 	world_point from;
@@ -82,33 +114,33 @@ void trail_occluders_add(trail_occluders *o, const trail *t, int head_gap, const
 
 	// Newest first: if the list fills up, the oldest (usually furthest) are the ones left out
 	for (int i = trail_segment_count(t) - 1; i >= 0 && o->count < TRAIL_OCCLUDERS_MAX; --i)
+		if (trail_get_segment(t, i, head_gap, &from, &to))
+			add_segment(o, from, to, view);
+}
+
+void trail_occluders_add_blocks(trail_occluders *o, const world_rect *blocks, int count, const world_rect *view)
+{
+	for (int i = 0; i < count; ++i)
 	{
-		if (!trail_get_segment(t, i, head_gap, &from, &to))
-			continue;
-		// Wholly outside the view rectangle: it can't hide anything that's drawn
-		if ((from.x < view->x_min && to.x < view->x_min) || (from.x > view->x_max && to.x > view->x_max) ||
-			(from.y < view->y_min && to.y < view->y_min) || (from.y > view->y_max && to.y > view->y_max))
-			continue;
+		const world_rect *b = &blocks[i];
+		world_point from;
+		world_point to;
+
+		// The face on the eye's side across x (a north-south line), if it's off to one side
+		if (o->eye.x < b->x_min || o->eye.x > b->x_max)
 		{
-			line_view v;
-
-			int d1;
-			int along_min;
-			int along_max;
-
-			if (!view_of(from, to, o->eye, &v))
-				continue; // diagonal: hides nothing
-			if (v.across == 0)
-				continue; // on the eye's own line: seen end on, it hides nothing (and d1 can't be 0)
-			d1 = v.across < 0 ? -v.across : v.across;
-			along_min = clamp(v.from_along < v.to_along ? v.from_along : v.to_along, ALONG_LIMIT);
-			along_max = clamp(v.from_along < v.to_along ? v.to_along : v.from_along, ALONG_LIMIT);
-			o->along_x[o->count] = (unsigned char)v.runs_along_x;
-			o->across[o->count] = v.across;
-			// The only divisions: two per segment listed, at most TRAIL_OCCLUDERS_MAX a frame
-			o->slope_min[o->count] = div_ceil(along_min << SLOPE_SHIFT, d1);
-			o->slope_max[o->count] = div_floor(along_max << SLOPE_SHIFT, d1);
-			o->count++;
+			from.x = to.x = o->eye.x < b->x_min ? b->x_min : b->x_max;
+			from.y = b->y_min;
+			to.y = b->y_max;
+			add_segment(o, from, to, view);
+		}
+		// And the face on its side across y (an east-west line)
+		if (o->eye.y < b->y_min || o->eye.y > b->y_max)
+		{
+			from.y = to.y = o->eye.y < b->y_min ? b->y_min : b->y_max;
+			from.x = b->x_min;
+			to.x = b->x_max;
+			add_segment(o, from, to, view);
 		}
 	}
 }

@@ -13,6 +13,12 @@ void camera_shake_start(camera_shake *s, int strength)
 	s->frame = 0; // a fresh jolt starts on the + side
 }
 
+void camera_shake_hold(camera_shake *s, int strength)
+{
+	if (strength > s->strength)
+		s->strength = strength;
+}
+
 void camera_shake_step(camera_shake *s, int *yaw, int *pitch)
 {
 	int size = s->strength;

@@ -170,6 +170,30 @@ static void slopes_hide_what_division_does(void)
 	CHECK(worst <= 1);
 }
 
+// A pillar's face hides a trail behind it, as a nearer trail would; only the faces turned to the
+// eye are listed, and a block the eye is level with on one axis lists just one
+static void a_block_hides_what_is_behind_it(void)
+{
+	world_rect everywhere = {-9000, -9000, 9000, 9000};
+	world_rect pillar = {100, -1000, 400, -100}; // to the west (+x) and ahead (north, -y)
+	int n;
+
+	trail_occluders_begin(&occ, pt(0, 0));
+	trail_occluders_add_blocks(&occ, &pillar, 1, &everywhere);
+	CHECK_EQ(2, occ.count); // its east face (x 100) and its south face (y -100)
+	// The far trail, 300 west, running north: behind the east face from 300 to 3000 ahead
+	n = far_parts();
+	CHECK_EQ(1, n);
+	CHECK_EQ(0, starts[0]);
+	CHECK(ends[0] <= 300);
+	// Level with the eye across x (it spans x = 0): only its south face can hide anything
+	pillar.x_min = -200;
+	trail_occluders_begin(&occ, pt(0, 0));
+	trail_occluders_add_blocks(&occ, &pillar, 1, &everywhere);
+	CHECK_EQ(1, occ.count);
+	CHECK_EQ(1, occ.along_x[0]);
+}
+
 void run_trail_occlusion_tests(void)
 {
 	RUN(slopes_hide_what_division_does);
@@ -179,4 +203,5 @@ void run_trail_occlusion_tests(void)
 	RUN(a_trail_beside_the_eye_hides_what_is_behind_it);
 	RUN(farther_or_other_side_or_crossing_hides_nothing);
 	RUN(hidden_pieces_are_not_built);
+	RUN(a_block_hides_what_is_behind_it);
 }

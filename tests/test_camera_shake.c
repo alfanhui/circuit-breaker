@@ -85,6 +85,28 @@ static void a_second_jolt_keeps_the_bigger(void)
 	CHECK_EQ(2000, yaw);
 }
 
+// Held every frame, it keeps shaking both ways at that size (a rumble), and dies away after
+static void a_hold_keeps_it_buzzing(void)
+{
+	camera_shake s;
+	int yaw, pitch, plus = 0, minus = 0;
+
+	camera_shake_init(&s);
+	for (int i = 0; i < 20; ++i)
+	{
+		camera_shake_hold(&s, 128);
+		camera_shake_step(&s, &yaw, &pitch);
+		CHECK(yaw == 128 || yaw == -128);
+		plus += yaw > 0;
+		minus += yaw < 0;
+	}
+	CHECK_EQ(10, plus); // both ways, not a steady tilt
+	CHECK_EQ(10, minus);
+	for (int i = 0; i < 30; ++i)
+		camera_shake_step(&s, &yaw, &pitch);
+	CHECK(!camera_shake_active(&s));
+}
+
 void run_camera_shake_tests(void)
 {
 	still_until_started();
@@ -92,4 +114,5 @@ void run_camera_shake_tests(void)
 	yaw_flips_every_frame_pitch_every_other();
 	dies_away_and_stops();
 	a_second_jolt_keeps_the_bigger();
+	a_hold_keeps_it_buzzing();
 }

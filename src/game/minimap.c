@@ -186,3 +186,35 @@ int minimap_build(const trail *const *trails, int trail_count, world_point eye, 
 	}
 	return n;
 }
+
+// A rectangle's four edges, relative to the player. Returns how many lines were added
+static int add_outline(int x_min, int y_min, int x_max, int y_max, world_point eye, int forward_x, int forward_y,
+					   minimap_line *out, int room)
+{
+	const int x0 = x_min - eye.x, x1 = x_max - eye.x;
+	const int y0 = y_min - eye.y, y1 = y_max - eye.y;
+	int n = 0;
+
+	if (n < room && add_segment(x0, y0, x1, y0, forward_x, forward_y, &out[n]))
+		out[n++].trail = MINIMAP_WALL;
+	if (n < room && add_segment(x0, y1, x1, y1, forward_x, forward_y, &out[n]))
+		out[n++].trail = MINIMAP_WALL;
+	if (n < room && add_segment(x0, y0, x0, y1, forward_x, forward_y, &out[n]))
+		out[n++].trail = MINIMAP_WALL;
+	if (n < room && add_segment(x1, y0, x1, y1, forward_x, forward_y, &out[n]))
+		out[n++].trail = MINIMAP_WALL;
+	return n;
+}
+
+int minimap_build_walls(const world_rect *blocks, int block_count, int half, world_point eye, int forward_x,
+						int forward_y, minimap_line *out, int max_lines)
+{
+	int n = 0;
+
+	if (half > 0)
+		n += add_outline(-half, -half, half, half, eye, forward_x, forward_y, out, max_lines);
+	for (int i = 0; i < block_count; ++i)
+		n += add_outline(blocks[i].x_min, blocks[i].y_min, blocks[i].x_max, blocks[i].y_max, eye, forward_x,
+						 forward_y, &out[n], max_lines - n);
+	return n;
+}

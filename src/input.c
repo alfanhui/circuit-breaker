@@ -24,6 +24,16 @@ static bot_mind bot_minds[BOT_COUNT_MAX]; // what each bot remembers between fra
 int bot_skill_level = BOT_EASY;
 static const char *const skill_titles[BOT_SKILL_COUNT] = {"Difficulty: Easy", "Difficulty: Medium",
 															 "Difficulty: Hard"};
+
+// How hard the bots play now: the difficulty picked, but never below the round's least
+// (rounds_min_skill: Medium in rounds 4 and 5)
+int bot_skill_now(void)
+{
+	const int least = rounds_min_skill(&arena_rounds);
+
+	return bot_skill_level > least ? bot_skill_level : least;
+}
+
 // Who the bots chase, if they can see them: you. They're a team against you, not each other: a
 // round is yours once they're all gone, and bots knocking each other out would make it a wait
 static const rider *const bot_rivals[] = {&player1};
@@ -188,6 +198,32 @@ static void attract_frame(rider_controls *controls)
 	update_pan();
 }
 
+/*
+ * The round's arena (game/rounds.h: rounds_layout): which blocks stand inside the square. Set
+ * whenever a round starts afresh: before its walls rise, and at a restart. The last round closes
+ * in (rounds_closing), pulling the walls in (arena_set_inset); setting the next round's layout
+ * puts them back, so a restart or the loop going round opens it out again
+ */
+static void enter_round_layout(void)
+{
+	arena_set_inset(0);
+	arena_set_layout(rounds_layout(&arena_rounds));
+}
+
+// Each game frame: the last round's walls lunging in (rounds.h), the camera rumbling while they
+// move. A wall coming in over a cycle pulls it inside (cycle.c): a crash. Won, it stops closing
+// but the walls stay where they got to until they're down (enter_round_layout)
+static void close_in(void)
+{
+	const int closing = rounds_closing(&arena_rounds);
+	const int rumble = rounds_rumble(&arena_rounds);
+
+	if (closing > 0)
+		arena_set_inset(closing);
+	if (rumble > 0)
+		view_rumble(rumble); // kept up each frame: it only dies away once they stop
+}
+
 // Spectating (the prologue's loop) or playing. In the loop the CPU is alone: the bot is taken
 // out of the field, and comes in fresh at its start when play begins (docs/STORY.md)
 static void set_spectating(bool on)
@@ -205,6 +241,7 @@ static void set_spectating(bool on)
 		loop_break_init(&breaker);
 		rounds_init(&arena_rounds); // the loop: play will start from the first round (BOOT_ROUND)
 		arena_rounds.number = BOOT_ROUND;
+		enter_round_layout(); // flat in the floor all through the loop: it rises at the break
 		if (attract_waypoint_count == 0) // built once
 		{
 			origin.x = ATTRACT_ORIGIN_X;
@@ -249,14 +286,22 @@ static int nearest_step(int v)
 	return (v >= 0 ? v + SLIDE_STEP / 2 : v - SLIDE_STEP / 2) / SLIDE_STEP * SLIDE_STEP;
 }
 
+// How far to slide the world, in whole steps, on one axis, to bring v within half a step of to:
+// the layout's start (the middle isn't clear in every layout: the donut's block stands there)
+static int slide_towards(int v, int to)
+{
+	return -nearest_step(v - to);
+}
+
 // The arena is centred on the world's origin, and the flight down is made for a cycle there
 // (it frames the whole arena from the overview, and stays well clear of the walls when low).
 // The loop's cycle could be anywhere along the message, so rather than move the arena, move
 // everything else: the cycle, the message's strokes and the camera, all by the same amount
 static void slide_to_the_centre(void)
 {
-	int dx = -nearest_step(player1.bike.position.x);
-	int dy = -nearest_step(player1.bike.position.y);
+	const world_point to = arena_start(); // the centre, unless BOOT_ROUND's layout has a block there
+	int dx = slide_towards(player1.bike.position.x, to.x);
+	int dy = slide_towards(player1.bike.position.y, to.y);
 
 	// Mid-stroke, keep the stroke being written: it sinks with the rest of its word
 	if (attract_route_pen(&route) && attract_stroke_count < ATTRACT_STROKES_MAX && current_word < ATTRACT_WORDS_MAX)
@@ -400,7 +445,17 @@ static void enter_scene(scene part)
 {
 	game_init(&game);
 	status_init(&status);
-	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
+	if (part == SCENE_PLAY)
+	{
+		// The round's layout first: where you start depends on it (the middle isn't always clear)
+		world_point at;
+
+		enter_round_layout();
+		at = arena_start();
+		rider_init(&player1, at.x, at.y, (unsigned char)arena_start_heading());
+	}
+	else
+		rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
 	set_spectating(part != SCENE_PLAY); // the bots: out for the loop, or the round's in for play
 	intro_hurry = 1;
 	if (part == SCENE_INTRO)
@@ -431,19 +486,15 @@ int arena_wall_rise(void)
  * Between rounds (game/rounds.h, docs/STORY.md). Once the last rival's gone the walls sink, and
  * every trail with them; you ride on over the endless floor, a ghost, as there's nothing to hit.
  * Just before the next round's walls rise, with nothing standing anywhere, the world slides so
- * you're near the centre again (the same slide as at the loop's break: you may have ridden a
- * long way out); then the walls rise round you, and once they're up its rivals come in.
+ * you're near its layout's start (the same slide as at the loop's break: you may have ridden a
+ * long way out); then the walls and its blocks rise round you, and once they're up its rivals
+ * come in.
  */
 
-// A spawn point kept SPAWN_MARGIN inside the arena's edge on one axis: in a small arena (the
-// debug sizes) 2000 out could be outside the walls, an instant crash
+// Spawn points are kept SPAWN_MARGIN inside the arena's walls and clear of its blocks
+// (arena_clear_spot): in a small arena (the debug sizes) 2000 out could be outside the walls,
+// and in the donut 3000 ahead can be inside its block, an instant crash
 #define SPAWN_MARGIN 500
-static short inside_arena(int v)
-{
-	int limit = arena_player_limit() - SPAWN_MARGIN;
-
-	return (short)(v > limit ? limit : v < -limit ? -limit : v);
-}
 
 // Where each bot starts, from you: how far to your right (negative: left) and ahead, riding the
 // way you are. The first is where round 1's bot has always been (2000 to your right); the
@@ -452,8 +503,8 @@ static const short bot_start_right[BOT_COUNT_MAX] = {2000, -2000, 0};
 static const short bot_start_ahead[BOT_COUNT_MAX] = {0, 0, 3000};
 
 // The round's bots (rounds_rivals: 1 to 3) placed round you, the rest out of the field, and the
-// status line saying which round it is. You're near the centre whenever this is called (play's
-// start, or the walls just risen round you), so they're well inside the walls too
+// status line saying which round it is. You're near the layout's start whenever this is called
+// (play's start, or the walls just risen round you), so they're well inside the walls too
 static void begin_round(void)
 {
 	int h = player1.bike.heading, right = (h + 1) & 3;
@@ -462,16 +513,18 @@ static void begin_round(void)
 	remove_bots();
 	for (int i = 0; i < count && i < BOT_COUNT_MAX; ++i)
 	{
-		int x = player1.bike.position.x + WORLD_HEADING_DX(right) * bot_start_right[i] +
-				WORLD_HEADING_DX(h) * bot_start_ahead[i];
-		int y = player1.bike.position.y + WORLD_HEADING_DY(right) * bot_start_right[i] +
-				WORLD_HEADING_DY(h) * bot_start_ahead[i];
+		world_point at;
 
-		rider_init(&bots[i], inside_arena(x), inside_arena(y), (unsigned char)h);
+		at.x = (short)(player1.bike.position.x + WORLD_HEADING_DX(right) * bot_start_right[i] +
+					   WORLD_HEADING_DX(h) * bot_start_ahead[i]);
+		at.y = (short)(player1.bike.position.y + WORLD_HEADING_DY(right) * bot_start_right[i] +
+					   WORLD_HEADING_DY(h) * bot_start_ahead[i]);
+		at = arena_clear_spot(at, SPAWN_MARGIN);
+		rider_init(&bots[i], at.x, at.y, (unsigned char)h);
 		// The seed picks its reaction times: the same every run, but different for each bot and
 		// round (round 1's first bot keeps seed 1, which the E2E scripts were made with)
 		bot_init(&bot_minds[i], 1 + arena_rounds.number * BOT_COUNT_MAX + i);
-		bot_set_skill(&bot_minds[i], bot_skill_level);
+		bot_set_skill(&bot_minds[i], bot_skill_now());
 	}
 	update_solid_trails();
 	status_show(&status, rounds_title(&arena_rounds));
@@ -486,10 +539,16 @@ static void between_rounds(void)
 		break;
 	case ROUND_RISES:
 	{
-		// Whole floor tiles, so the grid under you lands on itself. Your trail starts afresh
-		// here: what you laid out there is flat in the floor, and would be left far off
-		int dx = -nearest_step(player1.bike.position.x);
-		int dy = -nearest_step(player1.bike.position.y);
+		// The next round's layout rises: you're slid near its start. Whole floor tiles, so the
+		// grid under you lands on itself. Your trail starts afresh here: what you laid out there
+		// is flat in the floor, and would be left far off
+		world_point to;
+		int dx, dy;
+
+		enter_round_layout();
+		to = arena_start();
+		dx = slide_towards(player1.bike.position.x, to.x);
+		dy = slide_towards(player1.bike.position.y, to.y);
 
 		player1.bike.position.x = (short)(player1.bike.position.x + dx);
 		player1.bike.position.y = (short)(player1.bike.position.y + dy);
@@ -504,6 +563,7 @@ static void between_rounds(void)
 		begin_round();
 		break;
 	}
+	close_in();
 	// Your trail sinks and rises with the walls
 	if (arena_rounds.phase != ROUND_PLAYING)
 		player1.trail_height = (unsigned char)((TRAIL_HEIGHT * rounds_wall_rise(&arena_rounds)) >> 8);
@@ -692,8 +752,8 @@ static void game_step(unsigned short struck)
 	{
 		bot_skill_level = bot_skill_level + 1 < BOT_SKILL_COUNT ? bot_skill_level + 1 : BOT_EASY;
 		for (int i = 0; i < BOT_COUNT_MAX; ++i)
-			bot_set_skill(&bot_minds[i], bot_skill_level);
-		status_show(&status, skill_titles[bot_skill_level]);
+			bot_set_skill(&bot_minds[i], bot_skill_now());
+		status_show(&status, skill_titles[bot_skill_now()]); // what they play at, not just what was picked
 	}
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (struck & DIGI_X)
