@@ -17,6 +17,7 @@ rider player1;
 rider bot1;
 game_state game;
 status_message status;
+rounds arena_rounds;
 static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
 static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
 // Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
@@ -158,6 +159,7 @@ static void set_spectating(bool on)
 
 		rider_remove(&bot1);
 		loop_break_init(&breaker);
+		rounds_init(&arena_rounds); // the loop: play will start from the first round
 		if (attract_waypoint_count == 0) // built once
 		{
 			origin.x = ATTRACT_ORIGIN_X;
@@ -169,8 +171,12 @@ static void set_spectating(bool on)
 	}
 	else
 	{
+		// The round you're on, from its start: the first after the loop's break, the same one
+		// again after a crash (the terminal screen), saying which as it begins
 		rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
 		bot_init(&bot1_mind, 1);
+		rounds_restart(&arena_rounds);
+		status_show(&status, rounds_title(&arena_rounds));
 	}
 	update_solid_trails();
 }
@@ -344,7 +350,78 @@ static void enter_scene(scene part)
 
 void init_players(void)
 {
+	rounds_init(&arena_rounds); // booting straight into play (BOOT_SCENE) skips the loop's
 	enter_scene(BOOT_SCENE);
+}
+
+int arena_wall_rise(void)
+{
+	int arriving = view_wall_rise(), between = rounds_wall_rise(&arena_rounds);
+
+	return arriving < between ? arriving : between;
+}
+
+/*
+ * Between rounds (game/rounds.h, docs/STORY.md). Once the last rival's gone the walls sink, and
+ * every trail with them; you ride on over the endless floor, a ghost, as there's nothing to hit.
+ * Just before the next round's walls rise, with nothing standing anywhere, the world slides so
+ * you're near the centre again (the same slide as at the loop's break: you may have ridden a
+ * long way out); then the walls rise round you, and once they're up its rivals come in.
+ */
+
+// A spawn point kept SPAWN_MARGIN inside the arena's edge on one axis: in a small arena (the
+// debug sizes) 2000 out could be outside the walls, an instant crash
+#define SPAWN_MARGIN 500
+static short inside_arena(int v)
+{
+	int limit = arena_player_limit() - SPAWN_MARGIN;
+
+	return (short)(v > limit ? limit : v < -limit ? -limit : v);
+}
+
+// The next round's rivals: the bot 2000 to your right, riding the way you are. Where you'll be
+// as the walls finish rising is near the centre (within ~1000), so it's well inside them too
+static void start_rivals(void)
+{
+	int right = (player1.bike.heading + 1) & 3;
+
+	rider_init(&bot1, inside_arena(player1.bike.position.x + WORLD_HEADING_DX(right) * 2000),
+			   inside_arena(player1.bike.position.y + WORLD_HEADING_DY(right) * 2000), player1.bike.heading);
+	bot_init(&bot1_mind, 1 + arena_rounds.number); // a different seed each round: other reaction times
+	update_solid_trails();
+}
+
+static void between_rounds(void)
+{
+	switch (rounds_update(&arena_rounds, bot1.alive))
+	{
+	case ROUND_CLEARED:
+		player1.bike.bounded = 0; // nothing left to hit, and soon no edge
+		break;
+	case ROUND_RISES:
+	{
+		// Whole floor tiles, so the grid under you lands on itself. Your trail starts afresh
+		// here: what you laid out there is flat in the floor, and would be left far off
+		int dx = -nearest_step(player1.bike.position.x);
+		int dy = -nearest_step(player1.bike.position.y);
+
+		player1.bike.position.x = (short)(player1.bike.position.x + dx);
+		player1.bike.position.y = (short)(player1.bike.position.y + dy);
+		view_spectate_move(dx, dy); // the camera with you (in play it follows you anyway)
+		trail_reset(&player1.wall, player1.bike.position);
+		rider_remove(&bot1); // its trail's sunk by now; gone for good
+		break;
+	}
+	case ROUND_BEGINS:
+		player1.bike.bounded = 1;
+		player1.trail_height = TRAIL_HEIGHT;
+		start_rivals();
+		status_show(&status, rounds_title(&arena_rounds));
+		break;
+	}
+	// Your trail sinks and rises with the walls
+	if (arena_rounds.phase != ROUND_PLAYING)
+		player1.trail_height = (unsigned char)((TRAIL_HEIGHT * rounds_wall_rise(&arena_rounds)) >> 8);
 }
 
 void debug_pad1(void)
@@ -511,6 +588,8 @@ static void game_step(unsigned short struck)
 	}
 	else
 		rider_sink(&bot1);
+	if (!spectating)
+		between_rounds();
 	status_update(&status); // the status line types on, and goes once it's been read
 
 	// A: clear every wall, each starting fresh where its cycle is

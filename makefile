@@ -42,6 +42,7 @@ SRCS=main.c \
 	src/game/intro_flight.c \
 	src/game/arrival_flight.c \
 	src/game/surround.c \
+	src/game/rounds.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \

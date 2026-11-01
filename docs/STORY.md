@@ -81,6 +81,32 @@ The title has a double meaning: you break the loop, not just the circuit. The op
 look deliberately plainer than everything after it, so the escape feels like the world getting
 bigger.
 
+### The arena's rounds (decided 2026-11-01)
+
+The arena is five rounds, about 5-10 minutes in all. Each round is one turn of the loop the CPU
+is stuck in, and each comes up a little different, as if the loop were trying variations on
+itself.
+
+| Round | Layout | Rivals | What's wrong |
+|---|---|---|---|
+| 1 | A square | One bot | Nothing yet |
+| 2 | A square donut: a solid block in the middle | Two bots | One section of wall flickers; the HUD glitches on near misses |
+| 3 | A square with four square pillars | Three bots, and an ally pick-up | The flicker again, somewhere else |
+| 4 | Four rooms, a cross of walls between them with a gap (a door) in each arm | The Watchdog arrives: faster, and it copies itself (DMA) | The flicker grows |
+| 5 | A square again, the first round's, closing in | The Watchdog alone | The flicker is obvious |
+
+- **Between rounds** the walls (and any pillars) sink into the ground. For a few seconds there's
+  no edge: you ride on over the endless floor. Then the next layout rises around you. The world
+  slides first so you're somewhere clear in the new layout (as at the loop's break, by whole
+  floor tiles), so a wall never rises through you.
+- **Losing a round** (you crash) resets you to that round's start, with a reset effect: the
+  Watchdog doing its job. Winning a round is being the last one moving.
+- **The flicker** is a section of the outer wall, in every round after the first. Before round 5
+  it's solid: riding into it is a crash like any other (and a hint: it glitches as you die).
+- **The designed crash.** In round 5 the Watchdog doesn't go for the flicker itself. It herds
+  you: it cuts off the ways *away* from the section, so the only way left open leads into it.
+  You hit the section, the Watchdog's reset fails, the screen tears, and you fall through.
+
 ## Telling it: mostly without words
 
 Like Rez, the story is told through what you see and hear, not text or dialogue:
@@ -266,8 +292,8 @@ The mechanic is safe: leaving a wall behind you and boxing people in goes back t
 
 ## Still to decide
 
-- **The designed crash**: where it is, how players find it, and how many hints they get.
-- **What a crash means** in the arena: reset by the Watchdog and back to the start of the loop?
+- **The overclock in the arena**: a charge from near misses that you spend as a surge. Does the
+  break need a surge, or only the hit in round 5?
 - **The main CPU's turn**: what changes its mind?
 - **The palette**: one per place, or one for the whole game?
 - **Versus mode**: two players in the arena. Does it share the story, or stand apart?

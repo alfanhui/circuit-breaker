@@ -166,8 +166,8 @@ void debug_3d(bool show)
 	jo_printf(0, 3, "spd %d arena %d%s%s%s%s     ", cycle_cruise_speed(), 2 * arena_half(),
 			  debug_no_termination ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
-	jo_printf(0, 4, "bot %d %d %c boost %d     ", bot1.bike.position.x, bot1.bike.position.y,
-			  compass[bot1.bike.heading], bot1.bike.gauge);
+	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d     ", bot1.bike.position.x, bot1.bike.position.y,
+			  compass[bot1.bike.heading], bot1.bike.gauge, arena_rounds.number + 1, arena_rounds.phase);
 }
 
 /*
@@ -436,11 +436,13 @@ void draw_3d(void)
 				wall_eye.x = (short)view_x;
 				wall_eye.y = (short)view_y;
 			}
-			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, view_wall_rise());
+			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, arena_wall_rise());
 			// The ground round the arena, raised level with the walls' tops: the arena's sunk into
 			// it, and the floor's grid is only seen inside. It rises with the walls, from the
-			// break's flash (flat on the floor till then, hiding the grid outside)
-			draw_arena_surround(view_wall_rise(), !first_person && !debug_camera);
+			// break's flash (flat on the floor till then, hiding the grid outside). Between rounds,
+			// once it's sunk flat, it goes: the grid runs on for ever, as in the loop
+			if (arena_rounds.phase != ROUND_OPEN)
+				draw_arena_surround(arena_wall_rise(), !first_person && !debug_camera);
 		}
 
 		if (enable_trails)

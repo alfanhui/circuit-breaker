@@ -7,6 +7,7 @@
 #include "game/game_state.h"
 #include "game/status_message.h"
 #include "game/loop_break.h"
+#include "game/rounds.h"
 #include "game/arena.h"
 #include "game/trail.h"
 #include "view.h"
@@ -15,6 +16,7 @@ extern rider player1;
 extern rider bot1; // a computer rider (game/bot.h)
 extern game_state game; // playing, or terminated after a crash (game/game_state.h)
 extern status_message status; // a line typed out during play (game/status_message.h)
+extern rounds arena_rounds; // which round, and the walls sinking and rising between them (game/rounds.h)
 #define FIELD_TRAIL_COUNT 2
 extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trail: the radar's colours
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)
@@ -37,6 +39,9 @@ extern int intro_hurry;
 // The presses breaking the loop: their burst of light and flash are drawn in main.c
 extern loop_break breaker;
 extern world_point loop_break_at; // where the cycle was when the loop broke (the last burst is there)
+
+// How far the arena's walls stand, 0 to 256: rising in the arrival, sinking and rising between rounds
+int arena_wall_rise(void);
 
 void init_players(void);
 void debug_pad1(void);
