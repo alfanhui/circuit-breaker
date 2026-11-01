@@ -382,6 +382,86 @@ static void does_not_weave(void)
 	CHECK_EQ(0, turns);
 }
 
+// A pocket ahead: a corridor 120 wide, closed 500 ahead. A rival far beyond it pulls it
+// straight on, but there's no way out at the end: it turns away now, while the sides are open
+static void turns_away_from_a_dead_end(void)
+{
+	static trail pocket;
+	world_point p;
+
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	add_rival(0, -6000, HEADING_NORTH); // beyond sight: it heads their way (north)
+	another_trail(&pocket, -60, -100, -60, -500);
+	trail_add_corner(&pocket);
+	p.x = 60;
+	p.y = -500;
+	trail_set_head(&pocket, p);
+	trail_add_corner(&pocket);
+	p.y = -100;
+	trail_set_head(&pocket, p);
+	CHECK(decide(2, NULL) != TURN_NONE);
+}
+
+// It plans a turn left (the only open way), then while it reacts a trail is laid down that
+// side. With its hand on the button it looks again: it doesn't turn into the trail, but takes
+// the way with the most room left, at once
+static void looks_again_before_turning(void)
+{
+	static trail wall;
+	world_point p;
+	int pressed = TURN_NONE;
+	int frames = 0;
+
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	// Across its path 150 ahead, and down its right (east, -x) 300 away
+	another_trail(&wall, 300, -150, -300, -150);
+	trail_add_corner(&wall);
+	p.x = -300;
+	p.y = 500;
+	trail_set_head(&wall, p);
+	CHECK_EQ(TURN_NONE, think(2).turn); // planned: left, a reaction time from now
+	CHECK_EQ(TURN_LEFT, mind.planned);
+	// The left closes: a trail 50 away on that side (west is +x)
+	p.x = 50;
+	p.y = 200;
+	trail_reset(&bot.wall, p);
+	p.y = -200;
+	trail_set_head(&bot.wall, p);
+	while (pressed == TURN_NONE && frames++ <= BOT_REACTION_MAX)
+		pressed = think(2).turn;
+	CHECK_EQ(TURN_RIGHT, pressed);
+}
+
+// A rival behind it is out of sight: a turn they make there changes nothing it does, until it
+// sees them again. It goes on what it believes: they carried on the way it last saw them going
+static void ignores_a_turn_it_cannot_see(void)
+{
+	int seen_turn;
+	int seen_frames = 0;
+	int unseen_turn;
+	int unseen_frames = 0;
+
+	// The rival 2000 behind and 1000 to its left, both riding north: it cuts across (left)
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	add_rival(1000, 2000, HEADING_NORTH);
+	seen_turn = decide(1, &seen_frames);
+	// The same, but behind its back the rival turns west, away from it. Before, it knew at once
+	// and gave up the cut; now it believes they're still riding north
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	add_rival(1000, 2000, HEADING_NORTH);
+	think(1); // the round's start: it knows where they are and which way they're going
+	rival.bike.heading = HEADING_WEST;
+	unseen_turn = decide(1, &unseen_frames);
+	CHECK_EQ(TURN_LEFT, seen_turn);
+	CHECK_EQ(seen_turn, unseen_turn);
+	CHECK_EQ(1, mind.believes);
+	CHECK_EQ(HEADING_NORTH, mind.rival_heading);
+}
+
 void run_bot_tests(void)
 {
 	RUN(races_ahead_of_a_rival_level_with_it);
@@ -403,4 +483,7 @@ void run_bot_tests(void)
 	RUN(turns_away_from_a_trail_ahead);
 	RUN(ignores_what_is_far_away);
 	RUN(survives_a_minute_alone);
+	RUN(turns_away_from_a_dead_end);
+	RUN(looks_again_before_turning);
+	RUN(ignores_a_turn_it_cannot_see);
 }

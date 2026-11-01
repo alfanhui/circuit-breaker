@@ -10,9 +10,11 @@
  * its rider is then driven exactly like a player's (rider.h). So it plays by the same rules.
  *
  * It only knows what it could see: it asks the same collision code the cycles use
- * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT. Beyond
- * that it knows only which way they are, as the player's radar shows the bots. Nothing else:
- * not the player's buttons, not the whole map.
+ * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT in the
+ * half in front of it. Behind it, it believes they carried on the way it last saw them going
+ * (so a turn behind its back changes nothing until it sees them again). Further off it knows
+ * only which way they are, as the player's radar shows the bots. Nothing else: not the
+ * player's buttons, not the whole map.
  *
  * How it chooses: utility scoring. Every few frames it scores its three options, straight on,
  * left and right, and picks the best:
@@ -20,8 +22,11 @@
  *   score = room x BOT_WEIGHT_ROOM        how far it could go that way (up to its side look)
  *         + approach x BOT_WEIGHT_CHASE   how much that way closes on where it aims to cut off
  *                                         the nearest rival it can see (below)
- *         - danger x BOT_WEIGHT_DANGER    how far short of its look-ahead it would hit something
  *         - a turn cost                   turning has to be worth it: no twitching
+ *
+ * But safety comes first: a way that would hit something within its look-ahead (BOT_LOOK_FRAMES)
+ * isn't scored at all while there's a safe one. Only when every way is dangerous does it pick
+ * the one with the most room.
  *
  * Each part is a distance in world units, so weights are plain whole numbers and the sums are
  * a few multiplies and adds: no division. Changing the weights changes its character (step 5:
@@ -48,6 +53,14 @@
 // About what's drawn round a player; a person sees as far, if only ahead. Beyond it, it only
 // knows which way they are, and heads that way (as the player's radar shows the bots)
 #define BOT_SIGHT 4096
+
+// Out of sight behind it, it believes a rival carried on straight at cruise speed for up to this
+// many frames (2 s); after that it believes they're about there. An unsigned char, so at most 255
+#define BOT_MEMORY_FRAMES 120
+
+// A way that's blocked within its side look needs a way out near the end, at least this many
+// frames of travel to one side, or it's a dead end: as bad as a wall right ahead
+#define BOT_WAY_OUT_FRAMES 60
 /*
  * Cutting a rival off. Aiming at a point just ahead of them was pursuit: the bot drew level and
  * rode alongside, or zigzagged towards them, but never got across. A cut-off is two moves:
@@ -64,11 +77,13 @@
  */
 #define BOT_RACE_FRAMES 120	   // racing, it aims 2 s of travel ahead of them
 #define BOT_CUT_MARGIN_FRAMES 20 // cuts when this much further ahead than across
+// Racing, it rides a lane this far to its side of their line, not on it: close beside their trail,
+// a turn of theirs lays a new trail across its nose before it can react
+#define BOT_LANE 400
 
 // The weights: what it cares about, and how much
 #define BOT_WEIGHT_ROOM 2
 #define BOT_WEIGHT_CHASE 1
-#define BOT_WEIGHT_DANGER 8
 // A turn costs this many frames of travel's worth of score
 #define BOT_TURN_COST_FRAMES 20
 
@@ -94,6 +109,12 @@ typedef struct
 	unsigned char thinking; // frames until it next scores its options
 	unsigned char calm;		// frames until it may choose a turn again (danger aside)
 	unsigned char boosting; // 1 while it holds boost
+	// What it believes of the nearest rival while they're behind it (find_target): where it last
+	// saw them and which way they were going. One rival's worth: there are two riders so far
+	unsigned char believes;		 // 0 until it has a belief (the round's start gives it one)
+	unsigned char unseen;		 // frames since it last saw them, up to BOT_MEMORY_FRAMES
+	unsigned char rival_heading;
+	world_point rival_seen;
 } bot_mind;
 
 // A fresh mind. seed: any number, picking its sequence of reaction times. The same seed always
