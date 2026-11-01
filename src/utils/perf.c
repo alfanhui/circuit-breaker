@@ -24,6 +24,15 @@ static int cpu_total = 0;
 static int cpu_peak = 0;
 static int timing = 0; // 0 until the first frame has started: nothing before it to time
 
+int perf_part_peak[PERF_PART_COUNT];
+static int part_counts[PERF_PART_COUNT]; // FRC counts each part took so far this frame
+static int part_worst[PERF_PART_COUNT];	 // the most a part took in one frame, this second
+
+void perf_part_add(int part, int frc_before)
+{
+	part_counts[part] += jo_time_get_frc() - frc_before;
+}
+
 /*
  * The frame rate is timed by the FRC (the SH-2's free running counter, a hardware clock): from
  * one frame's start to the next, that's how long the frame really took, drawing and waiting
@@ -63,6 +72,12 @@ void perf_frame_end(void)
 	cpu_total += cpu;
 	if (cpu > cpu_peak)
 		cpu_peak = cpu;
+	for (int i = 0; i < PERF_PART_COUNT; ++i)
+	{
+		if (part_counts[i] > part_worst[i])
+			part_worst[i] = part_counts[i];
+		part_counts[i] = 0;
+	}
 
 	// Once a second (of frame time): frames per second, rounded. Divisions once a second only
 	if (frame_counts >= FRC_COUNTS_PER_SECOND)
@@ -74,5 +89,10 @@ void perf_frame_end(void)
 		frame_counts = 0;
 		cpu_total = 0;
 		cpu_peak = 0;
+		for (int i = 0; i < PERF_PART_COUNT; ++i)
+		{
+			perf_part_peak[i] = part_worst[i] * 100 / FRC_COUNTS_PER_VBLANK;
+			part_worst[i] = 0;
+		}
 	}
 }

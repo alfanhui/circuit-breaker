@@ -76,7 +76,14 @@ int plane1_texture_id = 0;
 bool enable_trails = true;
 
 static trail_mesh player1_trail_mesh;
-static trail_mesh bot1_trail_mesh;
+// One mesh per bot, as each is a colour of its own: the radar's colours after the player's
+// (hud.c's map_trail_colours). ~12 KB each (TRAIL_DRAW_COLUMNS_MAX columns)
+static trail_mesh bot_trail_meshes[BOT_COUNT_MAX];
+static const jo_color bot_trail_colours[BOT_COUNT_MAX] = {
+	JO_COLOR_RGB(255, 120, 0),	// orange
+	JO_COLOR_RGB(255, 40, 200), // pink
+	JO_COLOR_RGB(120, 255, 60), // green
+};
 static trail_mesh attract_mesh; // the prologue loop's message, every stroke (input.c)
 // The cycle's place on screen this frame, in pixels from the middle (+y down): for the burst of
 // light when a press hits the prologue's loop (draw_loop_break)
@@ -156,8 +163,10 @@ void debug_3d(bool show)
 	// Each line ends in spaces, to cover the end of a longer one printed there before
 	jo_printf(0, 0, "fps %d cpu %d%% pk %d%% late %d     ", perf_fps, perf_cpu_average, perf_cpu_peak,
 			  perf_late_frames);
-	jo_printf(0, 1, "poly %d/%d vert %d     ", jo_3d_get_polygon_count(), perf_displayed_polygons,
-			  jo_3d_get_vertices_count());
+	// bots / trl: the worst frame's time for the bots' thinking and riding, and for building the
+	// trails' meshes, as % of a frame (utils/perf.h): what the cpu figure is spent on
+	jo_printf(0, 1, "poly %d/%d vert %d bots %d%% trl %d%%     ", jo_3d_get_polygon_count(), perf_displayed_polygons,
+			  jo_3d_get_vertices_count(), perf_part_peak[PERF_BOTS], perf_part_peak[PERF_TRAILS]);
 	if (debug_camera)
 		jo_printf(0, 2, "CAM %d %d %d          ", view_x, view_y, view_z);
 	else
@@ -166,8 +175,8 @@ void debug_3d(bool show)
 	jo_printf(0, 3, "spd %d arena %d%s%s%s%s     ", cycle_cruise_speed(), 2 * arena_half(),
 			  debug_no_termination ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
-	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d     ", bot1.bike.position.x, bot1.bike.position.y,
-			  compass[bot1.bike.heading], bot1.bike.gauge, arena_rounds.number + 1, arena_rounds.phase);
+	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d     ", bots[0].bike.position.x, bots[0].bike.position.y,
+			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase);
 }
 
 /*
@@ -447,6 +456,7 @@ void draw_3d(void)
 
 		if (enable_trails)
 		{
+			int trails_frc = jo_time_get_frc(); // the debug line's "trl" figure (utils/perf.h)
 			// 1st person (the eye is below the trails' tops): a part of a trail hidden behind a
 			// nearer one isn't drawn. VDP1 has no depth buffer, and side by side pieces of two
 			// parallel trails sort in either order: the hidden one showed through
@@ -462,11 +472,12 @@ void draw_3d(void)
 			}
 			trail_mesh_draw(&player1_trail_mesh, &player1.wall, player1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
 							&visible_trails, clip, hide);
-			// Cut finer near the player (the camera), not near the bot: that's where detail shows.
+			// Cut finer near the player (the camera), not near the bots: that's where detail shows.
 			// A dead bot's trail sinks (its height falls), then has nothing left to draw
-			if (bot1.trail_height > 0)
-				trail_mesh_draw(&bot1_trail_mesh, &bot1.wall, bot1.trail_height, TRAIL_HEAD_GAP, player1.bike.position,
-								&visible_trails, clip, hide);
+			for (int i = 0; i < BOT_COUNT_MAX; ++i)
+				if (bots[i].trail_height > 0)
+					trail_mesh_draw(&bot_trail_meshes[i], &bots[i].wall, bots[i].trail_height, TRAIL_HEAD_GAP,
+									player1.bike.position, &visible_trails, clip, hide);
 			// The prologue's loop: the finished strokes of its message, each as tall as its word
 			// stands (sinking once it's spelt). All of them in one mesh, drawn once (trail_render.h)
 			trail_mesh_begin(&attract_mesh);
@@ -479,6 +490,7 @@ void draw_3d(void)
 								   &visible_trails, clip, hide);
 			}
 			trail_mesh_end(&attract_mesh);
+			perf_part_add(PERF_TRAILS, trails_frc);
 		}
 
 		// In 1st person the camera is inside it; coming down into it, it's seen until the camera's close
@@ -505,8 +517,10 @@ void draw_3d(void)
 		}
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
-		if (bot1.alive && (!clip || wall_clip_object_visible(clip, bot1.bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
-			draw_cycle(bot1.bike.position);
+		for (int i = 0; i < BOT_COUNT_MAX; ++i)
+			if (bots[i].alive &&
+				(!clip || wall_clip_object_visible(clip, bots[i].bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
+				draw_cycle(bots[i].bike.position);
 	}
 	jo_3d_pop_matrix();
 
@@ -524,15 +538,16 @@ void draw_3d(void)
 	if (!debug_camera) // both views: in iso it turns with the iso camera (hud.h)
 	{
 		// Every trail on the field, and a marker on the rim pointing at each live bot
-		hud_marker markers[1];
+		hud_marker markers[BOT_COUNT_MAX];
 		int marker_count = 0;
 
-		if (bot1.alive)
-		{
-			markers[0].position = bot1.bike.position;
-			markers[0].colour = 1; // its place in field_trails: the radar's orange
-			marker_count = 1;
-		}
+		for (int i = 0; i < BOT_COUNT_MAX; ++i)
+			if (bots[i].alive)
+			{
+				markers[marker_count].position = bots[i].bike.position;
+				markers[marker_count].colour = (unsigned char)(1 + i); // its place in field_trails: its colour
+				marker_count++;
+			}
 		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
 	}
 	draw_status();
@@ -689,7 +704,8 @@ void jo_main(void)
 
 	load_player_model();
 	trail_mesh_init(&player1_trail_mesh, JO_COLOR_RGB(0, 220, 255));
-	trail_mesh_init(&bot1_trail_mesh, JO_COLOR_RGB(255, 120, 0)); // the radar's second colour (hud.c)
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		trail_mesh_init(&bot_trail_meshes[i], bot_trail_colours[i]); // the radar's colours (hud.c)
 	trail_mesh_init(&attract_mesh, JO_COLOR_RGB(0, 220, 255)); // the player's: it's writing it
 
 	init_3d_planes();

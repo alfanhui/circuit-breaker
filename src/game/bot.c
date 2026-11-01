@@ -14,6 +14,8 @@ void bot_init(bot_mind *mind, unsigned int seed)
 	mind->thinking = 0;
 	mind->calm = 0;
 	mind->boosting = 0;
+	mind->may_think = 1; // every frame, unless the game shares the turns out
+	mind->in_danger = 0;
 	mind->believes = 0;
 	mind->unseen = 0;
 	mind->rival_heading = 0;
@@ -246,14 +248,27 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 		mind->calm = 0;
 	}
 
-	// Danger ahead is checked every frame; the rest only every few frames (or now, in danger)
+	// Danger ahead is checked every frame: one question. The rest only every few frames, and on
+	// its turn (bot.h: may_think), unless danger has just appeared: then it thinks now, turn or
+	// not. Left to its turn, it noticed a closing wall up to 2 frames late, and in the PC
+	// simulation crashed into its own trail nearly 3 times as often against a careless player.
+	// Danger that stays (no safe way: it rides on, looking for one) is thought about on each of
+	// its turns, not every frame: thinking again every frame of it, 3 bots boxed in among long
+	// trails took nearly half a frame. (Only at the usual pace, every few frames, it found a way
+	// out too late: 251 of 300 lived the minute against a careless player, against 276)
 	danger_ahead = free_ahead(me, me->bike.heading, look, trails, trail_count) < look;
-	if (mind->thinking > 0)
-		mind->thinking--;
-	if (!danger_ahead && mind->thinking > 0 && !correcting)
 	{
-		controls.boost = mind->boosting;
-		return controls;
+		const int new_danger = danger_ahead && !mind->in_danger;
+		const int due = mind->may_think && (mind->thinking <= 1 || danger_ahead); // its turn, and time
+
+		mind->in_danger = (unsigned char)danger_ahead;
+		if (mind->thinking > 0)
+			mind->thinking--;
+		if (!new_danger && !due && !correcting)
+		{
+			controls.boost = mind->boosting;
+			return controls;
+		}
 	}
 	mind->thinking = BOT_THINK_FRAMES;
 

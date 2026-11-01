@@ -277,9 +277,10 @@ static void fast_trail_check_matches_segment_by_segment(void)
 
 	for (int round = 0; round < 3000; ++round)
 	{
-		// A random N/S/E/W walk of up to 40 corners in a 1000 square, some steps short
+		// A random N/S/E/W walk of up to 100 corners in a 1000 square, some steps short. Past 64
+		// the oldest drop off, and the trail's box (the whole-trail skip) is built again
 		world_point p = pt((short)(random_below(1000) - 500), (short)(random_below(1000) - 500));
-		int corners = 1 + random_below(40);
+		int corners = 1 + random_below(100);
 
 		trail_reset(&t, p);
 		for (int c = 0; c < corners; ++c)
@@ -294,12 +295,13 @@ static void fast_trail_check_matches_segment_by_segment(void)
 			if (c + 1 < corners)
 				trail_add_corner(&t);
 		}
-		// Asked from anywhere nearby, any heading, any distance, the head included (a cycle on it)
+		// Asked from anywhere nearby or further off (where the box skips the trail), any heading,
+		// any distance up to a bot's look round, the head included (a cycle on it)
 		for (int q = 0; q < 8; ++q)
 		{
-			world_point from = q == 0 ? t.head : pt((short)(random_below(1400) - 700), (short)(random_below(1400) - 700));
+			world_point from = q == 0 ? t.head : pt((short)(random_below(3000) - 1500), (short)(random_below(3000) - 1500));
 			int heading = random_below(4);
-			int distance = random_below(300);
+			int distance = random_below(q & 1 ? 300 : 2000);
 
 			if (collision_trail(from, heading, distance, &t) != reference_trail(from, heading, distance, &t))
 				differ++;

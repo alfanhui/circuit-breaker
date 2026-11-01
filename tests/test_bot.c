@@ -462,8 +462,32 @@ static void ignores_a_turn_it_cannot_see(void)
 	CHECK_EQ(HEADING_NORTH, mind.rival_heading);
 }
 
+// Off its turn to think (the game shares the turns between bots, input.c), it rides on: the cut
+// across that cuts_across_once_ahead makes isn't chosen. But a trail right ahead makes it think
+// anyway, turn or not
+static void thinks_on_its_turn_or_in_danger(void)
+{
+	static trail across;
+
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	add_rival(1000, 2000, HEADING_NORTH);
+	mind.may_think = 0;
+	CHECK_EQ(TURN_NONE, decide(1, NULL));
+	mind.may_think = 1;
+	CHECK_EQ(TURN_LEFT, decide(1, NULL));
+
+	setup();
+	rider_init(&bot, 0, 0, HEADING_NORTH);
+	another_trail(&across, -500, -100, 500, -100); // across its way, 100 ahead: inside its look
+	field[1] = &across;
+	mind.may_think = 0;
+	CHECK(decide(2, NULL) != TURN_NONE);
+}
+
 void run_bot_tests(void)
 {
+	RUN(thinks_on_its_turn_or_in_danger);
 	RUN(races_ahead_of_a_rival_level_with_it);
 	RUN(cuts_across_once_ahead);
 	RUN(heads_for_a_rival_beyond_sight);

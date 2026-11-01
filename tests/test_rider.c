@@ -90,7 +90,12 @@ static void another_riders_trail_stops_it(void)
 	rider_init(&me, 0, 0, HEADING_NORTH);
 	// The other rider's trail lies across the way, 200 ahead
 	rider_init(&other, -500, -200, HEADING_WEST);
-	other.wall.head.x = 500;
+	{
+		world_point head = other.wall.head;
+
+		head.x = 500;
+		trail_set_head(&other.wall, head); // through trail_set_head: it keeps the trail's box
+	}
 	both[0] = &me.wall;
 	both[1] = &other.wall;
 	CHECK_EQ(0, me.crashed);

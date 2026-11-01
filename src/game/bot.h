@@ -109,6 +109,13 @@ typedef struct
 	unsigned char thinking; // frames until it next scores its options
 	unsigned char calm;		// frames until it may choose a turn again (danger aside)
 	unsigned char boosting; // 1 while it holds boost
+	// 1 if it may look round and decide this frame (bot_init sets it). The game takes turns
+	// between its bots, one a frame (input.c): thinking is the costly part, ~12 questions about
+	// every trail, and 3 bots at once among long trails took 45% of a frame. Off its turn it rides
+	// on as it was, and still presses a turn it's reacting to. Up to 2 frames late noticing
+	// something, beside its 9-16 frame reaction: the PC simulation's survival barely moved
+	unsigned char may_think;
+	unsigned char in_danger; // 1 if something was in its way last frame (danger seen afresh: think now)
 	// What it believes of the nearest rival while they're behind it (find_target): where it last
 	// saw them and which way they were going. One rival's worth: there are two riders so far
 	unsigned char believes;		 // 0 until it has a belief (the round's start gives it one)

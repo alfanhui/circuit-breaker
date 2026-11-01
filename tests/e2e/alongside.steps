@@ -1,0 +1,19 @@
+# Riding close alongside a trail (the frame rate fell to ~35 there, 2026-11-01). Ride north 8 s,
+# U-turn by double tap: back south ~50 units beside it. The cpu figure is a one-second average:
+# shots 2.5 s and more into the run alongside. Then away from it, for comparison.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+wait 8
+shot along_0_before
+press left
+press left
+wait 2.5
+shot along_1
+wait 1
+shot along_2
+wait 1
+shot along_3
+press right
+wait 3
+shot along_4_away

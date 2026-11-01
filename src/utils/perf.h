@@ -21,6 +21,19 @@ extern int perf_last_frame_vblanks;
 // SGL only knows this once it has sorted the frame, so it's sampled at the next frame's start.
 extern int perf_displayed_polygons;
 
+/*
+ * Parts of the frame timed on their own, to find what the cpu figure is spent on: read the FRC
+ * (jo_time_get_frc) before the part, then perf_part_add with that reading after it. A part can
+ * be added to several times a frame (the game steps up to 3 times). The debug line shows each
+ * part's worst frame in the last second, as a % of a display frame, like the cpu peak.
+ */
+#define PERF_BOTS 0	  // the bots thinking and riding (input.c)
+#define PERF_TRAILS 1 // building the trails' meshes to draw (main.c)
+#define PERF_PART_COUNT 2
+extern int perf_part_peak[PERF_PART_COUNT]; // % of a display frame, the worst in the last second
+
+void perf_part_add(int part, int frc_before);
+
 void perf_frame_start(void);
 void perf_frame_end(void);
 

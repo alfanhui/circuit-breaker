@@ -13,11 +13,14 @@
 #include "view.h"
 
 extern rider player1;
-extern rider bot1; // a computer rider (game/bot.h)
+// The computer riders (game/bot.h): as many as the round has (game/rounds.h), the rest out of
+// the field (not alive, their trails sunk)
+#define BOT_COUNT_MAX 3
+extern rider bots[BOT_COUNT_MAX];
 extern game_state game; // playing, or terminated after a crash (game/game_state.h)
 extern status_message status; // a line typed out during play (game/status_message.h)
 extern rounds arena_rounds; // which round, and the walls sinking and rising between them (game/rounds.h)
-#define FIELD_TRAIL_COUNT 2
+#define FIELD_TRAIL_COUNT (1 + BOT_COUNT_MAX) // you, then the bots: the radar's colours in order
 extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trail: the radar's colours
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)
 extern const trail *solid_trails[FIELD_TRAIL_COUNT];

@@ -36,9 +36,12 @@ typedef struct
 
 // Keeps the parts of the trail inside view; focus (the player) sets how finely they're cut.
 // occluders (NULL: none): leaves out the parts hidden behind a nearer trail (trail_occlusion.h).
+// camera (NULL: none, as in iso): the 1st person camera; only what's inside its view wedge is cut
+// into pieces (the rest of the view rectangle would only be dropped by trail_clip_columns).
 // Returns the number of columns written to out (at most max_columns).
 int trail_build_columns(const trail *t, int head_gap, world_point focus, const world_rect *view,
-						const trail_occluders *occluders, trail_column *out, int max_columns);
+						const trail_occluders *occluders, const wall_clip_camera *camera, trail_column *out,
+						int max_columns);
 
 /*
  * 1st person: keeps every strip's corners in front of the camera, like the walls (wall_clip.h).

@@ -243,8 +243,66 @@ static void shift_moves_every_corner_and_the_head(void)
 	CHECK(t.version != version);
 }
 
+// Whether every corner and the head are inside the trail's box (and so whether the whole-trail
+// skip in collision.c can trust it)
+static int box_holds_all(const trail *t)
+{
+	int ok = t->head.x >= t->box.x_min && t->head.x <= t->box.x_max && t->head.y >= t->box.y_min &&
+			 t->head.y <= t->box.y_max;
+
+	for (int i = 0; i < t->corner_count; ++i)
+		ok &= t->corners[i].x >= t->box.x_min && t->corners[i].x <= t->box.x_max && t->corners[i].y >= t->box.y_min &&
+			  t->corners[i].y <= t->box.y_max;
+	return ok;
+}
+
+// A spiral outwards, 100 turns: past 64 the oldest (innermost) drop off and the box shrinks to
+// what's left, exactly. Then shifted with the trail
+static void box_holds_every_corner_and_the_head(void)
+{
+	trail t;
+	world_point p = pt(0, 0);
+	int ok = 1;
+
+	trail_reset(&t, p);
+	ok &= box_holds_all(&t);
+	for (int i = 1; i <= 100; ++i)
+	{
+		int step = (short)(i * 10);
+
+		if (i & 1)
+			p.x = (short)(p.x + ((i & 2) ? -step : step));
+		else
+			p.y = (short)(p.y + ((i & 2) ? -step : step));
+		trail_set_head(&t, p);
+		ok &= box_holds_all(&t);
+		trail_add_corner(&t);
+		ok &= box_holds_all(&t);
+	}
+	CHECK(ok);
+	// Exactly the remaining corners' box once corners have dropped (a turn rebuilds it)
+	{
+		short x_min = t.head.x, x_max = t.head.x, y_min = t.head.y, y_max = t.head.y;
+
+		for (int i = 0; i < t.corner_count; ++i)
+		{
+			x_min = t.corners[i].x < x_min ? t.corners[i].x : x_min;
+			x_max = t.corners[i].x > x_max ? t.corners[i].x : x_max;
+			y_min = t.corners[i].y < y_min ? t.corners[i].y : y_min;
+			y_max = t.corners[i].y > y_max ? t.corners[i].y : y_max;
+		}
+		CHECK_EQ(x_min, t.box.x_min);
+		CHECK_EQ(x_max, t.box.x_max);
+		CHECK_EQ(y_min, t.box.y_min);
+		CHECK_EQ(y_max, t.box.y_max);
+	}
+	trail_shift(&t, 1000, -2000);
+	CHECK(box_holds_all(&t));
+}
+
 void run_trail_tests(void)
 {
+	RUN(box_holds_every_corner_and_the_head);
 	RUN(version_changes_only_when_corners_change);
 	RUN(version_changes_when_full_trail_drops_a_corner);
 	RUN(drawn_head_matches_live_segment_end);

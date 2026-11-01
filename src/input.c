@@ -8,32 +8,71 @@
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
-// The bot starts 2000 to the east of the player (east is -x), riding the same way
-#define BOT1_START_X (-2000)
-#define BOT1_START_Y 0
 #define DEBUG_CAMERA_SPEED 8
+// The round play starts in, from 0 (game/rounds.h). Like BOOT_SCENE (below): to work on a later
+// round, set it and build, so its bots and layout are there from the start
+#define BOOT_ROUND 0
 
 rider player1;
-rider bot1;
+rider bots[BOT_COUNT_MAX];
 game_state game;
 status_message status;
 rounds arena_rounds;
-static bot_mind bot1_mind; // what the bot remembers between frames (game/bot.h)
-static const rider *const bot1_rivals[] = {&player1}; // who the bot chases, if it can see them
-// Every trail on the field: what every rider crashes into, the bot sees, and the radar shows.
-// The order is the radar's colours: player 1 cyan, then orange
-const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bot1.wall};
+static bot_mind bot_minds[BOT_COUNT_MAX]; // what each bot remembers between frames (game/bot.h)
+// Who the bots chase, if they can see them: you. They're a team against you, not each other: a
+// round is yours once they're all gone, and bots knocking each other out would make it a wait
+static const rider *const bot_rivals[] = {&player1};
+// Every trail on the field: what every rider crashes into, the bots see, and the radar shows.
+// The order is the radar's colours (hud.c): player 1 cyan, then the bots orange, pink and green
+const trail *const field_trails[FIELD_TRAIL_COUNT] = {&player1.wall, &bots[0].wall, &bots[1].wall, &bots[2].wall};
 const trail *solid_trails[FIELD_TRAIL_COUNT];
 int solid_trail_count;
 
-// The player's trail always counts (a crash ends the game); the bot's only while it's alive
+// The player's trail always counts (a crash ends the game); a bot's only while it's alive
 static void update_solid_trails(void)
 {
 	solid_trail_count = 0;
 	solid_trails[solid_trail_count++] = &player1.wall;
-	if (bot1.alive)
-		solid_trails[solid_trail_count++] = &bot1.wall;
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		if (bots[i].alive)
+			solid_trails[solid_trail_count++] = &bots[i].wall;
 }
+
+// How many bots are still riding: the round's over at none (game/rounds.h)
+static int bots_alive(void)
+{
+	int alive = 0;
+
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		alive += bots[i].alive;
+	return alive;
+}
+
+// Each game step, the turn to think (game/bot.h: may_think) passes to the next live bot: with 3
+// alive each thinks every 3rd step, with 1 every step. Danger ahead still makes any bot think at
+// once. Thinking is the costly part: 3 bots at once among long trails took 45% of a frame
+static void share_thinking(void)
+{
+	static int thinker = 0; // whose turn it was last
+
+	for (int tries = 0; tries < BOT_COUNT_MAX; ++tries)
+	{
+		thinker = thinker + 1 < BOT_COUNT_MAX ? thinker + 1 : 0;
+		if (bots[thinker].alive)
+			break;
+	}
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		bot_minds[i].may_think = (unsigned char)(i == thinker);
+}
+
+// Every bot out of the field: dead, its trail already sunk away (rider_remove)
+static void remove_bots(void)
+{
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		rider_remove(&bots[i]);
+}
+
+static void begin_round(void); // below, with the rounds
 /*
  * The prologue's loop (docs/STORY.md): while spectating, the cycle writes "SEGA SATURN SH-2"
  * across the floor with its trail, by itself, for ever (game/attract_text.h builds the route).
@@ -157,9 +196,10 @@ static void set_spectating(bool on)
 	{
 		world_point origin;
 
-		rider_remove(&bot1);
+		remove_bots();
 		loop_break_init(&breaker);
-		rounds_init(&arena_rounds); // the loop: play will start from the first round
+		rounds_init(&arena_rounds); // the loop: play will start from the first round (BOOT_ROUND)
+		arena_rounds.number = BOOT_ROUND;
 		if (attract_waypoint_count == 0) // built once
 		{
 			origin.x = ATTRACT_ORIGIN_X;
@@ -172,11 +212,9 @@ static void set_spectating(bool on)
 	else
 	{
 		// The round you're on, from its start: the first after the loop's break, the same one
-		// again after a crash (the terminal screen), saying which as it begins
-		rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
-		bot_init(&bot1_mind, 1);
+		// again after a crash (the terminal screen), with its bots placed round you
 		rounds_restart(&arena_rounds);
-		status_show(&status, rounds_title(&arena_rounds));
+		begin_round();
 	}
 	update_solid_trails();
 }
@@ -242,6 +280,14 @@ static unsigned short hit_the_loop(unsigned short struck)
 	// Broken: play from where the cycle is, in 1st person, the bot coming in, once the camera's down
 	slide_to_the_centre();
 	loop_break_at = player1.bike.position;
+	// The same cycle, where it was, but turned north (the way the flight down lands) and with no
+	// trail: its stroke is kept above. From the stands, under the flash, the turn can't be seen.
+	// Turned before play begins, as the round's bots are placed by the way it faces
+	{
+		world_point at = player1.bike.position;
+
+		rider_init(&player1, at.x, at.y, HEADING_NORTH);
+	}
 	{
 		int strokes = attract_stroke_count; // the message is left standing, to sink (game_step)
 
@@ -250,13 +296,6 @@ static unsigned short hit_the_loop(unsigned short struck)
 	}
 	for (int w = 0; w < ATTRACT_WORDS_MAX; ++w)
 		word_sinking[w] = 1; // the word being written too
-	// The same cycle, where it was, but turned north (the way the flight down lands) and with no
-	// trail: its stroke is kept above. From the stands, under the flash, the turn can't be seen
-	{
-		world_point at = player1.bike.position;
-
-		rider_init(&player1, at.x, at.y, HEADING_NORTH);
-	}
 	first_person = true;
 	view_arrival_start(&player1.bike);
 	view_init(&player1.bike);
@@ -267,25 +306,48 @@ bool debug_camera = false; // START: freeze the cycle and fly the camera around
 bool debug_slow_motion = false;
 bool debug_no_termination = false; // debug camera Z: a crash only stops the cycle
 
-// Debug: fills the trail with a full-length serpentine across the arena, the worst case for drawing
-static void stress_fill_trail(void)
+// Debug: fills a trail with a full-length serpentine across the arena, the worst case for
+// drawing, its rows `offset` north of the player's (so several can lie side by side). Its last
+// corner is lined up with the rider's cycle, so the live end (corner to cycle) runs straight, as
+// in play: a diagonal one is cut into pieces with two divisions each (trail_pieces.c: point_at),
+// a cost no real trail has, which made this test far slower than play
+static void stress_fill_one(rider *r, int offset)
 {
 	world_point p;
 	const short edge = (short)(arena_player_limit() - 50);
 	const short row_spacing = (2 * edge) / (TRAIL_MAX_CORNERS / 2);
+	const world_point at = r->bike.position;
 
 	p.x = -edge;
-	p.y = -edge;
-	trail_reset(&player1.wall, p);
-	for (int i = 1; i < TRAIL_MAX_CORNERS; ++i)
+	p.y = (short)(-edge - offset);
+	trail_reset(&r->wall, p);
+	for (int i = 1; i < TRAIL_MAX_CORNERS - 1; ++i)
 	{
 		if (i & 1)
 			p.x = -p.x;
 		else
 			p.y += row_spacing;
-		trail_set_head(&player1.wall, p);
-		trail_add_corner(&player1.wall);
+		trail_set_head(&r->wall, p);
+		trail_add_corner(&r->wall);
 	}
+	// Riding north or south, the live end runs along x = the cycle's; east or west, along its y
+	if (WORLD_HEADING_DX(r->bike.heading) == 0)
+		p.x = at.x;
+	else
+		p.y = at.y;
+	trail_set_head(&r->wall, p);
+	trail_add_corner(&r->wall);
+	trail_set_head(&r->wall, at);
+}
+
+// The player's trail, and every live bot's beside it, 120 apart: long trails side by side near
+// you, as riding along a bot's trail late in a round (the frame rate fell to ~35 there)
+static void stress_fill_trail(void)
+{
+	stress_fill_one(&player1, 0);
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
+		if (bots[i].alive)
+			stress_fill_one(&bots[i], 120 * (i + 1));
 }
 
 /*
@@ -334,9 +396,7 @@ static void enter_scene(scene part)
 	game_init(&game);
 	status_init(&status);
 	rider_init(&player1, PLAYER1_START_X, PLAYER1_START_Y, HEADING_NORTH);
-	rider_init(&bot1, BOT1_START_X, BOT1_START_Y, HEADING_NORTH);
-	bot_init(&bot1_mind, 1); // the seed picks its reaction times: the same every run
-	set_spectating(part != SCENE_PLAY);
+	set_spectating(part != SCENE_PLAY); // the bots: out for the loop, or the round's in for play
 	intro_hurry = 1;
 	if (part == SCENE_INTRO)
 		view_intro_start(&player1.bike);
@@ -351,6 +411,7 @@ static void enter_scene(scene part)
 void init_players(void)
 {
 	rounds_init(&arena_rounds); // booting straight into play (BOOT_SCENE) skips the loop's
+	arena_rounds.number = BOOT_ROUND;
 	enter_scene(BOOT_SCENE);
 }
 
@@ -379,21 +440,40 @@ static short inside_arena(int v)
 	return (short)(v > limit ? limit : v < -limit ? -limit : v);
 }
 
-// The next round's rivals: the bot 2000 to your right, riding the way you are. Where you'll be
-// as the walls finish rising is near the centre (within ~1000), so it's well inside them too
-static void start_rivals(void)
-{
-	int right = (player1.bike.heading + 1) & 3;
+// Where each bot starts, from you: how far to your right (negative: left) and ahead, riding the
+// way you are. The first is where round 1's bot has always been (2000 to your right); the
+// others close you in from the left and ahead
+static const short bot_start_right[BOT_COUNT_MAX] = {2000, -2000, 0};
+static const short bot_start_ahead[BOT_COUNT_MAX] = {0, 0, 3000};
 
-	rider_init(&bot1, inside_arena(player1.bike.position.x + WORLD_HEADING_DX(right) * 2000),
-			   inside_arena(player1.bike.position.y + WORLD_HEADING_DY(right) * 2000), player1.bike.heading);
-	bot_init(&bot1_mind, 1 + arena_rounds.number); // a different seed each round: other reaction times
+// The round's bots (rounds_rivals: 1 to 3) placed round you, the rest out of the field, and the
+// status line saying which round it is. You're near the centre whenever this is called (play's
+// start, or the walls just risen round you), so they're well inside the walls too
+static void begin_round(void)
+{
+	int h = player1.bike.heading, right = (h + 1) & 3;
+	int count = rounds_rivals(&arena_rounds);
+
+	remove_bots();
+	for (int i = 0; i < count && i < BOT_COUNT_MAX; ++i)
+	{
+		int x = player1.bike.position.x + WORLD_HEADING_DX(right) * bot_start_right[i] +
+				WORLD_HEADING_DX(h) * bot_start_ahead[i];
+		int y = player1.bike.position.y + WORLD_HEADING_DY(right) * bot_start_right[i] +
+				WORLD_HEADING_DY(h) * bot_start_ahead[i];
+
+		rider_init(&bots[i], inside_arena(x), inside_arena(y), (unsigned char)h);
+		// The seed picks its reaction times: the same every run, but different for each bot and
+		// round (round 1's first bot keeps seed 1, which the E2E scripts were made with)
+		bot_init(&bot_minds[i], 1 + arena_rounds.number * BOT_COUNT_MAX + i);
+	}
 	update_solid_trails();
+	status_show(&status, rounds_title(&arena_rounds));
 }
 
 static void between_rounds(void)
 {
-	switch (rounds_update(&arena_rounds, bot1.alive))
+	switch (rounds_update(&arena_rounds, bots_alive()))
 	{
 	case ROUND_CLEARED:
 		player1.bike.bounded = 0; // nothing left to hit, and soon no edge
@@ -409,14 +489,13 @@ static void between_rounds(void)
 		player1.bike.position.y = (short)(player1.bike.position.y + dy);
 		view_spectate_move(dx, dy); // the camera with you (in play it follows you anyway)
 		trail_reset(&player1.wall, player1.bike.position);
-		rider_remove(&bot1); // its trail's sunk by now; gone for good
+		remove_bots(); // their trails have sunk by now; gone for good
 		break;
 	}
 	case ROUND_BEGINS:
 		player1.bike.bounded = 1;
 		player1.trail_height = TRAIL_HEIGHT;
-		start_rivals();
-		status_show(&status, rounds_title(&arena_rounds));
+		begin_round();
 		break;
 	}
 	// Your trail sinks and rises with the walls
@@ -569,25 +648,34 @@ static void game_step(unsigned short struck)
 	if (spectating && !attract_route_pen(&route))
 		trail_reset(&player1.wall, player1.bike.position);
 
-	// The bot decides its buttons from what it can see, then rides by the same rules
-	// A crash terminates the bot's process: it stops, and its trail sinks into the floor (and
-	// from now on stops nobody)
-	if (bot1.alive)
+	// Each bot decides its buttons from what it can see, then rides by the same rules. A crash
+	// terminates the bot's process: it stops, and its trail sinks into the floor (and from now on
+	// stops nobody)
+	int bots_frc = jo_time_get_frc(); // the debug line's "bots" figure (utils/perf.h)
+
+	share_thinking();
+	for (int i = 0; i < BOT_COUNT_MAX; ++i)
 	{
-		rider_step(&bot1, bot_think(&bot1_mind, &bot1, bot1_rivals, 1, solid_trails, solid_trail_count), solid_trails,
-				   solid_trail_count);
-		if (bot1.crashed)
+		rider *bot = &bots[i];
+
+		if (!bot->alive)
 		{
-			// Whatever it hit (your trail, its own, the arena edge), make it felt and say so: a
-			// jolt of the camera, and the status line. It may have been a long way off, or behind you
+			rider_sink(bot);
+			continue;
+		}
+		rider_step(bot, bot_think(&bot_minds[i], bot, bot_rivals, 1, solid_trails, solid_trail_count), solid_trails,
+				   solid_trail_count);
+		if (bot->crashed)
+		{
+			// Whatever it hit (a trail, the arena edge), make it felt and say so: a jolt of the
+			// camera, and the status line. It may have been a long way off, or behind you
 			view_shake(CAMERA_SHAKE_BOT_KILL);
 			status_show(&status, STATUS_ENEMY_ELIMINATED);
-			rider_kill(&bot1);
-			update_solid_trails();
+			rider_kill(bot);
+			update_solid_trails(); // from the next bot on, its trail stops nobody
 		}
 	}
-	else
-		rider_sink(&bot1);
+	perf_part_add(PERF_BOTS, bots_frc);
 	if (!spectating)
 		between_rounds();
 	status_update(&status); // the status line types on, and goes once it's been read
@@ -596,7 +684,8 @@ static void game_step(unsigned short struck)
 	if (struck & DIGI_A)
 	{
 		trail_reset(&player1.wall, player1.bike.position);
-		trail_reset(&bot1.wall, bot1.bike.position);
+		for (int i = 0; i < BOT_COUNT_MAX; ++i)
+			trail_reset(&bots[i].wall, bots[i].bike.position);
 	}
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (struck & DIGI_X)

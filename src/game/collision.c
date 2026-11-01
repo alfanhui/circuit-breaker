@@ -73,6 +73,22 @@ int collision_trail(world_point from, int heading, int distance, const trail *t)
 	const int from_across = ACROSS(from);
 	const int from_along = ALONG(from);
 	const int corners = t->corner_count;
+	// The trail's box (trail.h), as across and along: along flips with sign, so its ends swap
+	const int box_across_min = along_x ? t->box.y_min : t->box.x_min;
+	const int box_across_max = along_x ? t->box.y_max : t->box.x_max;
+	const int box_along_min = sign > 0 ? (along_x ? t->box.x_min : t->box.y_min) : -(along_x ? t->box.x_max : t->box.y_max);
+	const int box_along_max = sign > 0 ? (along_x ? t->box.x_max : t->box.y_max) : -(along_x ? t->box.x_min : t->box.y_min);
+
+	// The whole trail at once, from its box: no segment can stop the cycle unless it's across the
+	// path (as the test below, for each segment), some of it's ahead of the cycle (else it's
+	// behind: past it), and it starts before the cycle gets there (near edge inside distance).
+	// A trail far off is skipped in 4 comparisons instead of a walk along all its corners: the
+	// bots ask ~12 questions each, about every trail, whenever they think (2026-11-01: 3 bots
+	// among long trails took 45% of a frame)
+	if (from_across <= box_across_min - COLLISION_TRAIL_CLEARANCE ||
+		from_across >= box_across_max + COLLISION_TRAIL_CLEARANCE || box_along_max <= from_along ||
+		box_along_min - COLLISION_TRAIL_CLEARANCE - from_along >= distance)
+		return distance;
 
 	// Every segment, oldest to newest, including the live one the cycle is laying (it's always
 	// inside that one, so it never stops it). Each hit can only shorten the distance, so the

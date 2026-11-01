@@ -21,6 +21,10 @@ typedef struct
 	unsigned short corner_count;
 	unsigned short version; // changes whenever the corners change, so renderers can cache them
 	world_point head;
+	// A box round every corner and the head, kept up as the trail grows: a question about a path
+	// that misses the box can skip the whole trail (collision_trail). It may be bigger than the
+	// trail (it only shrinks when the oldest corner drops off), never smaller
+	world_rect box;
 } trail;
 
 // Starts a new wall at start, discarding the old one.

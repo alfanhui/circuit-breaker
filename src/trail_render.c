@@ -41,7 +41,8 @@ void trail_mesh_add(trail_mesh *m, const trail *t, int height, int head_gap, wor
 	// joined (it starts the trail), so no piece bridges from the last trail to this one
 	const int first = m->columns_used;
 	trail_column *mine = &m->columns[first];
-	int columns = trail_build_columns(t, head_gap, focus, view, occluders, mine, TRAIL_DRAW_COLUMNS_MAX - first);
+	int columns =
+		trail_build_columns(t, head_gap, focus, view, occluders, camera, mine, TRAIL_DRAW_COLUMNS_MAX - first);
 	int pieces = m->pieces_used;
 	unsigned char fog_levels[TRAIL_DRAW_COLUMNS_MAX]; // per column: its top and bottom are equally far
 

@@ -120,17 +120,59 @@ static void hidden_pieces_are_not_built(void)
 	trail_occluders_add(&occ, &far, 0, &view);
 	CHECK_EQ(2, occ.count);
 
-	without = trail_build_columns(&far, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
-	with = trail_build_columns(&far, 0, pt(0, 0), &view, &occ, columns, TRAIL_DRAW_COLUMNS_MAX);
+	without = trail_build_columns(&far, 0, pt(0, 0), &view, NULL, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
+	with = trail_build_columns(&far, 0, pt(0, 0), &view, &occ, NULL, columns, TRAIL_DRAW_COLUMNS_MAX);
 	CHECK(without > 2);
 	CHECK_EQ(0, with); // wholly behind the nearer trail
 	// The nearer trail itself is all drawn
-	CHECK_EQ(trail_build_columns(&near, 0, pt(0, 0), &view, NULL, columns, TRAIL_DRAW_COLUMNS_MAX),
-			 trail_build_columns(&near, 0, pt(0, 0), &view, &occ, columns, TRAIL_DRAW_COLUMNS_MAX));
+	CHECK_EQ(trail_build_columns(&near, 0, pt(0, 0), &view, NULL, NULL, columns, TRAIL_DRAW_COLUMNS_MAX),
+			 trail_build_columns(&near, 0, pt(0, 0), &view, &occ, NULL, columns, TRAIL_DRAW_COLUMNS_MAX));
+}
+
+// The hidden range comes from slopes worked out once per near segment (no division per pair).
+// Over many layouts, it must never hide more than exact division does (rounded inwards: what's
+// visible is always drawn), and lose at most a unit at each end against it
+static void slopes_hide_what_division_does(void)
+{
+	int worst = 0, never_more = 1;
+
+	for (int d1 = 7; d1 < 4000; d1 += 173)
+		for (int d2 = d1 + 1; d2 < 9000; d2 += 611)
+			for (int a = 40; a < 6000; a += 997)
+			{
+				const int b = a + 731;
+				// Exact, as the division per pair did it: A * d2 / d1 rounded up, B * d2 / d1 down
+				const int t0 = (a * d2 + d1 - 1) / d1;
+				const int t1 = b * d2 / d1;
+				const int far_end = 9000; // the far trail runs north from level with the eye
+
+				int parts;
+
+				one_occluder(pt((short)d1, (short)-a), pt((short)d1, (short)-b));
+				parts = trail_occluders_visible(&occ, pt((short)d2, 0), pt((short)d2, (short)-far_end), 0, far_end, starts,
+												ends, TRAIL_VISIBLE_PARTS_MAX);
+				if (parts < 1 || t1 >= far_end)
+					continue; // hidden past the far trail's end: only one part, checked elsewhere
+				// The first visible part runs from 0 to where it's hidden from: t0, or a little later
+				never_more &= ends[0] >= t0;
+				if (ends[0] - t0 > worst)
+					worst = ends[0] - t0;
+				// And the next starts where it's hidden to: t1, or a little earlier
+				CHECK_EQ(2, parts);
+				if (parts == 2)
+				{
+					never_more &= starts[1] <= t1;
+					if (t1 - starts[1] > worst)
+						worst = t1 - starts[1];
+				}
+			}
+	CHECK(never_more);
+	CHECK(worst <= 1);
 }
 
 void run_trail_occlusion_tests(void)
 {
+	RUN(slopes_hide_what_division_does);
 	RUN(nearer_parallel_trail_hides_the_farther);
 	RUN(a_short_one_hides_the_middle);
 	RUN(works_whichever_way_the_trail_runs);
