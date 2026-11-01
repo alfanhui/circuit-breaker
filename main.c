@@ -175,8 +175,9 @@ void debug_3d(bool show)
 	jo_printf(0, 3, "spd %d arena %d%s%s%s%s     ", cycle_cruise_speed(), 2 * arena_half(),
 			  debug_no_termination ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
-	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d     ", bots[0].bike.position.x, bots[0].bike.position.y,
-			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase);
+	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d %c     ", bots[0].bike.position.x, bots[0].bike.position.y,
+			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
+			  "EMH"[bot_skill_level]);
 }
 
 /*

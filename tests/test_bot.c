@@ -485,8 +485,42 @@ static void thinks_on_its_turn_or_in_danger(void)
 	CHECK(decide(2, NULL) != TURN_NONE);
 }
 
+// Each difficulty presses its chosen turn within its own reaction time: Hard's 3-10 frames,
+// Easy's 9-16. The same choice either way (the cut across of cuts_across_once_ahead)
+static void harder_bots_react_sooner(void)
+{
+	for (int skill = 0; skill < BOT_SKILL_COUNT; ++skill)
+		for (unsigned int seed = 1; seed <= 40; ++seed)
+		{
+			int frames = 0;
+
+			setup();
+			bot_init(&mind, seed);
+			bot_set_skill(&mind, skill);
+			rider_init(&bot, 0, 0, HEADING_NORTH);
+			add_rival(1000, 2000, HEADING_NORTH);
+			CHECK_EQ(TURN_LEFT, decide(1, &frames));
+			CHECK(frames >= bot_skills[skill].reaction_min);
+			CHECK(frames <= bot_skills[skill].reaction_min + BOT_REACTION_SPREAD_MASK);
+		}
+}
+
+// Every difficulty cuts across only with time to spare: its margin is more than its slowest
+// reaction (bot.h), or it would reach the rival's line too late. And an unknown skill is Easy
+static void every_skill_cuts_in_time(void)
+{
+	for (int skill = 0; skill < BOT_SKILL_COUNT; ++skill)
+		CHECK(bot_skills[skill].cut_margin_frames > bot_skills[skill].reaction_min + BOT_REACTION_SPREAD_MASK);
+	bot_init(&mind, 1);
+	CHECK_EQ(BOT_EASY, mind.skill);
+	bot_set_skill(&mind, 7);
+	CHECK_EQ(BOT_EASY, mind.skill);
+}
+
 void run_bot_tests(void)
 {
+	RUN(harder_bots_react_sooner);
+	RUN(every_skill_cuts_in_time);
 	RUN(thinks_on_its_turn_or_in_danger);
 	RUN(races_ahead_of_a_rival_level_with_it);
 	RUN(cuts_across_once_ahead);

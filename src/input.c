@@ -19,6 +19,11 @@ game_state game;
 status_message status;
 rounds arena_rounds;
 static bot_mind bot_minds[BOT_COUNT_MAX]; // what each bot remembers between frames (game/bot.h)
+// How hard the bots play (game/bot.h: BOT_EASY, _MEDIUM, _HARD): A in play steps through them.
+// Kept through rounds and restarts
+int bot_skill_level = BOT_EASY;
+static const char *const skill_titles[BOT_SKILL_COUNT] = {"Difficulty: Easy", "Difficulty: Medium",
+															 "Difficulty: Hard"};
 // Who the bots chase, if they can see them: you. They're a team against you, not each other: a
 // round is yours once they're all gone, and bots knocking each other out would make it a wait
 static const rider *const bot_rivals[] = {&player1};
@@ -466,6 +471,7 @@ static void begin_round(void)
 		// The seed picks its reaction times: the same every run, but different for each bot and
 		// round (round 1's first bot keeps seed 1, which the E2E scripts were made with)
 		bot_init(&bot_minds[i], 1 + arena_rounds.number * BOT_COUNT_MAX + i);
+		bot_set_skill(&bot_minds[i], bot_skill_level);
 	}
 	update_solid_trails();
 	status_show(&status, rounds_title(&arena_rounds));
@@ -680,12 +686,14 @@ static void game_step(unsigned short struck)
 		between_rounds();
 	status_update(&status); // the status line types on, and goes once it's been read
 
-	// A: clear every wall, each starting fresh where its cycle is
+	// A: the bots' difficulty, Easy, Medium, Hard and round again (a toggle for now: it may be
+	// chosen in a menu later). The bots riding change at once, and the status line says which
 	if (struck & DIGI_A)
 	{
-		trail_reset(&player1.wall, player1.bike.position);
+		bot_skill_level = bot_skill_level + 1 < BOT_SKILL_COUNT ? bot_skill_level + 1 : BOT_EASY;
 		for (int i = 0; i < BOT_COUNT_MAX; ++i)
-			trail_reset(&bots[i].wall, bots[i].bike.position);
+			bot_set_skill(&bot_minds[i], bot_skill_level);
+		status_show(&status, skill_titles[bot_skill_level]);
 	}
 	// X: worst-case trail for performance checks (the live segment then runs diagonally to the cycle)
 	if (struck & DIGI_X)

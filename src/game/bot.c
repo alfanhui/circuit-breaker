@@ -6,6 +6,15 @@
 #define OPTION_LEFT 1
 #define OPTION_RIGHT 2
 
+// Each difficulty's numbers (bot.h, where the choice of them is explained). Easy is the bot as
+// it was first tuned: the macros in bot.h
+const bot_skill bot_skills[BOT_SKILL_COUNT] = {
+	// name    reaction          calm             cut margin             boost from            chase
+	{"Easy", BOT_REACTION_MIN, BOT_CALM_FRAMES, BOT_CUT_MARGIN_FRAMES, CYCLE_GAUGE_MAX, BOT_WEIGHT_CHASE},
+	{"Medium", 6, 20, BOT_CUT_MARGIN_FRAMES, CYCLE_GAUGE_MAX / 2, BOT_WEIGHT_CHASE},
+	{"Hard", 3, 12, 12, CYCLE_GAUGE_MAX / 2, 2},
+};
+
 void bot_init(bot_mind *mind, unsigned int seed)
 {
 	mind->random = seed ? seed : 1; // xorshift sticks at 0 forever
@@ -16,11 +25,17 @@ void bot_init(bot_mind *mind, unsigned int seed)
 	mind->boosting = 0;
 	mind->may_think = 1; // every frame, unless the game shares the turns out
 	mind->in_danger = 0;
+	mind->skill = BOT_EASY;
 	mind->believes = 0;
 	mind->unseen = 0;
 	mind->rival_heading = 0;
 	mind->rival_seen.x = 0;
 	mind->rival_seen.y = 0;
+}
+
+void bot_set_skill(bot_mind *mind, int skill)
+{
+	mind->skill = (unsigned char)(skill >= 0 && skill < BOT_SKILL_COUNT ? skill : BOT_EASY);
 }
 
 // The next number in the bot's random sequence. xorshift: three shifts and three exclusive ORs,
@@ -151,7 +166,7 @@ static int find_target(bot_mind *mind, const rider *me, const rider *const *riva
 	side = across < 0 ? -1 : 1; // which side of their line the bot is on
 	across = abs_int(across);
 
-	if (ahead > across + cycle_cruise_speed() * BOT_CUT_MARGIN_FRAMES)
+	if (ahead > across + cycle_cruise_speed() * bot_skills[mind->skill].cut_margin_frames)
 	{
 		// Far enough ahead to get there first. But if something already blocks their way before
 		// that point (usually its own trail, just laid across it), they're cut off: done. Without
@@ -202,11 +217,12 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 						 const trail *const *trails, int trail_count)
 {
 	rider_controls controls;
+	const bot_skill *skill = &bot_skills[mind->skill]; // how hard it plays (bot.h)
 	// Distances from frames of travel: a multiply each, no division
 	const int look = cycle_cruise_speed() * BOT_LOOK_FRAMES;
 	const int side_look = cycle_cruise_speed() * BOT_SIDE_LOOK_FRAMES;
 	const int turn_cost = cycle_cruise_speed() * BOT_TURN_COST_FRAMES;
-	const int reaction_travel = cycle_cruise_speed() * BOT_REACTION_MAX;
+	const int reaction_travel = cycle_cruise_speed() * (skill->reaction_min + BOT_REACTION_SPREAD_MASK);
 	world_point target;
 	int has_target;
 	int danger_ahead;
@@ -301,7 +317,7 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 		{
 			int a = approach(me, heading, target, side_look);
 
-			score += a * BOT_WEIGHT_CHASE;
+			score += a * skill->chase_weight;
 			if (option == OPTION_STRAIGHT)
 				straight_approach = a;
 		}
@@ -351,7 +367,7 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 		int wants = clear && (chasing || squeezed);
 
 		if (!mind->boosting)
-			mind->boosting = wants && me->bike.gauge == CYCLE_GAUGE_MAX;
+			mind->boosting = wants && me->bike.gauge >= skill->boost_from;
 		else
 			mind->boosting = wants && me->bike.gauge >= CYCLE_GAUGE_DRAIN;
 		controls.boost = mind->boosting;
@@ -361,8 +377,8 @@ rider_controls bot_think(bot_mind *mind, const rider *me, const rider *const *ri
 	// A turn: it presses it a reaction time later. This frame counts as the first
 	mind->boosting = 0;
 	mind->planned = best == OPTION_LEFT ? TURN_LEFT : TURN_RIGHT;
-	mind->calm = BOT_CALM_FRAMES;
-	mind->reacting = (unsigned char)(BOT_REACTION_MIN - 1 + (next_random(mind) & BOT_REACTION_SPREAD_MASK));
+	mind->calm = skill->calm_frames;
+	mind->reacting = (unsigned char)(skill->reaction_min - 1 + (next_random(mind) & BOT_REACTION_SPREAD_MASK));
 	if (correcting)
 		mind->reacting = 0; // already reacting: pressed now
 	if (mind->reacting == 0)

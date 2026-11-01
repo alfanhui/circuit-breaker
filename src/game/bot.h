@@ -100,6 +100,43 @@
 #define BOT_REACTION_SPREAD_MASK 7
 #define BOT_REACTION_MAX (BOT_REACTION_MIN + BOT_REACTION_SPREAD_MASK)
 
+/*
+ * Difficulty. The numbers above are Easy's. Harder bots are the same brain with a quicker hand
+ * and more nerve, not new rules: they still only press buttons a player can, and still play
+ * safety first. Picked by measuring in the PC simulation (300 one-minute rounds against a
+ * scripted player that weaves and takes 10-16 frames to react, as a person does): against
+ * Easy, Medium and Hard survive longer (252 and 264 of 300, from 238) and kill that player
+ * more often (80 and 77, from 63; more against one weaving close by). What changes:
+ *   - reaction: quicker to press a turn once it has chosen one (Hard: 3-10 frames, 50-167 ms,
+ *     a sharp human; Easy's 9-16 is an average one). The biggest single gain, in both
+ *   - boost from: the gauge it needs before it starts a boost. From half: more bursts to get
+ *     ahead and cut across
+ *   - calm: how long it holds its line after a turn before choosing another. Shorter: it
+ *     answers your turns sooner (much shorter, or cheaper turns, made it twitchy: it boxed
+ *     itself in)
+ *   - cut margin: how much further ahead than across it must be before it cuts across your
+ *     path (kept above its slowest reaction, so it's still in time)
+ *   - chase: how much closing on where it aims to cut you off counts against room
+ * Tried and left alone, as no help: seeing all round (it kept answering your every move and
+ * committed to fewer cuts: half the kills), thinking more often, judging room further out.
+ */
+#define BOT_EASY 0
+#define BOT_MEDIUM 1
+#define BOT_HARD 2
+#define BOT_SKILL_COUNT 3
+
+typedef struct
+{
+	const char *name;				 // what the status line says when it's picked
+	unsigned char reaction_min;		 // frames; plus 0 to BOT_REACTION_SPREAD_MASK more
+	unsigned char calm_frames;		 // BOT_CALM_FRAMES on Easy
+	unsigned char cut_margin_frames; // BOT_CUT_MARGIN_FRAMES on Easy; above its slowest reaction
+	unsigned char boost_from;		 // gauge needed to start a boost (CYCLE_GAUGE_MAX: full)
+	unsigned char chase_weight;		 // BOT_WEIGHT_CHASE on Easy
+} bot_skill;
+
+extern const bot_skill bot_skills[BOT_SKILL_COUNT];
+
 // What a bot remembers between frames
 typedef struct
 {
@@ -116,6 +153,7 @@ typedef struct
 	// something, beside its 9-16 frame reaction: the PC simulation's survival barely moved
 	unsigned char may_think;
 	unsigned char in_danger; // 1 if something was in its way last frame (danger seen afresh: think now)
+	unsigned char skill;	 // BOT_EASY, BOT_MEDIUM or BOT_HARD: its row of bot_skills
 	// What it believes of the nearest rival while they're behind it (find_target): where it last
 	// saw them and which way they were going. One rival's worth: there are two riders so far
 	unsigned char believes;		 // 0 until it has a belief (the round's start gives it one)
@@ -127,6 +165,9 @@ typedef struct
 // A fresh mind. seed: any number, picking its sequence of reaction times. The same seed always
 // gives the same bot, so a run can be repeated exactly (tests, and the attract mode later)
 void bot_init(bot_mind *mind, unsigned int seed);
+
+// How hard it plays: BOT_EASY (bot_init's), BOT_MEDIUM or BOT_HARD. Can change mid-round
+void bot_set_skill(bot_mind *mind, int skill);
 
 // This frame's buttons for the bot riding me.
 // rivals: the other riders on the field (it only uses those it can see). trails: every trail on

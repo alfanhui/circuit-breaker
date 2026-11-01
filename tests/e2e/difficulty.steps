@@ -1,0 +1,14 @@
+# The bots' difficulty (game/bot.h): A in play steps Easy -> Medium -> Hard -> Easy. The status
+# line says which, and the debug text's last line ends E / M / H.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+press a
+wait 1
+shot skill_1_medium
+press a
+wait 1
+shot skill_2_hard
+press a
+wait 1
+shot skill_3_easy

@@ -17,6 +17,7 @@ extern rider player1;
 // the field (not alive, their trails sunk)
 #define BOT_COUNT_MAX 3
 extern rider bots[BOT_COUNT_MAX];
+extern int bot_skill_level; // how hard they play: BOT_EASY, BOT_MEDIUM or BOT_HARD (game/bot.h)
 extern game_state game; // playing, or terminated after a crash (game/game_state.h)
 extern status_message status; // a line typed out during play (game/status_message.h)
 extern rounds arena_rounds; // which round, and the walls sinking and rising between them (game/rounds.h)
