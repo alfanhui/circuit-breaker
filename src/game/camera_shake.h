@@ -28,6 +28,7 @@
 #define CAMERA_SHAKE_DECAY 13 // sixteenths of the size kept each frame
 #define CAMERA_SHAKE_MIN 32	  // 0.18 degrees: below this it stops
 #define CAMERA_SHAKE_BOT_KILL 546 // 3 degrees: a bot died
+#define CAMERA_SHAKE_BREACH 1456  // 8 degrees: the designed crash's hit (breach.h)
 
 typedef struct
 {

@@ -29,6 +29,10 @@ void run_arrival_flight_tests(void);
 void run_surround_tests(void);
 void run_rounds_tests(void);
 void run_wall_flicker_tests(void);
+void run_breach_tests(void);
+void run_corridor_tests(void);
+void run_city_tests(void);
+void run_walker_tests(void);
 
 int main(void)
 {
@@ -58,6 +62,10 @@ int main(void)
 	run_surround_tests();
 	run_rounds_tests();
 	run_wall_flicker_tests();
+	run_breach_tests();
+	run_corridor_tests();
+	run_city_tests();
+	run_walker_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

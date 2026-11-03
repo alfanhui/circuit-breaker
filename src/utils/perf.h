@@ -29,7 +29,17 @@ extern int perf_displayed_polygons;
  */
 #define PERF_BOTS 0	  // the bots thinking and riding (input.c)
 #define PERF_TRAILS 1 // building the trails' meshes to draw (main.c)
-#define PERF_PART_COUNT 2
+// The level's parts (docs/CULLING.md, step 1): each its own, so a film says where the time went.
+// What's left of cpu once they're taken off is the rest (the HUD, SGL's frame, the sky...)
+#define PERF_ARENA 2	// the arena's walls and blocks, worked out into strips (level.c)
+#define PERF_CORRIDOR 3 // the corridor's walls and the glass behind you (level.c)
+#define PERF_SIDES 4	// the grey box's and the city's box sides (level.c)
+#define PERF_TOPS 5		// their tops (main.c)
+#define PERF_FLOOR 6	// the corridor's glass floor (main.c, level.c)
+#define PERF_BANDS 7	// SGL taking the walls' strips: transforms and sorting (level.c)
+#define PERF_WALKER 8	// on foot: the walker's step, its roofs checked (input.c)
+#define PERF_GRID 9		// the floor's grid on VDP2: its rotation worked out (main.c)
+#define PERF_PART_COUNT 10
 extern int perf_part_peak[PERF_PART_COUNT]; // % of a display frame, the worst in the last second
 
 void perf_part_add(int part, int frc_before);

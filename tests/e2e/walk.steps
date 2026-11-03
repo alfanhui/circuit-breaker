@@ -1,0 +1,70 @@
+# On foot (game/walker.h): round 5's designed crash (as breach.steps, without its shots), then
+# a press to get up, and the on-foot controls: walking, the head's looks, turning, a wall stopping
+# you, strafing, and walking to the corridor's far end.
+# Film it with tests\e2e\film_round.ps1 -Round 5 -Steps walk.steps
+wait_boot
+skip_prologue
+press start
+press z
+press start
+wait 0.5
+# Left: face west, into the flicker. C x6: cruise 7 -> 13. Then the crash, to lying still
+press left
+press c 6
+wait 5
+wait 11
+shot walk_00_lying
+# Any button: up, over just over a second
+press b
+wait 0.2
+shot walk_01_rising
+wait 0.3
+shot walk_02_rising
+wait 0.3
+shot walk_03_rising
+wait 0.5
+shot walk_04_stood
+# Up: walk on along the corridor, 2 s
+keydown up
+wait 1
+shot walk_05_walking
+wait 1
+keyup up
+wait 0.3
+shot walk_06_stopped
+# The head: X up-left, Y up, B down, C + Z straight right
+keydown x
+wait 0.5
+shot walk_07_look_up_left
+keyup x
+keydown y
+wait 0.5
+shot walk_08_look_up
+keyup y
+keydown b
+wait 0.5
+shot walk_09_look_down
+keyup b
+keydown c
+keydown z
+wait 0.5
+shot walk_10_look_right
+keyup c
+keyup z
+wait 0.5
+# Turn right, half a second: about a quarter turn, facing the corridor's side wall
+hold right 0.5
+wait 0.2
+shot walk_11_turned
+# Walk into the side wall: stopped short of it
+hold up 3
+shot walk_12_at_the_wall
+# Strafe left along it (L), 1.5 s
+hold l 1.5
+shot walk_13_strafed
+# Turn back the other way (left, a quarter) and walk all the way to the far end
+hold left 0.5
+wait 0.2
+shot walk_14_turned_back
+hold up 12
+shot walk_15_far_end

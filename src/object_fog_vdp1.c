@@ -96,6 +96,13 @@ unsigned short object_fog_quad(int level0, int level1, int level2, int level3)
 	return table_gstb(next_table++);
 }
 
+jo_color object_fog_flat_colour(jo_color colour, int level)
+{
+	// colours[]: each level's Gouraud colour, worked out once (object_fog_init); a channel's 16
+	// leaves the colour alone
+	return level <= 0 ? colour : (jo_color)depth_fog_darken((unsigned short)colour, 16 - (colours[level] & 31));
+}
+
 void object_fog_set_quad(ATTR *attribute, int level0, int level1, int level2, int level3)
 {
 	attribute->gstb = object_fog_quad(level0, level1, level2, level3);

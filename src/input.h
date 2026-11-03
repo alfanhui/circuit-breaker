@@ -9,6 +9,8 @@
 #include "game/loop_break.h"
 #include "game/rounds.h"
 #include "game/wall_flicker.h"
+#include "game/breach.h"
+#include "game/corridor.h"
 #include "game/arena.h"
 #include "game/trail.h"
 #include "view.h"
@@ -24,6 +26,9 @@ extern game_state game; // playing, or terminated after a crash (game/game_state
 extern status_message status; // a line typed out during play (game/status_message.h)
 extern rounds arena_rounds; // which round, and the walls sinking and rising between them (game/rounds.h)
 extern wall_flicker arena_flicker; // the round's glitching section of outer wall (game/wall_flicker.h)
+extern breach arena_breach; // the designed crash, round 5, through the flicker (game/breach.h)
+extern corridor *arena_corridor; // behind the flicker, once it's given way (game/corridor.h); NULL
+								 // till the breach, in Work RAM's memory (scene_memory.h)
 #define FIELD_TRAIL_COUNT (1 + BOT_COUNT_MAX) // you, then the bots: the radar's colours in order
 extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trail: the radar's colours
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)
@@ -37,7 +42,7 @@ extern bool debug_slow_motion;
 extern bool debug_no_termination;
 // The prologue's loop (input.c): the strokes of "SEGA SATURN SH-2" written so far, each with
 // its word, and how tall each word's strokes stand (they sink once it's spelt)
-extern trail attract_strokes[];
+extern trail *attract_strokes; // the arena's memory (scene_memory.h): NULL once it's given back
 extern unsigned char attract_stroke_word[];
 extern int attract_stroke_count;
 extern unsigned char attract_word_height[];

@@ -184,6 +184,18 @@ the Saturn. The emulator figures below are the ones to compare against.
       (the scene goes close to SGL's ~8192 depth limit).
 - [ ] **Glitches that move around randomly** (garbage polygons for a frame): could be the second
       CPU reading stale data (backlog: slave SH-2 cache coherency). Note when it happens.
+- [ ] **The grey box's stairs** (on foot, `BOOT_ON_FOOT 1`): walk up to the first step and stop,
+      looking straight up the stairs; then the platform's end, facing the tower. In Mednafen
+      both read 60 fps (the stairs' foot was 30 before the box fronts were laid flat:
+      `lay_wide_pieces_flat`, level.c). Note `fps` and `cpu` at each. 30 at the stairs' foot on
+      the Saturn would mean VDP1's line cost isn't what Mednafen models.
+- [ ] **The tower's front up close**: run to the tower on the low roof, stop, turn a little each
+      way. Mednafen: 60 fps (30 before its bottom was cut to the screen: `cap_band_bottoms`).
+      Look for the floor showing through the tower's or a wall's foot, mostly looking down from
+      the platform: the cut's worked out for a 240-row picture; a gap means the Saturn shows more.
+- [ ] **Down the corridor, from where you stand up**: `cpu` read 78-81% in Mednafen. Laying far,
+      small fronts flat made it slower there (60 to 54 fps) for no reason worked out: if the
+      Saturn's quicker with them flat, `LAY_FLAT_LINES` (level.c) can come down.
 
 Result: ________
 

@@ -5,6 +5,7 @@
 #include "game/camera_shake.h"
 #include "game/intro_flight.h"
 #include "game/arrival_flight.h"
+#include "game/city.h"
 
 // 1st person: camera sits on the cycle and turns with it (easing round: turn_ease.h)
 #define FIRST_PERSON_FOV 90
@@ -18,6 +19,11 @@
 // following it, it widened 6 degrees a frame and looked like a glitch. It's kept in SGL's ANGLE
 // units (65536 a circle), not whole degrees, so even its slowest steps are smooth
 #define FIRST_PERSON_BOOST_FOV 12				   // extra degrees at full boost
+// On foot (view_on_foot), narrower: walking, nothing comes at you at 13 a frame, and less on the
+// screen is less for VDP1 to fill (the stairs, the walls beside you). Things nearby look nearer
+// their size, too: at 90 the grey box's stairs looked far off. Eased to as you get up
+#define ON_FOOT_FOV 75
+#define ON_FOOT_FOV_ANGLE DEGtoANG(ON_FOOT_FOV)
 #define FIRST_PERSON_FOV_ANGLE DEGtoANG(FIRST_PERSON_FOV) // constants: worked out by the compiler
 #define BOOST_FOV_ANGLE DEGtoANG(FIRST_PERSON_BOOST_FOV)
 #define FOV_EASE_SHARE 2	 // sixteenths of the way each frame: most of it in ~0.3 s, settled in ~0.6 s
@@ -38,6 +44,15 @@
 #define LOOK_EASE_SHARE 4	   // sixteenths of the way a frame: quicker than a turn, it's a glance
 #define LOOK_EASE_MIN_STEP 64 // 0.35 degrees
 #define LOOK_FOG_TILT_STEP 10 // tan(pitch) x 1000: about 0.6 degrees
+
+/*
+ * On foot (game/walker.h, view_on_foot): the body turns freely, not in quarter turns, and at once
+ * (the walker eases its own turning speed: easing the camera after it as well would lag). The
+ * head's look (the face buttons) eases as on the cycle, and can look up and down as well: up
+ * less far than down, as a neck does. The eye bobs with each step
+ */
+#define LOOK_UP_ANGLE DEGtoANG(25.0)
+#define LOOK_DOWN_ANGLE DEGtoANG(35.0)
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
@@ -152,12 +167,24 @@ static int look_target = 0;
 static int look_now = 0;
 static int fog_tilt = 0; // the floor fog's tilt (tan x 1000) as last built
 
+// On foot (view_on_foot): whether, the head's look up or down (ANGLE, + down) wanted and now, and
+// how far the eye's down for the step
+static bool on_foot = false;
+static int look_pitch_target = 0;
+static int look_pitch_now = 0;
+static int foot_bob = 0;
+
 // Spectating: the message's centre line, which the camera stays across from (view_spectate_line),
 // and the steady point it pans with along the line (view_spectate_pan)
 static int spectate_line_y = 0;
 static int spectate_pan_x = 0;
-// The camera's lean (ANGLE), only ever off 0 while the opening flight banks
+// The camera's lean (ANGLE), only ever off 0 while the opening flight banks, or in the designed
+// crash (view_breach)
 static ANGLE view_roll = 0;
+// The designed crash's tip down towards the floor (ANGLE) and how far the eye's dropped, 1st
+// person (view_breach)
+static int breach_dip = 0;
+static int breach_drop = 0;
 
 // The opening flight: its frame (-1: not flying), where the cycle began, the point easing after
 // the cycle (lead ahead of it, along x), the FOV as last set, frames to the fog's next rebuild,
@@ -233,6 +260,12 @@ static void apply_view(const cycle *c)
 	int floor_view;
 
 	view_roll = 0;
+	breach_dip = 0;
+	breach_drop = 0;
+	on_foot = false; // until the next view_on_foot
+	look_pitch_target = 0;
+	look_pitch_now = 0;
+	foot_bob = 0;
 	view_floor_shift = 0;
 	if (arrival_frame >= 0)
 	{
@@ -339,8 +372,9 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 		mode = VIEW_CULL_ALL;
 	else if (!first_person)
 		mode = VIEW_CULL_ISO;
-	else if (heading_current != heading_target || look_now != 0 || camera_shake_active(&shake))
-		mode = VIEW_CULL_TURNING; // easing round, looking aside or shaking: it faces between headings
+	else if (on_foot || heading_current != heading_target || look_now != 0 || camera_shake_active(&shake))
+		mode = VIEW_CULL_TURNING; // on foot (any way at all), easing round, looking aside or shaking:
+								  // it faces between headings
 	else if (fov_now != FIRST_PERSON_FOV_ANGLE)
 		mode = VIEW_CULL_TURNING; // boosting: wider than the 90 degree rectangle, so look all round
 	else
@@ -363,6 +397,7 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 		out->forward_x = -(slSin(view_rz) >> 6);
 		out->forward_y = -(slCos(view_rz) >> 6);
 		out->view_width = arrival_view_width;
+		out->side_extra16 = 0;
 		return true;
 	}
 	if (free_camera || spectating || !first_person)
@@ -373,6 +408,7 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 	out->forward_x = -(slSin(yaw) >> 6);
 	out->forward_y = -(slCos(yaw) >> 6);
 	out->view_width = view_width_now;
+	out->side_extra16 = 0;
 	return true;
 }
 
@@ -408,6 +444,28 @@ void view_look(int direction)
 	look_target = direction * LOOK_ANGLE;
 }
 
+void view_on_foot(int yaw, int look_x, int look_y, int bob)
+{
+	on_foot = true;
+	heading_target = yaw;
+	heading_current = yaw; // no easing after it: the walker's turn is already eased
+	look_target = look_x * LOOK_ANGLE;
+	look_pitch_target = look_y > 0 ? -LOOK_UP_ANGLE : look_y < 0 ? LOOK_DOWN_ANGLE : 0;
+	foot_bob = bob;
+}
+
+int view_look_pitch(void)
+{
+	return look_pitch_now;
+}
+
+int view_ground_height(void)
+{
+	// On foot you're in the corridor or beyond it: its floor is the glass (VDP1), and the grid's
+	// only seen through the glass's seams, and below the city. Moved down at once as you get up
+	return on_foot ? CITY_GROUND : 0;
+}
+
 void view_shake(int strength)
 {
 	camera_shake_start(&shake, strength);
@@ -416,6 +474,13 @@ void view_shake(int strength)
 void view_rumble(int strength)
 {
 	camera_shake_hold(&shake, strength);
+}
+
+void view_breach(int roll, int dip, int drop)
+{
+	view_roll = (ANGLE)roll;
+	breach_dip = dip;
+	breach_drop = drop;
 }
 
 void view_spectate_shift(int dx)
@@ -721,6 +786,52 @@ bool view_floor_quad(int height, world_point *quad)
 	return true;
 }
 
+int view_sky_rise(void)
+{
+	// In 1st person only: the camera's tilt from level (+ down), as tan x 100 (the sky's 100
+	// away, main.c), negative looking down: the horizon goes up the screen (SGL's y is down it),
+	// and the sky with it
+	const int tilt = FIRST_PERSON_RX - view_rx;
+
+	if (!first_person || spectating || arrival_frame >= 0)
+		return 0;
+	return -((slTan((ANGLE)tilt) * 100) >> 16);
+}
+
+bool view_roof_quad(int height, world_point *quad)
+{
+	intro_shot s;
+
+	if (spectating || -view_z <= height)
+		return false; // not drawn spectating; or the eye's level with the roof or under it
+	s.ox = view_x;
+	s.oy = view_y;
+	s.height = -view_z;
+	s.rx = view_rx;
+	s.rz = view_rz;
+	s.fov = arrival_frame >= 0 ? arrival_fov : first_person ? fov_now : ISO_FOV_ANGLE;
+	corner_rays_meet(&s, height, 10, quad); // a quarter wider all round, as view_ground_quad's
+	return true;
+}
+
+bool view_ground_quad(world_point *quad)
+{
+	intro_shot s;
+
+	if (spectating || view_z >= 0)
+		return false; // not drawn spectating; or the eye's on the floor or under it
+	s.ox = view_x;
+	s.oy = view_y;
+	s.height = -view_z;
+	s.rx = view_rx;
+	s.rz = view_rz;
+	s.fov = arrival_frame >= 0 ? arrival_fov : first_person ? fov_now : ISO_FOV_ANGLE;
+	// A quarter wider all round, not an eighth: the corners don't follow the camera's roll (the
+	// designed crash leans it up to 11 degrees), so they're kept well off the screen
+	corner_rays_meet(&s, 0, 10, quad);
+	return true;
+}
+
 // One frame of the flight down into the cycle
 static void arrival_follow(const cycle *c, int yaw, int pitch)
 {
@@ -800,13 +911,17 @@ void view_follow(const cycle *c)
 			heading_current = turn_ease_step(heading_current, heading_target);
 		// The head's turn to the side, and its dip towards the floor
 		look_now = ease_out_step(look_now, look_target, LOOK_EASE_SHARE, LOOK_EASE_MIN_STEP);
+		look_pitch_now = ease_out_step(look_pitch_now, look_pitch_target, LOOK_EASE_SHARE, LOOK_EASE_MIN_STEP);
 		view_rz = (ANGLE)(heading_current + look_now + shake_yaw);
 		{
-			int pitch = ((look_now < 0 ? -look_now : look_now) * LOOK_PITCH_X256) >> 8;
+			// The designed crash's tip forward is a dip of the head like any other, and so is
+			// looking up or down on foot (negative: up). The fog follows them
+			int pitch = (((look_now < 0 ? -look_now : look_now) * LOOK_PITCH_X256) >> 8) + breach_dip + look_pitch_now;
 			int tilt = (slTan((ANGLE)pitch) * 1000) >> 16; // tan x 1000, as the floor fog keeps it
 
 			// Less than level (90 degrees) looks down. The shake's pitch isn't in the fog's tilt
 			view_rx = (ANGLE)(FIRST_PERSON_RX - pitch + shake_pitch);
+			view_z = FIRST_PERSON_Z + breach_drop + foot_bob; // view_z moves the world: + lowers the eye
 			int change = tilt > fog_tilt ? tilt - fog_tilt : fog_tilt - tilt;
 
 			// Rebuilt in steps, and once more on landing level, so it ends exactly right
@@ -819,7 +934,7 @@ void view_follow(const cycle *c)
 
 		// Ease towards the width the boost level asks for (0..CYCLE_BOOST_FULL, which is 16: >> 4
 		// divides by it). The level ramps up over 8 frames; easing on top rounds both ends off
-		ease_first_person_fov(FIRST_PERSON_FOV_ANGLE + ((c->boost * BOOST_FOV_ANGLE) >> 4));
+		ease_first_person_fov(on_foot ? ON_FOOT_FOV_ANGLE : FIRST_PERSON_FOV_ANGLE + ((c->boost * BOOST_FOV_ANGLE) >> 4));
 	}
 	else
 	{

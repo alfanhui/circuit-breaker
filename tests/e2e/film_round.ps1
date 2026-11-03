@@ -15,12 +15,16 @@ $shots = "$project\tests\build\e2e"
 
 # Sets BOOT_ROUND (0-based) in input.c. Written back without a byte-order mark: PowerShell's own
 # Set-Content would add one (SKILLS.md)
-function Set-BootRound([int]$number)
+function Set-BootRound([int]$number, [int]$on_foot)
 {
 	$src = [System.IO.File]::ReadAllText($input_c)
 	$src = $src -replace "(?m)^#define BOOT_ROUND \d+", "#define BOOT_ROUND $number"
+	$src = $src -replace "(?m)^#define BOOT_ON_FOOT \d+", "#define BOOT_ON_FOOT $on_foot"
 	[System.IO.File]::WriteAllText($input_c, $src)
 }
+# The rounds are filmed from the arena: not booted on foot in the corridor (BOOT_ON_FOOT), which
+# is put back as it was afterwards
+$was_on_foot = if ([System.IO.File]::ReadAllText($input_c) -match "(?m)^#define BOOT_ON_FOOT (\d+)") { [int]$Matches[1] } else { 0 }
 
 function Build
 {
@@ -28,7 +32,7 @@ function Build
 	try { cmd /c "scripts\compile.bat" | Select-String -Pattern " error" } finally { Pop-Location }
 }
 
-Set-BootRound ($Round - 1)
+Set-BootRound ($Round - 1) 0
 try
 {
 	Build
@@ -48,6 +52,6 @@ try
 }
 finally
 {
-	Set-BootRound 0
+	Set-BootRound 0 $was_on_foot
 	Build
 }

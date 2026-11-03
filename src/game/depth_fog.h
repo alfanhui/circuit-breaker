@@ -56,4 +56,12 @@ int depth_fog_level(const depth_fog *f, int x, int y);
 #define DEPTH_FOG_GOURAUD_NEUTRAL 0xC210 // all three channels 16: no change (jo's JO_NO_GOURAUD_COLOR)
 unsigned short depth_fog_gouraud_colour(int level);
 
+/*
+ * The same darkening done to a flat colour (an RGB555 jo_color, bit 15 set) instead: each 5-bit
+ * channel `steps` darker (16 - a Gouraud channel, as depth_fog_gouraud_colour's), not below 0. For
+ * a small untextured polygon one fog level for the whole of it is enough, and drawing it in the
+ * darker colour costs VDP1 nothing: no Gouraud table to write, no shading worked out per pixel
+ */
+unsigned short depth_fog_darken(unsigned short colour, int steps);
+
 #endif

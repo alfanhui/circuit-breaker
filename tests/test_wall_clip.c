@@ -25,6 +25,7 @@ static wall_clip_camera camera(int x, int y, int forward_x, int forward_y)
 	c.forward_x = forward_x;
 	c.forward_y = forward_y;
 	c.view_width = WALL_CLIP_VIEW_WIDTH_90;
+	c.side_extra16 = 0;
 	return c;
 }
 
@@ -121,8 +122,55 @@ static void objects_behind_or_beside_are_not_drawn(void)
 	CHECK_EQ(0, wall_clip_object_visible(&c, p, 35, 10));
 }
 
+// On foot, beside a wall running north (x = -300, columns every 250 from y = 1000 to -2000),
+// facing north up it from the origin: the cone keeps its near end no further to the side than
+// twice its distance in front, so it starts 150 ahead, not 10. Facing the wall itself, nothing's cut
+static void the_cone_cuts_a_wall_beside_you(void)
+{
+	world_point wall[13];
+	wall_clip_camera c = camera(0, 0, 0, -1024);
+	wall_clip_run run;
+
+	for (int k = 0; k < 13; ++k)
+	{
+		wall[k].x = -300;
+		wall[k].y = (short)(1000 - 250 * k);
+	}
+	run = wall_clip_strip(wall, 12, &c, 10);
+	CHECK_EQ(-10, run.start.y); // only in front: 10 ahead, 300 to the side
+	run = wall_clip_strip_in_cone(wall, 12, &c, 10, 32);
+	CHECK(run.count > 0);
+	CHECK(run.start.y <= -149 && run.start.y >= -151); // 150 ahead: 300 to the side is twice that
+	CHECK_EQ(-300, run.start.x);
+	CHECK_EQ(-2000, run.end.y); // the far end's well inside the cone: untouched
+
+	// Facing it (east, -x), 40 from it: its middle's straight ahead, its ends slid in to the cone
+	// either side, 80 along it each way
+	c = camera(-260, -500, -1024, 0);
+	run = wall_clip_strip_in_cone(wall, 12, &c, 10, 32);
+	CHECK(run.count > 0);
+	CHECK(run.start.y >= -421 && run.start.y <= -419);
+	CHECK(run.end.y >= -581 && run.end.y <= -579);
+
+	// A single piece wholly beside you, outside the cone: dropped, not drawn back to front
+	c = camera(0, 1000, 0, -1024);
+	run = wall_clip_strip_in_cone(&wall[3], 1, &c, 10, 32); // y 250..0, 750..1000 ahead, 300 aside
+	CHECK_EQ(1, run.count);
+	c = camera(0, 300, 0, -1024); // the same piece from 300..50 ahead: the near end's out
+	run = wall_clip_strip_in_cone(&wall[3], 1, &c, 10, 32);
+	CHECK(run.count == 1 && run.start.y <= 150);
+	// A very wide view (boosting further than the game does) still sees it 100 ahead and 300
+	// aside, but that's outside the cone all along: dropped
+	c = camera(0, 100, 0, -1024);
+	c.view_width = 40;
+	CHECK_EQ(1, wall_clip_strip(&wall[3], 1, &c, 10).count);
+	run = wall_clip_strip_in_cone(&wall[3], 1, &c, 10, 32);
+	CHECK_EQ(0, run.count);
+}
+
 void run_wall_clip_tests(void)
 {
+	RUN(the_cone_cuts_a_wall_beside_you);
 	RUN(running_along_a_wall_starts_it_in_front);
 	RUN(facing_a_wall_up_close_keeps_only_the_low_strip);
 	RUN(wall_behind_draws_nothing);

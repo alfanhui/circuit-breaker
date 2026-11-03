@@ -1,0 +1,20 @@
+# By the tower (found 2026-11-03 in greybox_look.steps: 30 fps facing its front from the low roof).
+# Held Up from where you stand up, straight on (no turn taps: they made the line differ run to run),
+# the run carries you over the crate, up the stairs, off the platform onto the low roof (64) and up
+# to the tower's front. Stood still 2.5 s for each shot (fps and cpu are one-second averages):
+# facing it, then turned left, then right. Check each shot for gaps too: the floor showing through
+# the tower's front means its bottom was cut too high (cap_band_bottoms, level.c)
+# Film it: tests\e2e\run_e2e.ps1 -Steps tower_perf.steps (built with BOOT_ON_FOOT 1)
+wait_up
+hold up 13
+wait 2.5
+shot tp_00_facing
+hold left 0.3
+wait 2.5
+shot tp_01_left
+hold right 0.6
+wait 2.5
+shot tp_02_right
+hold right 0.3
+wait 2.5
+shot tp_03_right_more

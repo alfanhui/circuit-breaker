@@ -194,6 +194,7 @@ static wall_clip_camera north_camera(void)
 	c.forward_x = 0;
 	c.forward_y = -1024;
 	c.view_width = WALL_CLIP_VIEW_WIDTH_90;
+	c.side_extra16 = 0;
 	return c;
 }
 
@@ -272,6 +273,7 @@ static wall_clip_camera camera_north(void)
 	c.forward_x = 0;
 	c.forward_y = -1024;
 	c.view_width = WALL_CLIP_VIEW_WIDTH_90;
+	c.side_extra16 = 0;
 	return c;
 }
 

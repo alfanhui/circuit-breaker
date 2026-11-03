@@ -34,6 +34,9 @@ typedef struct
 	int forward_x;	// camera's forward direction on the floor, x1024
 	int forward_y;
 	int view_width; // sideways reach per unit in front, x16 (WALL_CLIP_VIEW_WIDTH_90 = 90 degrees)
+	// And this much further aside at any distance, x16: for a strip wholly below the eye with the
+	// head looking down (level.c), on the screen further out than the level view reaches. 0 level
+	int side_extra16;
 } wall_clip_camera;
 
 typedef struct
@@ -47,6 +50,20 @@ typedef struct
 // Visible run of pieces for a strip whose corners must be at least min_forward in front.
 wall_clip_run wall_clip_strip(const world_point *columns, int pieces,
 							  const wall_clip_camera *camera, int min_forward);
+
+/*
+ * The same, for a wall you can stand right next to (on foot: game/walker.h). With only a small
+ * min_forward, a wall running alongside you starts just in front of you, but well off to the
+ * side: 300 to the side and 10 in front is ~4800 pixels off the screen's edge, and VDP1 steps
+ * through every pixel of that too (it halved the frame rate). So each end also slides along until
+ * it's within a cone in front of the camera: no further to the side than reach16 sixteenths of
+ * its distance in front (32: twice as far, 320 pixels off the middle, past the 90 degree view's
+ * edge with room to spare). Nothing on the screen is lost: only the part beside you, out of
+ * view, is cut. A division per end (two a strip), none per column
+ */
+// The cone's wider by the camera's side_extra16 all along, as the view is
+wall_clip_run wall_clip_strip_in_cone(const world_point *columns, int pieces, const wall_clip_camera *camera,
+									  int min_forward, int reach16);
 
 // Whether to draw an object (another cycle) at p, reaching radius from its centre: all of it at
 // least min_forward in front of the camera, and not wholly off either side of the view. An

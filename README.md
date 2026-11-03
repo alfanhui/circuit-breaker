@@ -63,6 +63,12 @@ To measure the worst case from boot, build with `make re _CCFLAGS=-DPERF_STRESS_
 - A: the bots' difficulty: Easy, Medium, Hard (a toggle for now; the status line says which, the debug text's last line shows E / M / H). Rounds 4 and 5 are at least Medium whatever's picked
 - Y: arena boundary on/off (debug: lets the cycle leave the arena)
 - B: terminate every bot riding (debug): the round's won, so it skips on to the next round
+- Round 5: ride into the flickering section of wall for the designed crash (`game/breach.h`): it doesn't reset you, it lets you out into the corridor behind it (`game/corridor.h`), where you crash to a stop on its glass floor. Any button (but Start) gets you up, and you're on foot (`game/walker.h`):
+  - Left / Right: turn (slowly at first for aiming, quicker the longer it's held, stopping dead on letting go)
+  - Up / Down: walk forwards / backwards
+  - L / R: step sideways
+  - Face buttons: turn the head, easing back on letting go. X / Y / Z look up-left / up / up-right, A / B / C down-left / down / down-right; two in a column look straight aside (A + X left, C + Z right)
+  - No button does anything else: on purpose (Work RAM is stealth: you get by moving and looking)
 - C: cruise speed up (tuning; units per frame)
 - X: fill the trail with a full-length zig-zag (worst case, for performance checks)
 - Start: debug camera (D-pad pans, L/R height, B/C pitch, X / Y arena smaller / larger: tuning, the debug text shows the width; Z: a crash only stops the cycle instead of terminating the player, "NOTERM" in the debug text, for testing; A: jump to the next part of the game, intro flight -> spectator loop -> play -> intro, when you leave the debug camera)

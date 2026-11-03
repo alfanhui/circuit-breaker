@@ -49,12 +49,26 @@ void view_turn_left(void);
 void view_turn_right(void);
 // 1st person: turn the head to look aside (-1 left, 1 right) or back ahead (0); it eases there
 void view_look(int direction);
+// On foot (game/walker.h), every frame: the body facing yaw (ANGLE, any way at all, at once), the
+// head looking look_x (-1 left, 1 right) and look_y (-1 down, 1 up), easing there, and the eye bob
+// lower than standing on the floor (a step's bob, a landing's dip, less the roof's height). Off
+// again at view_init
+void view_on_foot(int yaw, int look_x, int look_y, int bob);
+// On foot, how far the head's looking down now (ANGLE; negative: up). 0 otherwise
+int view_look_pitch(void);
+// How high the floor's grid (VDP2) lies: 0 riding, the arena's floor; on foot, far below, as the
+// ground under Work RAM's city (city.h: CITY_GROUND), the towers' feet
+int view_ground_height(void);
 // Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
 // In iso it's half the size: the whole arena swinging is too much
 void view_shake(int strength);
 // Keep the camera rumbling at least this hard (ANGLE), called every frame while it should
 // (camera_shake_hold): it dies away once the calls stop
 void view_rumble(int strength);
+// The designed crash (game/breach.h): the camera's roll and, in 1st person, its tip down towards
+// the floor (ANGLE) and how far the eye's dropped, each frame of it. Back to 0 when the game
+// starts again (view_init)
+void view_breach(int roll, int dip, int drop);
 // Spectating: move the camera dx along x at once, with the cycle (the prologue's loop jumping
 // back to its start, input.c), so the jump doesn't show as a pan
 void view_spectate_shift(int dx);
@@ -90,6 +104,16 @@ int view_arrival_frame(void); // 0..ARRIVAL_FRAMES, -1 when not flying (the debu
 // (game/surround.h). Returns false when it can't be seen from above: the camera's under or level
 // with it, or spectating
 bool view_floor_quad(int height, world_point *quad);
+// The same for the floor itself, however low the camera (1st person's eye is only 35 up, too low
+// for view_floor_quad): for things laid on the floor (the corridor's glass, level.c)
+bool view_ground_quad(world_point *quad);
+// The same for a roof at a height (level.c's grey box): seen however little the eye's above it,
+// as you stand on it. False when the eye's not above it
+bool view_roof_quad(int height, world_point *quad);
+
+// How far to move the sky (main.c) up or down for the camera's pitch now: the sky's drawn
+// outside the world's matrix, so it doesn't tilt with the camera on its own. 0 looking level
+int view_sky_rise(void);
 // How far the arena's walls have risen out of the floor: 0..256, 256 (full) but while arriving
 int view_wall_rise(void);
 // The floor is drawn 2^this times larger (main.c): far off, its tiles grow, so the grid holds up

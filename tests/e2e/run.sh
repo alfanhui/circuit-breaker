@@ -12,6 +12,8 @@
 #                       container has no speakers, so it plays to SDL's silent "dummy" output
 #   wait_boot           wait until the game is up (its floor fills the screen), however long
 #                       the BIOS took: put it before the first press
+#   wait_up             wait_boot's, for a game booted on foot in the corridor (BOOT_ON_FOOT in
+#                       src/input.c): its dark red-black, not the arena's navy
 #   skip_prologue       jump to play, fresh at the start, from wherever the game boots
 #                       (BOOT_SCENE in src/input.c): START (the debug camera), A for each part
 #                       to go round (intro -> loop -> play -> intro), START. From the intro
@@ -106,6 +108,23 @@ while read -r command arg1 arg2; do
 		done
 		echo "booted after ~$((t * 55 / 100)) s of polling"
 		sleep 0.3 # a few frames more, so the game is reading the pad
+		;;
+	wait_up)
+		# Until the corridor's up: more red than green, and not dark. The BIOS's screens are
+		# black, the SEGA logo ~(11, 12, 24), the globe grey ~(110, 119, 136): green as high as
+		# red in all of them. The corridor's ~(38, 23, 40). At most 40 s, then carry on anyway
+		t=0
+		while [ "$t" -lt 80 ]; do
+			import -window "$window" /tmp/boot.png
+			rgb=$(convert /tmp/boot.png -resize '1x1!' -format '%[fx:int(255*r)] %[fx:int(255*g)]' info:)
+			r=${rgb% *}
+			g=${rgb#* }
+			[ "$r" -gt 25 ] && [ $((g + 8)) -lt "$r" ] && break
+			sleep 0.4
+			t=$((t + 1))
+		done
+		echo "up after ~$((t * 55 / 100)) s of polling"
+		sleep 0.3
 		;;
 	skip_prologue) jump_scenes "$(presses_to SCENE_PLAY)" ;;
 	start_intro) jump_scenes "$(presses_to SCENE_INTRO)" ;;

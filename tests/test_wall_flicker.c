@@ -136,6 +136,81 @@ static void the_same_every_time(void)
 	}
 }
 
+// Only round 5's gives way: before it, riding into the flicker is a crash like any other
+static void only_the_last_round_gives_way(void)
+{
+	wall_flicker f;
+
+	for (int round = 0; round < ROUND_COUNT; ++round)
+	{
+		wall_flicker_set_round(&f, round);
+		CHECK_EQ(round == ROUND_COUNT - 1, f.gives_way);
+	}
+}
+
+// A hit: facing its wall, up against it, along the section (half a piece of forgiveness either
+// side). Round 5's is the west wall (+x), -500 to 500 along y
+static void a_hit_is_facing_it_against_it_and_along_it(void)
+{
+	wall_flicker f;
+	const int limit = 7900;
+	world_point at = {7900, 0};
+
+	wall_flicker_set_round(&f, 4);
+	CHECK(wall_flicker_hit(&f, at, HEADING_WEST, limit));
+	CHECK(!wall_flicker_hit(&f, at, HEADING_NORTH, limit)); // riding along the wall, not into it
+	CHECK(!wall_flicker_hit(&f, at, HEADING_EAST, limit));	// away from it
+	at.x = 7899;
+	CHECK(!wall_flicker_hit(&f, at, HEADING_WEST, limit)); // stopped short: a trail
+	at.x = 7900;
+	at.y = 500 + WALL_FLICKER_HIT_MARGIN;
+	CHECK(wall_flicker_hit(&f, at, HEADING_WEST, limit)); // just clipping its end counts
+	at.y = 500 + WALL_FLICKER_HIT_MARGIN + 1;
+	CHECK(!wall_flicker_hit(&f, at, HEADING_WEST, limit));
+	at.y = -500 - WALL_FLICKER_HIT_MARGIN;
+	CHECK(wall_flicker_hit(&f, at, HEADING_WEST, limit));
+	at.y = -500 - WALL_FLICKER_HIT_MARGIN - 1;
+	CHECK(!wall_flicker_hit(&f, at, HEADING_WEST, limit));
+}
+
+// Each side: north is -y, east -x (world.h); north and south run along x
+static void every_side_is_the_right_wall(void)
+{
+	wall_flicker f;
+	const int limit = 5000;
+	world_point north = {-2500, -5000};
+	world_point east = {-5000, -2000};
+
+	wall_flicker_set_round(&f, 3); // the north wall, -3000 to -2000 along x
+	CHECK(wall_flicker_hit(&f, north, HEADING_NORTH, limit));
+	north.y = 5000; // the south wall, at the same x
+	CHECK(!wall_flicker_hit(&f, north, HEADING_SOUTH, limit));
+	wall_flicker_set_round(&f, 2); // the east wall, -2250 to -1500 along y
+	CHECK(wall_flicker_hit(&f, east, HEADING_EAST, limit));
+	east.x = 5000;
+	CHECK(!wall_flicker_hit(&f, east, HEADING_WEST, limit));
+}
+
+static void round_one_is_never_hit(void)
+{
+	wall_flicker f;
+	world_point at = {0, -5000};
+
+	wall_flicker_set_round(&f, 0);
+	CHECK(!wall_flicker_hit(&f, at, HEADING_NORTH, 5000));
+}
+
+// Opened: every piece hidden, none flashed: a hole
+static void opened_it_is_a_hole(void)
+{
+	wall_flicker f;
+
+	wall_flicker_set_round(&f, 4);
+	wall_flicker_open(&f);
+	CHECK_EQ((1 << f.count) - 1, f.hidden);
+	CHECK_EQ(0, f.flashed);
+}
+
 void run_wall_flicker_tests(void)
 {
 	RUN(round_one_has_none);
@@ -145,4 +220,9 @@ void run_wall_flicker_tests(void)
 	RUN(glitches_stay_in_the_section);
 	RUN(it_grows_more_obvious);
 	RUN(the_same_every_time);
+	RUN(only_the_last_round_gives_way);
+	RUN(a_hit_is_facing_it_against_it_and_along_it);
+	RUN(every_side_is_the_right_wall);
+	RUN(round_one_is_never_hit);
+	RUN(opened_it_is_a_hole);
 }

@@ -98,8 +98,20 @@ static void gouraud_darkens_steadily_and_greys(void)
 	}
 }
 
+// A flat colour darkened as Gouraud would: each channel down, none below black, bit 15 kept
+static void darken_takes_steps_off_each_channel(void)
+{
+	CHECK_EQ(0x8000 | 10 << 10 | 20 << 5 | 30, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 0));
+	CHECK_EQ(0x8000 | 6 << 10 | 16 << 5 | 26, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 4));
+	CHECK_EQ(0x8000 | 0 << 10 | 4 << 5 | 14, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 16));
+	// The most a level takes off is the Gouraud's: 16 - its channel
+	CHECK_EQ(0x8000 | 0 << 10 | 4 << 5 | 14,
+			 depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 16 - (depth_fog_gouraud_colour(DEPTH_FOG_LEVELS - 1) & 31)));
+}
+
 void run_depth_fog_tests(void)
 {
+	RUN(darken_takes_steps_off_each_channel);
 	RUN(agrees_with_the_floor_at_every_distance);
 	RUN(clear_near_and_full_far);
 	RUN(behind_the_camera_is_clear);

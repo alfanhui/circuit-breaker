@@ -14,15 +14,16 @@ typedef struct
 	unsigned char side;
 	short along_min;
 	unsigned char chance;
+	unsigned char gives_way;
 } section;
 
 static const section sections[] = {
-	{0, WALL_FLICKER_NORTH, 0, 0},		   // round 1: nothing wrong yet
-	{3, WALL_FLICKER_NORTH, 2000, 63},	   // 2000 to 2750 west of the middle
-	{3, WALL_FLICKER_EAST, -2250, 31},	   // somewhere else: -2250 to -1500 (north of the middle)
-	{4, WALL_FLICKER_NORTH, -3000, 15},	   // grown: -3000 to -2000, the north-east room's (you start
+	{0, WALL_FLICKER_NORTH, 0, 0, 0},		   // round 1: nothing wrong yet
+	{3, WALL_FLICKER_NORTH, 2000, 63, 0},	   // 2000 to 2750 west of the middle
+	{3, WALL_FLICKER_EAST, -2250, 31, 0},	   // somewhere else: -2250 to -1500 (north of the middle)
+	{4, WALL_FLICKER_NORTH, -3000, 15, 0},	   // grown: -3000 to -2000, the north-east room's (you start
 										   // in the south-west one), clear of the rooms' cross
-	{4, WALL_FLICKER_WEST, -500, 3},		   // obvious: -500 to 500, mid wall, inside the square closed in
+	{4, WALL_FLICKER_WEST, -500, 3, 1}, 		   // obvious: -500 to 500, mid wall, inside the square closed in
 };
 #define SECTION_COUNT (int)(sizeof(sections) / sizeof(sections[0]))
 
@@ -46,6 +47,7 @@ void wall_flicker_set_round(wall_flicker *f, int round)
 	f->side = s->side;
 	f->along_min = s->along_min;
 	f->chance = s->chance;
+	f->gives_way = s->gives_way;
 	f->random = 0x9e3779b9u ^ (unsigned int)(round + 1); // the same glitches every time round
 	f->burst = 0;
 	f->hidden = 0;
@@ -83,4 +85,37 @@ void wall_flicker_step(wall_flicker *f)
 int wall_flicker_along_max(const wall_flicker *f)
 {
 	return f->along_min + f->count * WALL_FLICKER_PIECE;
+}
+
+int wall_flicker_hit(const wall_flicker *f, world_point at, int heading, int limit)
+{
+	// North and south walls run along x; east and west along y (north is -y, east is -x)
+	const int along = (f->side == WALL_FLICKER_NORTH || f->side == WALL_FLICKER_SOUTH) ? at.x : at.y;
+	int against;
+
+	if (f->count == 0 || heading != f->side)
+		return 0;
+	switch (f->side)
+	{
+	case WALL_FLICKER_NORTH:
+		against = at.y <= -limit;
+		break;
+	case WALL_FLICKER_EAST:
+		against = at.x <= -limit;
+		break;
+	case WALL_FLICKER_SOUTH:
+		against = at.y >= limit;
+		break;
+	default:
+		against = at.x >= limit;
+		break;
+	}
+	return against && along >= f->along_min - WALL_FLICKER_HIT_MARGIN &&
+		   along <= wall_flicker_along_max(f) + WALL_FLICKER_HIT_MARGIN;
+}
+
+void wall_flicker_open(wall_flicker *f)
+{
+	f->hidden = (unsigned short)((1u << f->count) - 1);
+	f->flashed = 0;
 }

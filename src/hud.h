@@ -41,4 +41,8 @@ void hud_draw_text_cursor(int column, int row);
 // rays from inner to outer pixels out (game/loop_break.h times them)
 void hud_draw_burst(int cx, int cy, int inner, int outer);
 
+// The designed crash's tear (game/breach.h): a strip the whole width of the screen, rows top
+// to top + height - 1 from the screen's top, near black or pink, over everything
+void hud_draw_band(int top, int height, bool pink);
+
 #endif

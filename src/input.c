@@ -3,6 +3,9 @@
 #include "game/camera_shake.h"
 #include "game/attract_route.h"
 #include "game/arrival_flight.h"
+#include "game/walker.h"
+#include "level.h"
+#include "scene_memory.h"
 #include "sound.h"
 #include "utils/perf.h"
 
@@ -12,6 +15,11 @@
 // The round play starts in, from 0 (game/rounds.h). Like BOOT_SCENE (below): to work on a later
 // round, set it and build, so its bots and layout are there from the start
 #define BOOT_ROUND 0
+// 1: the game boots stood up in the corridor behind round 5's flicker, as if you'd just got up
+// after the designed crash (boot_on_foot): for working on Work RAM without riding there first.
+// The arena's films build with 0 (tests/e2e/film_round.ps1); the corridor's with 1 (run_e2e.ps1
+// -OnFoot)
+#define BOOT_ON_FOOT 1
 
 rider player1;
 rider bots[BOT_COUNT_MAX];
@@ -19,6 +27,8 @@ game_state game;
 status_message status;
 rounds arena_rounds;
 wall_flicker arena_flicker;
+breach arena_breach;
+corridor *arena_corridor = JO_NULL;
 static bot_mind bot_minds[BOT_COUNT_MAX]; // what each bot remembers between frames (game/bot.h)
 // How hard the bots play (game/bot.h: BOT_EASY, _MEDIUM, _HARD): A in play steps through them.
 // Kept through rounds and restarts
@@ -107,10 +117,10 @@ static void begin_round(void); // below, with the rounds
 #define ATTRACT_STROKES_MAX 24 // the message has 21
 #define ATTRACT_WORDS_MAX 4	   // and 3 words
 
-static attract_waypoint attract_waypoints[ATTRACT_TEXT_MAX_WAYPOINTS];
+static attract_waypoint *attract_waypoints = JO_NULL; // ATTRACT_TEXT_MAX_WAYPOINTS: the arena's memory
 static int attract_waypoint_count;
 static attract_route route;
-trail attract_strokes[ATTRACT_STROKES_MAX]; // the finished strokes, standing or sinking
+trail *attract_strokes = JO_NULL; // ATTRACT_STROKES_MAX: the finished strokes, standing or sinking
 unsigned char attract_stroke_word[ATTRACT_STROKES_MAX]; // the word each belongs to
 int attract_stroke_count;
 unsigned char attract_word_height[ATTRACT_WORDS_MAX]; // how tall each word's strokes stand
@@ -435,6 +445,67 @@ typedef enum
 #define INTRO_HURRY_BUTTONS (DIGI_LEFT | DIGI_RIGHT | DIGI_UP | DIGI_DOWN | DIGI_A | DIGI_B | DIGI_C | DIGI_X | DIGI_Y | DIGI_L | DIGI_R)
 int intro_hurry = 1; // the flight's speed: 1, or INTRO_HURRY_SPEED once hurried (main.c shows it)
 
+/*
+ * Each part of the game's memory (scene_memory.h): the arena's (the trails' meshes, main.c, and
+ * the prologue's message, here) and Work RAM's (the corridor, here, and its meshes, level.c).
+ * jo_malloc'd and zeroed, as a static array would be
+ */
+static void *taken(int size)
+{
+	void *memory = jo_malloc(size);
+
+	if (memory == JO_NULL)
+		jo_core_error("No memory for the next part");
+	else
+		jo_memset(memory, 0, size);
+	return memory;
+}
+
+static void arena_memory_take(void)
+{
+	if (attract_strokes == JO_NULL)
+	{
+		attract_strokes = (trail *)taken(sizeof(trail) * ATTRACT_STROKES_MAX);
+		attract_waypoints = (attract_waypoint *)taken(sizeof(attract_waypoint) * ATTRACT_TEXT_MAX_WAYPOINTS);
+	}
+	arena_trail_meshes_take();
+}
+
+static void arena_memory_release(void)
+{
+	if (attract_strokes != JO_NULL)
+	{
+		jo_free(attract_strokes);
+		jo_free(attract_waypoints);
+		attract_strokes = JO_NULL;
+		attract_waypoints = JO_NULL;
+	}
+	attract_stroke_count = 0;
+	attract_waypoint_count = 0;
+	arena_trail_meshes_release();
+}
+
+static void corridor_memory_take(void)
+{
+	if (arena_corridor == JO_NULL)
+	{
+		arena_corridor = (corridor *)taken(sizeof(corridor));
+		if (arena_corridor != JO_NULL)
+			corridor_init(arena_corridor);
+	}
+	corridor_meshes_take();
+}
+
+static void corridor_memory_release(void)
+{
+	if (arena_corridor != JO_NULL)
+	{
+		jo_free(arena_corridor);
+		arena_corridor = JO_NULL;
+	}
+	corridor_meshes_release();
+}
+
 static scene current_scene(void)
 {
 	if (!spectating)
@@ -448,6 +519,10 @@ static scene current_scene(void)
 static void enter_scene(scene part)
 {
 	game_init(&game);
+	breach_init(&arena_breach);
+	// The arena's memory back in place of Work RAM's (scene_memory.h): after a breach, or at boot
+	corridor_memory_release();
+	arena_memory_take();
 	status_init(&status);
 	if (part == SCENE_PLAY)
 	{
@@ -470,13 +545,6 @@ static void enter_scene(scene part)
 	if (part == SCENE_PLAY)
 		stress_fill_trail();
 #endif
-}
-
-void init_players(void)
-{
-	rounds_init(&arena_rounds); // booting straight into play (BOOT_SCENE) skips the loop's
-	arena_rounds.number = BOOT_ROUND;
-	enter_scene(BOOT_SCENE);
 }
 
 int arena_wall_rise(void)
@@ -639,6 +707,140 @@ static void debug_next_turn_compare(void)
 }
 
 /*
+ * The designed crash (game/breach.h, docs/STORY.md). Round 5's flicker gives way: ride into it
+ * and, instead of the terminal screen, the Watchdog's reset fails. Everyone else is frozen
+ * where they were while the screen tears (main.c draws the glitches). Then the section's a hole
+ * with a corridor behind it (game/corridor.h): you ride on through, laying no trail (it ends at
+ * the wall, where the arena's rules stopped holding), out over the grid tailing off into dark
+ * glass. The cycle goes down, skids, and crashes to a stop, and lies there: where Work RAM
+ * begins. A button gets you up, and from then on you're on foot (game/walker.h).
+ */
+
+// On foot: you, and the floor you can stand on (the corridor's, for now)
+static walker player_feet;
+static walker_area feet_area;
+
+// Getting up: stood where the cycle came to rest, facing the way it was going, on the corridor's
+// floor and the grey box's roofs (corridor_walker_area)
+static void stand_up(void)
+{
+	walker_init(&player_feet, player1.bike.position, player1.bike.heading * 0x4000);
+	corridor_walker_area(arena_corridor, &feet_area);
+}
+
+// One frame on foot: the pad (game/walker.h has the scheme) moves you, and the camera's yours
+static void walk_step(void)
+{
+	const unsigned short held = press_latch_held(&pad1_presses);
+	walker_controls controls;
+	// Both of a pair held at once cancel out: neither way
+	const int left = (held & DIGI_LEFT) != 0, right = (held & DIGI_RIGHT) != 0;
+	const int up = (held & DIGI_UP) != 0, down = (held & DIGI_DOWN) != 0;
+	const int l = (held & DIGI_L) != 0, r = (held & DIGI_R) != 0;
+
+	controls.turn = (signed char)(right - left);
+	controls.move = (signed char)(up - down);
+	controls.strafe = (signed char)(r - l);
+	walker_look_from_buttons((held & DIGI_A) != 0, (held & DIGI_B) != 0, (held & DIGI_C) != 0, (held & DIGI_X) != 0,
+							 (held & DIGI_Y) != 0, (held & DIGI_Z) != 0, &controls.look_x, &controls.look_y);
+	walker_update(&player_feet, controls, &feet_area);
+	// The cycle's position stands in for yours: the camera, culling and the walls all go by it.
+	// Its heading is the quarter turn nearest your facing, for anything that only knows those
+	player1.bike.position = walker_position(&player_feet);
+	player1.bike.heading = (unsigned char)(((player_feet.yaw + 0x2000) >> 14) & 3);
+	// The eye: down for the step and a landing's dip, and still down a stair (or a vault) your feet
+	// are already up (walker_step_lag); up with the roof you're on and with standing up (the
+	// view's eye is the cycle's, 35 up: walker_eye's above it)
+	view_on_foot(player_feet.yaw, controls.look_x, controls.look_y,
+				 walker_bob(&player_feet) + walker_dip(&player_feet) + walker_step_lag(&player_feet) -
+					 walker_height(&player_feet) - (walker_eye(&player_feet) - WALKER_EYE_RIDING));
+}
+
+// Whether the crash this step was into the flicker where it gives way: then it's the breach
+static bool crashed_through_the_flicker(void)
+{
+	return player1.crashed && arena_flicker.gives_way && arena_rounds.phase == ROUND_PLAYING &&
+		   wall_flicker_hit(&arena_flicker, player1.bike.position, player1.bike.heading, arena_player_limit());
+}
+
+// struck: this step's presses. Any (but START: the debug camera's) gets you up once you're lying still
+/*
+ * The hidden load (2026-11-02): as the reset loses and the hole opens (the tear's end), the screen
+ * freezes on the hole's first frame for a moment, as if the machine had hung, and what's next is
+ * loaded from the disc while nobody can tell: the glass behind you (level.c), and where you can
+ * stand is worked out (corridor_walker_area). Later, Work RAM's city too: its tables and textures,
+ * in place of the arena's.
+ * Frozen by not giving SGL a new frame: the game step waits here, so main.c doesn't draw, and
+ * VDP1 goes on showing the last picture it drew (VDP2 its layers). Held at least
+ * HIDDEN_LOAD_VBLANKS on top of the load: a hang, not a stutter. The waiting counts vblanks off
+ * VDP2's TVSTAT (bit 3: in the vblank), as jo's core does. The frame after it runs at most
+ * FRAME_STEPS_MAX steps, not the half second's worth
+ */
+#define HIDDEN_LOAD_VBLANKS 30
+static bool hidden_loaded = false; // this breach's: back to false as the next starts
+// What the hidden load does, frozen or not (boot_on_foot doesn't freeze)
+static void hidden_load_work(void)
+{
+	// The arena's left behind: its memory goes back to jo's heap (scene_memory.h), for Work RAM's
+	arena_memory_release();
+	load_corridor_glass();
+	corridor_walker_area(arena_corridor, &feet_area);
+}
+
+static void hidden_load(void)
+{
+	hidden_load_work();
+	for (int i = 0; i < HIDDEN_LOAD_VBLANKS; ++i)
+	{
+		while ((JO_VDP2_TVSTAT & 8) == 8)
+			; // out of the last one
+		while ((JO_VDP2_TVSTAT & 8) == 0)
+			; // into the next
+	}
+}
+
+static void breach_step(unsigned short struck)
+{
+	const int h = player1.bike.heading;
+	const int distance = breach_distance(&arena_breach, cycle_cruise_speed());
+
+	if ((struck & (unsigned short)~DIGI_START) != 0)
+		breach_get_up(&arena_breach);
+	if (arena_breach.phase == BREACH_ON_FOOT)
+	{
+		const int walker_frc = jo_time_get_frc(); // the debug line's "wk" (utils/perf.h)
+
+		walk_step();
+		perf_part_add(PERF_WALKER, walker_frc);
+		view_follow(&player1.bike);
+		return;
+	}
+	// The hidden load, once the hole's open and its first frame's been drawn: frozen on that, the
+	// world. On the tear's last frame instead, it froze on one of the terminal screen's flashes:
+	// an empty terminal, the white floor and a cursor
+	if (arena_breach.phase == BREACH_THROUGH && !hidden_loaded)
+	{
+		hidden_load();
+		hidden_loaded = true;
+	}
+	breach_update(&arena_breach);
+	if (arena_breach.phase == BREACH_ON_FOOT)
+		stand_up(); // up this frame: the pad's yours from the next
+	wall_flicker_open(&arena_flicker); // the section's gone: nothing puts a piece back now
+	// Straight on through the hole: nothing to hit out there. The cycle's moved here, not by
+	// cycle_update, so its trail isn't stretched after it
+	player1.bike.position.x = (short)(player1.bike.position.x + WORLD_HEADING_DX(h) * distance);
+	player1.bike.position.y = (short)(player1.bike.position.y + WORLD_HEADING_DY(h) * distance);
+	// Going down: a jolt as it hits the glass, then it rumbles as it skids, dying with the motion
+	if (breach_landed(&arena_breach))
+		view_shake(CAMERA_SHAKE_BREACH);
+	if (breach_rumble(&arena_breach) > 0)
+		view_rumble(breach_rumble(&arena_breach));
+	view_breach(breach_roll(&arena_breach), breach_dip(&arena_breach), breach_drop(&arena_breach));
+	view_follow(&player1.bike);
+}
+
+/*
  * One step of the game: a sixtieth of a second. struck: the presses to act on (each acted on in
  * one step only: the first of a frame's steps; held buttons, like boost, count in every step).
  */
@@ -654,7 +856,6 @@ static void game_step(unsigned short struck)
 			enter_scene(SCENE_PLAY); // straight back to play: the prologue is only at boot
 		return;
 	}
-
 	if (struck & DIGI_START)
 	{
 		debug_camera = !debug_camera;
@@ -664,6 +865,14 @@ static void game_step(unsigned short struck)
 	if (debug_camera)
 	{
 		debug_camera_input(struck);
+		return;
+	}
+	// The designed crash takes over from the pad (but the debug camera's START, above, so the
+	// corridor can be looked round, and A in it back to the game's start), and once you're up, the
+	// pad's yours again, on foot
+	if (arena_breach.phase != BREACH_NONE)
+	{
+		breach_step(struck);
 		return;
 	}
 
@@ -711,6 +920,17 @@ static void game_step(unsigned short struck)
 	case TURN_RIGHT:
 		view_turn_right();
 		break;
+	}
+	// Round 5, into the flicker: not a crash, the breach. The jolt of the hit at once
+	if (crashed_through_the_flicker())
+	{
+		player1.crashed = 0;
+		breach_start(&arena_breach);
+		hidden_loaded = false;
+		corridor_memory_take(); // Work RAM's memory, while the arena's is still in use (scene_memory.h)
+		corridor_open(arena_corridor, &arena_flicker, arena_half());
+		view_shake(CAMERA_SHAKE_BREACH);
+		return; // the world stops here: from the next step it's the breach's (breach_step)
 	}
 	// A crash terminates the player's process: the terminal screen from the next frame
 	game_update(&game, player1.crashed && !debug_no_termination, 0);
@@ -840,4 +1060,41 @@ void gamepad_input(void)
 			break;
 		game_step(i == 0 ? struck : 0);
 	}
+}
+
+/*
+ * Booting on foot (BOOT_ON_FOOT): round 5 entered as usual, then everything the designed crash
+ * leaves behind, at once: the corridor open behind the flicker, the hidden load's swap of memory
+ * (no freeze: nothing's on the screen yet), and you stood on the corridor's floor where the cycle
+ * comes to rest, facing out along it, stood up already
+ */
+#define BOOT_ON_FOOT_OUT 1300 // where the cycle comes to rest: out from the hole
+static void boot_on_foot(void)
+{
+	corridor_memory_take();
+	corridor_open(arena_corridor, &arena_flicker, arena_half());
+	wall_flicker_open(&arena_flicker);
+	breach_start(&arena_breach);
+	arena_breach.phase = BREACH_ON_FOOT;
+	hidden_loaded = true;
+	hidden_load_work();
+	// On the left half, where the stairs are: a quarter of the way across. The headings are
+	// numbered as the sides (wall_flicker.h): the side's heading is the way out
+	player1.bike.position = corridor_point(arena_corridor, BOOT_ON_FOOT_OUT,
+										   arena_corridor->across_min + ((arena_corridor->across_max - arena_corridor->across_min) >> 2));
+	player1.bike.heading = arena_corridor->side;
+	stand_up();
+	player_feet.eye = WALKER_EYE; // up already
+	// The round's title, typing on as round 5's entered: the breach stops the status line, so it
+	// would stay, cursor and all
+	status_init(&status);
+}
+
+void init_players(void)
+{
+	rounds_init(&arena_rounds); // booting straight into play (BOOT_SCENE) skips the loop's
+	arena_rounds.number = BOOT_ON_FOOT ? ROUND_COUNT - 1 : BOOT_ROUND;
+	enter_scene(BOOT_ON_FOOT ? SCENE_PLAY : BOOT_SCENE);
+	if (BOOT_ON_FOOT)
+		boot_on_foot();
 }

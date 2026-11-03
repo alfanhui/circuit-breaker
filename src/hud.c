@@ -46,6 +46,7 @@
 #define MAP_LINE_DEPTH (4 * JO_FIXED_1)
 #define GAUGE_DEPTH (3 * JO_FIXED_1)
 #define MARKER_DEPTH (5 * JO_FIXED_1 / 2) // 2.5: over the gauge, and still drawn in iso (2 isn't)
+#define GLITCH_DEPTH (12 * JO_FIXED_1 / 5) // 2.4: over everything else, the radar and gauge too
 #define MAP_DISC_SIZE 32 // the glass's texture, stretched to the map's size
 #define MAP_TRAILS_MAX 4 // trail colours: player 1 and up to 3 bots (input.h: FIELD_TRAIL_COUNT)
 /*
@@ -72,6 +73,8 @@ enum
 	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
 	PART_BURST,										 // the prologue's burst of light
 	PART_MAP_WALL,									 // the arena's walls and blocks on the map
+	PART_GLITCH_DARK,								 // the designed crash's tear bands (breach.h)
+	PART_GLITCH_PINK,
 	PART_COUNT
 };
 
@@ -181,6 +184,8 @@ void hud_init(void)
 	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
 	part_sprites[PART_BURST] = make_part(JO_COLOR_RGB(255, 255, 255));
 	part_sprites[PART_MAP_WALL] = make_part(JO_COLOR_RGB(170, 150, 255)); // pale violet: not any rider's
+	part_sprites[PART_GLITCH_DARK] = make_part(JO_COLOR_RGB(8, 0, 16));  // near black (all 0 would be see-through)
+	part_sprites[PART_GLITCH_PINK] = make_part(JO_COLOR_RGB(255, 40, 160)); // the flicker's pink
 	minimap_init();
 	prepare_map_disc();
 }
@@ -423,4 +428,15 @@ void hud_draw_burst(int cx, int cy, int inner, int outer)
 		draw_corners(PART_BURST, ix + wx - (wx == 0), iy + wy - (wy == 0), ox, oy, ox, oy, ix - wx + (wx == 0),
 					 iy - wy + (wy == 0), BURST_DEPTH);
 	}
+}
+
+void hud_draw_band(int top, int height, bool pink)
+{
+	// Screen pixels from the centre: the whole width, top to top + height - 1 (edges inclusive)
+	const int y0 = top - JO_TV_HEIGHT_2;
+	const int y1 = y0 + height - 1;
+	const int x0 = -JO_TV_WIDTH_2;
+	const int x1 = JO_TV_WIDTH_2 - 1;
+
+	draw_corners(pink ? PART_GLITCH_PINK : PART_GLITCH_DARK, x0, y0, x1, y0, x1, y1, x0, y1, GLITCH_DEPTH);
 }

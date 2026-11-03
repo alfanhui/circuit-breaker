@@ -1,0 +1,91 @@
+# The designed crash (game/breach.h): round 5, ride west into the flicker, mid west wall (+x: on
+# your left at the start, facing north). Film it with tests\e2e\film_round.ps1 -Round 5 -Steps
+# breach.steps. Termination off (debug camera Z), so a miss only stops the cycle and the shots go
+# on: a miss shows the wall; a hit the tear, the corridor through the hole, going down, and the
+# skid to a stop on its glass floor.
+wait_boot
+skip_prologue
+press start
+press z
+press start
+wait 0.5
+# Left: face west. C x6: cruise 7 -> 13
+press left
+press c 6
+wait 5
+shot breach_00
+wait 0.25
+shot breach_01
+wait 0.25
+shot breach_02
+wait 0.25
+shot breach_03
+wait 0.25
+shot breach_04
+wait 0.25
+shot breach_05
+wait 0.25
+shot breach_06
+wait 0.25
+shot breach_07
+wait 0.25
+# The tear (~1.2 s): back to back
+shot breach_08
+shot breach_09
+shot breach_10
+shot breach_11
+shot breach_12
+shot breach_13
+shot breach_14
+shot breach_15
+shot breach_16
+shot breach_17
+shot breach_18
+shot breach_19
+shot breach_20
+shot breach_21
+shot breach_22
+shot breach_23
+shot breach_24
+shot breach_25
+shot breach_26
+shot breach_27
+shot breach_28
+shot breach_29
+shot breach_30
+shot breach_31
+# Through the hole into the corridor, down, the skid to a stop, then lying still
+wait 0.2
+shot breach_32
+wait 0.2
+shot breach_33
+wait 0.2
+shot breach_34
+wait 0.2
+shot breach_35
+wait 0.2
+shot breach_36
+wait 0.2
+shot breach_37
+wait 0.2
+shot breach_38
+wait 0.2
+shot breach_39
+wait 0.2
+shot breach_40
+wait 0.2
+shot breach_41
+wait 0.2
+shot breach_42
+wait 0.2
+shot breach_43
+wait 0.2
+shot breach_44
+wait 0.2
+shot breach_45
+wait 0.2
+shot breach_46
+wait 0.2
+shot breach_47
+wait 2
+shot breach_48_stopped
