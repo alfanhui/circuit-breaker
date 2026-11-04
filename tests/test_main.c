@@ -34,6 +34,7 @@ void run_corridor_tests(void);
 void run_city_tests(void);
 void run_walker_tests(void);
 void run_frustum_tests(void);
+void run_vdp1_gauge_tests(void);
 
 int main(void)
 {
@@ -68,6 +69,7 @@ int main(void)
 	run_city_tests();
 	run_walker_tests();
 	run_frustum_tests();
+	run_vdp1_gauge_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

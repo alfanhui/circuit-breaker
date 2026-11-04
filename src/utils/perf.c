@@ -1,6 +1,12 @@
 #include <jo/jo.h>
 #include "perf.h"
 
+// VDP1's status registers (SEGA's VDP1 manual, chapter 4), read-only, words. game/vdp1_gauge.h
+// says what each bit means
+#define VDP1_EDSR (*(volatile unsigned short *)0x25D00010) // transfer end status
+#define VDP1_LOPR (*(volatile unsigned short *)0x25D00012) // last command read, the frame before
+#define VDP1_MODR (*(volatile unsigned short *)0x25D00016) // mode status: the version in bits 15-12
+
 // The FRC runs at the master clock / 32 (jo_core_init sets JO_TIME_CKS_32_MODE)
 #ifdef JO_PAL_VERSION
 #define VBLANKS_PER_SECOND 50
@@ -17,6 +23,8 @@ int perf_cpu_peak = 0;
 int perf_late_frames = 0;
 int perf_displayed_polygons = 0;
 int perf_last_frame_vblanks = 1;
+vdp1_gauge perf_vdp1; // zeroed as BSS: every count and figure starts at 0
+int perf_vdp1_version = 0;
 
 static int frames = 0;
 static int frame_counts = 0; // FRC counts the frames took between them, this second
@@ -46,6 +54,7 @@ void perf_frame_start(void)
 
 	jo_time_set_frc(0);
 	perf_displayed_polygons = jo_3d_get_displayed_polygon_count();
+	vdp1_gauge_frame_start(&perf_vdp1, VDP1_EDSR, VDP1_LOPR); // did VDP1 finish the frame before?
 	if (!timing)
 	{
 		timing = 1;
@@ -69,6 +78,7 @@ void perf_frame_end(void)
 	int cpu = jo_time_get_frc() * 100 / FRC_COUNTS_PER_VBLANK;
 
 	frames++;
+	vdp1_gauge_frame_end(&perf_vdp1, VDP1_EDSR); // the CPU's done: is VDP1?
 	cpu_total += cpu;
 	if (cpu > cpu_peak)
 		cpu_peak = cpu;
@@ -85,6 +95,8 @@ void perf_frame_end(void)
 		perf_fps = (frames * FRC_COUNTS_PER_SECOND + (frame_counts >> 1)) / frame_counts;
 		perf_cpu_average = cpu_total / frames;
 		perf_cpu_peak = cpu_peak;
+		vdp1_gauge_second(&perf_vdp1);
+		perf_vdp1_version = VDP1_MODR >> 12; // 0 lacks the Pclp and HSS speed bits (the VDP1 manual's supplement)
 		frames = 0;
 		frame_counts = 0;
 		cpu_total = 0;

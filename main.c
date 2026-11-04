@@ -182,7 +182,7 @@ void initCamera(jo_camera *curCam)
  *                                        is the rest; low cpu with low fps is VDP1 (docs/CULLING.md)
  * show: false clears it (the prologue's spectator view, a "main menu", shows none)
  */
-#define DEBUG_LINES 6
+#define DEBUG_LINES 7
 #define DEBUG_BLANK "                                        " // a whole row: 40 characters
 
 void debug_3d(bool show)
@@ -227,6 +227,11 @@ void debug_3d(bool show)
 			  perf_part_peak[PERF_CORRIDOR], perf_part_peak[PERF_SIDES], perf_part_peak[PERF_TOPS],
 			  perf_part_peak[PERF_FLOOR], perf_part_peak[PERF_GRID], perf_part_peak[PERF_BANDS],
 			  perf_part_peak[PERF_WALKER]);
+	// VDP1's own figures (game/vdp1_gauge.h): frames it didn't finish this last second, % of frames
+	// it was still drawing when the CPU was done (high with a low cpu: VDP1 limits the frame
+	// rate), how many commands its list had, and the chip's version
+	jo_printf(0, 6, "vdp1 over %d busy %d%% cmd %d v%d     ", perf_vdp1.over, perf_vdp1.busy_percent,
+			  perf_vdp1.commands, perf_vdp1_version);
 }
 
 /*

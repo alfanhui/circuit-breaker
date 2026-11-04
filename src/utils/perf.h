@@ -1,6 +1,8 @@
 #ifndef __PERF_H__
 #define __PERF_H__
 
+#include "../game/vdp1_gauge.h"
+
 /*
  * Frame rate and master CPU load, integer only.
  * FPS is timed by the SH-2's free running counter, from one frame's start to the next (perf.c).
@@ -20,6 +22,10 @@ extern int perf_last_frame_vblanks;
 // Polygons SGL actually passed to VDP1 last frame, after throwing away those fully off screen.
 // SGL only knows this once it has sorted the frame, so it's sampled at the next frame's start.
 extern int perf_displayed_polygons;
+// VDP1's own view (game/vdp1_gauge.h): frames it didn't finish, how often it was still drawing
+// when the CPU was done, and its command list's length. Updated once a second, like fps
+extern vdp1_gauge perf_vdp1;
+extern int perf_vdp1_version; // VDP1's chip version (MODR bits 15-12): Mednafen reports 1
 
 /*
  * Parts of the frame timed on their own, to find what the cpu figure is spent on: read the FRC

@@ -29,14 +29,17 @@ Commit on the disc: `________`
 
 ## The debug text, for reference
 
+Lines counted from the top (the layout as of 2026-11-04):
+
 | Line | Shows |
 |---|---|
-| 4 | view: `1ST`, `ISO` or `DEBUG CAM` |
-| 5 | `bounds` (Y), `turn` camera mode (Z) |
-| 6 | cruise `speed` (B/C), `arena` size (L/R) |
-| 7-9 | polygons, displayed, vertices |
-| 10 | `fps`, `cpu` (one-second average) and `peak` |
-| 11 | `late`: frames that missed the 60 fps deadline |
+| 1 | `fps`, `cpu` (one-second average), `pk` (worst frame), `late` (frames that missed 60 fps) |
+| 2 | `poly` given / displayed, `vert`, and the bots' and trails' worst frame (`bots`, `trl`) |
+| 3 | view (`1ST`, `ISO` or `CAM`), position, heading, boost |
+| 4 | cruise `spd`, `arena` size, debug switches |
+| 5 | the first bot, the round |
+| 6 | the level's parts, worst frame each (`ar co sd tp fl gr bd wk`: utils/perf.h) |
+| 7 | VDP1's own gauge: `over` (frames it didn't finish), `busy` (% of frames it was still drawing when the CPU was done), `cmd` (its list's length), `v` (its chip version). See `game/vdp1_gauge.h` |
 
 Pad: Up boost (the cycle always drives) · Left/Right turn · Down 1st person / iso · A new trail · X worst-case trail ·
 Y arena boundary · Z turn camera compare · B/C speed · L/R arena size · Start debug camera.
@@ -166,6 +169,23 @@ the Saturn. The emulator figures below are the ones to compare against.
 - [ ] `fps` stays at 60 in each; note any `late` counts.
 - [ ] Do you see stutter that `late` *doesn't* count? On the PC that was blamed on the emulator's
       pacing; on the Saturn it would be a real problem worth chasing.
+
+### 3b. VDP1's own gauge (debug line 7)
+
+It reads VDP1's status registers (SEGA's VDP1 manual, chapter 4), so on the Saturn it measures
+the real chip; Mednafen's VDP1 timing is only an estimate.
+
+| Scene | Mednafen (2026-11-04) | Saturn |
+|---|---|---|
+| On foot, the corridor's start | `over 0 busy 0% cmd 238`, cpu 76% | ____ |
+| On foot, the city's roof | `over 0 busy 100% cmd ~95`, 60 fps, cpu 48% | ____ |
+| On foot, looking back at the doorway from the city | `over 0 busy 94% cmd 282`, 37 fps, cpu 82% | ____ |
+
+- [ ] Does `over` ever go above 0? That's a frame shown half-drawn: note the scene.
+- [ ] If `busy` is much higher on the Saturn than in Mednafen, Mednafen is kinder to VDP1 than
+      the chip is, and every Mednafen frame rate is optimistic.
+- [ ] VDP1's version, the line's last figure (`v1`): Mednafen reports 1. A version 0 chip
+      lacks the speed bits the backlog's Pclp and HSS rows want.
 
 ---
 
