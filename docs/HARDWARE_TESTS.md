@@ -90,6 +90,8 @@ Result: ________
 | Fine normally, but the top of the screen flickers or goes wrong when the game slows down (X trail, test 3) | The once-per-frame restart ran late, after the picture had started, and was skipped (`floor_fade_vblank` returns early), so the DMA ran past the table | Video while holding X trail |
 | Hang, or corrupted graphics, sound or loading | SGL or jo also uses the fog's SCU DMA level and the two clash. It was level 2, which SGL streams PCM sound on (in Mednafen every sound stopped the fog); it's level 0 now, which SGL uses only for CD reads | When it happens, and whether the NO FOG disc does it too |
 | Fog fine until the first sound (the loop's break, a crash), then gone or flickering | Something else still shares level 0 | Which sound, and whether it comes back |
+| Single fog rows a line out (a step in the fade) that come and go, worst when the scene is busy | SCU precaution 12: CPU writes to the VDPs (SGL's command list, the wall fog's tables) come before SCU DMA, so that row's transfer started late. Or precaution 20: three DMA levels running at once (ours, SGL's level 1, sound on level 2) lose their priority order | Video; does it follow busy scenes, or sounds? |
+| A hang that the NO FOG disc doesn't have | SCU precaution 23: a DMA level's registers rewritten while it runs hangs the SCU. `arm_dma` turns the level off first but doesn't wait for a transfer in flight | When it happens (often or rare) |
 
 ### 1c. If it's broken
 
