@@ -1,0 +1,41 @@
+# The user's four artefacts (2026-11-03): the start's floor, turning by the towers, looking back from
+# the city, and turning round in the city. Film it: tests\e2e\run_e2e.ps1 -Steps artefacts.steps
+wait_up
+wait 1
+shot af_00_start
+hold right 0.15
+shot af_01_turn
+hold right 0.15
+shot af_02_turn
+hold right 0.15
+shot af_03_turn
+hold left 0.45
+hold up 13
+shot af_04_at_the_tower
+hold right 0.15
+shot af_05_turn
+hold right 0.15
+shot af_06_turn
+hold left 0.3
+hold l 3
+keydown up
+wait 1.8
+keyup up
+wait 0.5
+shot af_07_on_the_entry
+hold right 0.2
+shot af_08_turn
+hold right 0.2
+shot af_09_turn
+hold right 0.2
+shot af_10_turn
+hold right 0.2
+shot af_11_turn
+hold right 0.2
+shot af_12_turn
+hold right 0.2
+shot af_13_turn
+hold right 0.2
+shot af_14_turn
+hold right 0.2
+shot af_15_turn

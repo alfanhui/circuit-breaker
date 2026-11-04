@@ -5,6 +5,7 @@
 #include "game/cycle.h"
 #include "game/view_cull.h"
 #include "game/wall_clip.h"
+#include "game/frustum.h"
 
 // SGL sees the world this many times smaller than world units (see view_push_world_matrix)
 #define VIEW_WORLD_SCALE 4
@@ -34,6 +35,11 @@ void view_toggle(const cycle *c);
 // free_camera: the debug camera, which can look anywhere.
 world_rect view_visible_rect(const cycle *c, bool free_camera, int range);
 
+// In 1st person, the camera's planes in 3D (game/frustum.h): near, and the screen's four edges a
+// sixteenth wider than the screen. The corridor and the city are cut to them (level.c).
+// Returns false (nothing written) in other views, or with the debug camera
+bool view_frustum(bool free_camera, frustum *out);
+
 // The 1st person camera on the floor, for keeping wall corners in front of it.
 // Returns false (nothing written) in other views.
 bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out);
@@ -54,6 +60,8 @@ void view_look(int direction);
 // lower than standing on the floor (a step's bob, a landing's dip, less the roof's height). Off
 // again at view_init
 void view_on_foot(int yaw, int look_x, int look_y, int bob);
+// Whether you're on foot (view_on_foot since the last view_init)
+bool view_is_on_foot(void);
 // On foot, how far the head's looking down now (ANGLE; negative: up). 0 otherwise
 int view_look_pitch(void);
 // How high the floor's grid (VDP2) lies: 0 riding, the arena's floor; on foot, far below, as the

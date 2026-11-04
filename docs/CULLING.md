@@ -155,3 +155,53 @@ So down the corridor, the glass floor (~100 hexagons placed and cut every frame)
 sides (25 boxes plus the towers, each side cut, capped and checked) are three fifths of the frame.
 The walker, the grid and SGL's own work are nothing. Those two are where steps 2-4 start:
 the floor's tiles and the boxes' sides listed per cell and worked out once, not every frame.
+
+## One clipper, VDP2 for the background only (2026-11-03, uncommitted)
+
+The user found four artefacts on foot: a black band over the hexagons at the start; box sides
+cutting in from the bottom of the screen while turning; looking back from the city, the corridor
+gone (white); turning in the city, the ground flickering between navy and white. Each came from a
+local trick:
+
+| Artefact | Cause |
+|---|---|
+| Black over the hexagons | the seams were the VDP2 floor showing through, and on foot it lay 3000 down under the city: far rows fogged black |
+| Sides cut from the bottom | the bottom caps and crossing column (floor-plan cuts that assume a level eye) |
+| Corridor gone from the city | its floor and boxes weren't drawn from outside at all |
+| Ground flickering | the VDP2 grid 3000 down: its lines far too fine at that distance, the plane sampled lines or cells as you turned |
+
+A Saturn developer whose 3D game looks stable described theirs: all level geometry is VDP1
+quads; VDP2 is only the back screen and glows; rooms are joined by portals, and a closed door
+closes its portal so the room behind isn't drawn. What we took from it:
+
+- **One clipper for everything** (`game/frustum.h`, unit-tested): each face is cut in 3D by planes
+  from the eye: near, the screen's four edges, and a portal's edges. Exact whichever way you look,
+  so none of the floor-plan special cases are needed on foot (cones, caps, crossing columns, bands
+  looking down). The boxes, the city's towers, the corridor's walls and the glass floor all go
+  through `level_face_add` (level.c).
+- **Portals as planes**: the doorway's two sides and its sill are three planes from the eye
+  (`grey_portal_set`). From inside, the city is cut to them; from the city, the corridor's boxes
+  and floor are. Nothing below the sill is drawn from inside (it's under the floor).
+- **VDP2 is the background on foot**: the floor's palette goes black (`main.c`,
+  `set_floor_colours`). The seams are VDP1 lines on the tiles (`glass_outline_add`).
+
+What it cost, and how it was won back (Mednafen, `parts.steps`, cpu %):
+
+| Step | Start | Stairs' foot |
+|---|---|---|
+| Before (old cuts) | 60 fps, 72 | 60 fps, 83 |
+| Every face cut at the screen's edges, each box by its 8 corners | 30 fps, 106 | 30 fps, 101 |
+| `1 << i` and `>> 14` out of the clipper (library calls on the SH-2) | 30, 94 | 30, 101 |
+| Cut only at a guard band (2 x the screen); boxes by centre and size (`frustum_classify_box`) | 30, 85 | 30, 85 |
+| A white floor under the tiles for the seams: VDP1 filled the floor twice | (30, VDP1) | (20, VDP1) |
+| Seams as polylines instead, one line a seam | 60, 82 | 30, 84 |
+| Boxes tested in groups first (the stairs, the city's rows) | 60, 76 | 30, 80 |
+| Faces reaching past the guard band cut at the screen's edge (stair fronts' lying lines) | **60, 76** | **60, 79** |
+
+The stairs, tower and city films hold 60 fps (55 in two city frames). Looking back from the city
+at the doorway is 38-44 fps: the corridor's insides are drawn there now (they weren't), and the
+arena's walls behind it are still drawn by the old path, unseen behind the corridor's.
+
+Still to do from here: the tiles' seams as textures on the tiles (as the other game's floors
+are), the arena's walls culled from the city, and cells with lists worked out ahead (step 2),
+which the doorway's planes are the first piece of.

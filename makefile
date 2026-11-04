@@ -51,6 +51,7 @@ SRCS=main.c \
 	src/game/breach.c \
 	src/game/corridor.c \
 	src/game/city.c \
+	src/game/frustum.c \
 	src/game/walker.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \

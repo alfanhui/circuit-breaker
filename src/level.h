@@ -25,11 +25,17 @@ void init_arena_walls(void);
 void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
 					  int rise, const wall_flicker *flicker, const corridor *passage);
 
+// Once a frame, before the corridor's floor and boxes: this frame's view on foot (view_frustum),
+// with the corridor's doorway onto the city added to it as planes (level.c: grey_portal).
+// free_camera: the debug camera (no cuts: everything's drawn)
+void level_view_begin(const corridor *passage, bool free_camera);
+
 // Call inside view_push_world_matrix(), after the floor and before the walls: the corridor's
 // floor of dark glass hexagons (game/corridor.h), once it's open
 // camera: the 1st person camera (wall_clip.h), to cut only the tiles near it; NULL cuts them all
 void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera);
-// Straight after it: the grey box's tops (corridor.h). Their sides go with the corridor's walls
+// Straight after it: the grey boxes (corridor.h) and the city's towers (city.h), sides and tops,
+// each face cut to the view in 3D (game/frustum.h). camera: unused (level_view_begin's view)
 void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera);
 
 // Call inside view_push_world_matrix(), with the walls. The raised ground round the arena

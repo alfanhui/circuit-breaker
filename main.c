@@ -68,7 +68,7 @@
 jo_camera cam;
 jo_palette image_pal;
 // The floor's own palette (each image loads into a new one: the sky's comes after it, into
-// image_pal), and its colours as loaded, so it can go white and come back (set_floor_white)
+// image_pal), and its colours as loaded, so it can go white or black and come back (set_floor_colours)
 #define FLOOR_COLOURS 256 // FLOOR.TGA is 8-bit
 static jo_palette floor_pal;
 static jo_color floor_colours[FLOOR_COLOURS];
@@ -390,15 +390,29 @@ static bool draw_terminal(void)
  * offset would have whitened the sky too: they're the same screen, RBG0). The far floor still
  * fades to black (floor_fade_vdp2.c). 256 writes, only on the frame it changes
  */
-static void set_floor_white(bool white)
-{
-	static bool now = false;
+#define FLOOR_AS_LOADED 0
+#define FLOOR_WHITE 1
+/*
+ * On foot (the corridor and the city), black: the floor's not a floor there. The VDP2 floor is one
+ * plane at one height, and on foot there's no height that fits both the corridor's floor (0) and
+ * the city's ground (3000 down). Moved down under the city, its grid lines shimmered between navy
+ * and white as you turned (too fine to see that far off) and showed through the glass's seams as
+ * a black band. So on foot it's the background only, like the sky: everything you stand on and
+ * see is VDP1's (level.c), as the 3D Saturn games that look stable do it
+ */
+#define FLOOR_BLACK 2
 
-	if (white == now || floor_pal.data == JO_NULL)
+static void set_floor_colours(int colours)
+{
+	static int now = FLOOR_AS_LOADED;
+
+	if (colours == now || floor_pal.data == JO_NULL)
 		return;
-	now = white;
+	now = colours;
 	for (int i = 0; i < FLOOR_COLOURS; ++i)
-		floor_pal.data[i] = white ? JO_COLOR_RGB(255, 255, 255) : floor_colours[i];
+		floor_pal.data[i] = colours == FLOOR_WHITE	 ? JO_COLOR_RGB(255, 255, 255)
+							: colours == FLOOR_BLACK ? JO_COLOR_RGB(0, 0, 0)
+													 : floor_colours[i];
 }
 
 /*
@@ -519,7 +533,9 @@ static void draw_loop_break(void)
 void draw_3d(void)
 {
 	apply_breach_glitch();
-	set_floor_white(arena_breach.phase != BREACH_NONE);
+	set_floor_colours(view_is_on_foot()					 ? FLOOR_BLACK
+					  : arena_breach.phase != BREACH_NONE ? FLOOR_WHITE
+														  : FLOOR_AS_LOADED);
 	// Terminated (or the designed crash's reset, outside): only the terminal text. The world
 	// isn't drawn at all
 	if (draw_terminal())
@@ -587,6 +603,7 @@ void draw_3d(void)
 		// The corridor behind the flicker, once it's given way: its glass floor over the grid
 		if (!spectating)
 		{
+			level_view_begin(arena_corridor, debug_camera); // the planes everything on foot is cut to
 			draw_corridor_floor(arena_corridor, clip);
 			perf_part_add(PERF_FLOOR, floor_frc);
 			floor_frc = jo_time_get_frc();

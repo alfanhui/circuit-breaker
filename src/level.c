@@ -93,8 +93,9 @@ static jo_3d_mesh surround_mesh;
  * through the seams between them as lines, as the grid's lines show on it. Room for every tile on the screen at once, most of them 2 quads (6 corners);
  * one that won't fit is left out (a gap far off, not a crash)
  */
-#define CORRIDOR_POINTS_MAX 480
-#define CORRIDOR_QUADS_MAX 192
+// On foot each tile has its outline too, three polylines on its own corners (draw_glass_floor)
+#define CORRIDOR_POINTS_MAX 720
+#define CORRIDOR_QUADS_MAX 480
 
 static const jo_color glass_shades[CORRIDOR_SHADES] = {
 	JO_COLOR_RGB(4, 4, 12),
@@ -328,15 +329,6 @@ static block_band block_high;
  */
 static bool upright_lines = false;
 
-/*
- * Set while the boxes' sides are added (add_grey_box_sides): each piece's fog is one level, its
- * nearer column's, drawn as its colour darkened (depth_fog_darken), not a Gouraud table. A table
- * for each piece was written into VDP1 RAM while VDP1 drew: with the stairs far down the corridor
- * fogged, the sides were a seventh of the frame. A box's side is short, so one level's enough; the
- * corridor's long walls keep their tables (one level a 250 piece would step along them)
- */
-static bool flat_fog = false;
-
 static void block_band_begin(block_band *band)
 {
 	band->mesh.data.pntbl = band->points;
@@ -377,13 +369,7 @@ static void block_band_add(block_band *band, const ATTR *texture, const world_po
 			q->Vertices[1] = (Uint16)(base + j * 2 + 1);
 			q->Vertices[2] = (Uint16)(base + j * 2 + 3);
 			q->Vertices[3] = (Uint16)(base + j * 2 + 2);
-			if (object_fog_enabled && flat_fog)
-			{
-				const int level = fog_levels[j] < fog_levels[j + 1] ? fog_levels[j] : fog_levels[j + 1];
-
-				band->attributes[polygon].colno = object_fog_flat_colour(texture->colno, level);
-			}
-			else if (object_fog_enabled) // the fog's shades in the same corners' order
+			if (object_fog_enabled) // the fog's shades in the same corners' order
 				object_fog_set_quad(&band->attributes[polygon], fog_levels[j], fog_levels[j], fog_levels[j + 1],
 									fog_levels[j + 1]);
 			continue;
@@ -472,8 +458,7 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 		q->Vertices[1] = (Uint16)rt;
 		q->Vertices[2] = (Uint16)rb;
 		q->Vertices[3] = (Uint16)lb;
-		// The fog's shades follow the corners round (a piece fogged by its colour, flat_fog, or
-		// with no fog at all, has no Gouraud to follow)
+		// The fog's shades follow the corners round (a piece with no fog has no Gouraud to follow)
 		if (object_fog_enabled && (band->attributes[p].atrb & CL_Gouraud))
 		{
 			const int left = object_fog_level(dx0 + camera->eye.x, dy0 + camera->eye.y);
@@ -879,8 +864,8 @@ static void cap_band_tops(block_band *band, int first, const wall_clip_camera *c
  * it. VDP1 draws a straight edge between two columns: from one raised to the plane to one at or
  * under it, the edge stays on or under the plane, off the screen. To one above it (its bottom on
  * the screen, left where it was), the edge cuts across the screen: a wedge of the wall went
- * missing, the floor showing through. A box's side gets a column where the plane crosses its
- * bottom (grey_side_crossing), so its pieces past that can be cut
+ * missing, the floor showing through. (The arena's walls, riding, and the corridor's then. On foot
+ * everything's cut to the view in 3D instead: level_face_add, which has no such edges to mind)
  */
 #define CAP_BOTTOM_EDGE DEGtoANG(37.0)
 
@@ -944,32 +929,6 @@ static void cap_band_bottoms(block_band *band, int first, const wall_clip_camera
 }
 
 /*
- * Where along a box's side the plane meets the side's bottom: a column there lets the pieces past
- * it be cut (cap_band_bottoms), when the side's one piece reaches from where its bottom's on the
- * screen to where it isn't (the tower's front, 40 off, turned a little: 30 fps uncut). The plane's
- * height falls with the distance in front, and that's a straight line along the side: two
- * divisions, once a side (and only for a side the plane crosses). Returns the point along it, or
- * `from` if there's none inside
- */
-static int grey_side_crossing(bool along_x, int line, int from, int to, int bottom, const wall_clip_camera *camera)
-{
-	const int reach16 = bottom_cap_reach16();
-	const int ex = camera->eye.x, ey = camera->eye.y;
-	const int f_from = (((along_x ? from : line) - ex) * camera->forward_x +
-						((along_x ? line : from) - ey) * camera->forward_y) >> 10;
-	const int f_to = (((along_x ? to : line) - ex) * camera->forward_x + ((along_x ? line : to) - ey) * camera->forward_y) >>
-					 10;
-	int crossing; // how far in front the plane's at the side's bottom
-
-	if (reach16 <= 0 || -view_z - 4 <= bottom || f_from == f_to)
-		return from; // the plane's level, or above the bottom right under the eye: no crossing
-	crossing = ((-view_z - 4 - bottom) << 4) / reach16;
-	if ((crossing <= f_from) == (crossing <= f_to))
-		return from; // both ends the same side of it
-	return from + ((to - from) * (crossing - f_from)) / (f_to - f_from);
-}
-
-/*
  * The grey box (corridor.h): plain boxes, flat grey. Tops light, sides darker, the two ways the
  * sides face in two shades, so a box's edges and corners read against each other in the dark
  */
@@ -980,12 +939,11 @@ static int grey_side_crossing(bool along_x, int line, int from, int to, int bott
 // tops are above the eye), and one grey for them all read as one flat wall
 #define GREY_SIDE_X_ALT JO_COLOR_RGB(116, 116, 130)
 #define GREY_SIDE_Y_ALT JO_COLOR_RGB(88, 88, 102)
-#define GREY_FACE_PIECE 500 // a side longer than this is cut into 2 pieces (4 past twice it)
 
 /*
  * The boxes as the world has them, worked out once when the corridor's open (and again only if
- * it moves): each one's rectangle, its middle and a radius round it (half its width plus half its
- * depth: at least half its diagonal, with no square root), and how far down each of its sides is
+ * it moves): each one's rectangle, its middle (centre, and halfway up), and how far down each of
+ * its sides is
  * seen (grey_side_bottom). Worked out every frame for 24 boxes, it was hundreds of conversions a
  * frame and the CPU ran over (30 fps).
  * The city's towers (city.h) are boxes too, after the corridor's: the same drawing, but standing
@@ -1001,10 +959,25 @@ typedef struct
 {
 	world_rect rect;
 	world_point centre;
-	short radius;
+	short middle; // halfway up, from its floor to its top
 	short bottom[4];
 	short height, floor;
 } grey_box;
+/*
+ * The boxes in groups that stand together, each with a box round them all: tested first, as one
+ * (CULLING.md: a coarse cull before the fine one). Wholly out of view, none of a group's boxes is
+ * looked at; wholly in view, none of them is tested. The stairs (the corridor's first twenty boxes:
+ * corridor.c lists them first), the corridor's other five, and the city's rows of three (city.c
+ * lists them a row at a time). Tested one by one, every box every frame was a sixth of the frame
+ */
+#define GREY_STAIRS 20
+#define GREY_CITY_ROW 3
+#define GREY_GROUPS (2 + CITY_TOWERS / GREY_CITY_ROW)
+typedef struct
+{
+	unsigned char first, last; // its boxes, first to last
+	frustum_point middle, half; // the box round them all: its middle, and half its size each way
+} grey_group;
 static world_rect grey_corridor_floor; // the corridor's floor, for grey_side_bottom
 static int grey_boxes_for = -1; // the corridor they're for: its wall and side (-1: none yet)
 
@@ -1012,27 +985,30 @@ static int grey_boxes_for = -1; // the corridor they're for: its wall and side (
  * The corridor's meshes and the grey box's, in Work RAM's memory (scene_memory.h): taken as the
  * breach starts, given back when the arena starts again. NULL meanwhile: nothing's drawn
  */
-#define GREY_TOP_POINTS_MAX 200 // the corridor's boxes and the city's towers
-#define GREY_TOP_QUADS_MAX 72
+// The boxes' faces, sides and tops, each cut to the view: most a quad, some up to 7 (draw_corridor_boxes)
+#define GREY_POINTS_MAX 640
+#define GREY_QUADS_MAX 288
 typedef struct
 {
 	POINT points[CORRIDOR_POINTS_MAX]; // the glass floor's
 	POLYGON polygons[CORRIDOR_QUADS_MAX];
 	ATTR attributes[CORRIDOR_QUADS_MAX];
-	POINT top_points[GREY_TOP_POINTS_MAX]; // the grey box's tops (draw_corridor_boxes)
-	POLYGON top_polygons[GREY_TOP_QUADS_MAX];
-	ATTR top_attributes[GREY_TOP_QUADS_MAX];
+	POINT grey_points[GREY_POINTS_MAX]; // the boxes' faces (draw_corridor_boxes)
+	POLYGON grey_polygons[GREY_QUADS_MAX];
+	ATTR grey_attributes[GREY_QUADS_MAX];
 	grey_box boxes[GREY_BOXES];
+	grey_group groups[GREY_GROUPS];
 } corridor_memory;
 static corridor_memory *corridor_meshes = JO_NULL;
 // The arrays by their names, as when they were static
 #define corridor_points (corridor_meshes->points)
 #define corridor_polygons (corridor_meshes->polygons)
 #define corridor_attributes (corridor_meshes->attributes)
-#define grey_top_points (corridor_meshes->top_points)
-#define grey_top_polygons (corridor_meshes->top_polygons)
-#define grey_top_attributes (corridor_meshes->top_attributes)
+#define grey_mesh_points (corridor_meshes->grey_points)
+#define grey_mesh_polygons (corridor_meshes->grey_polygons)
+#define grey_mesh_attributes (corridor_meshes->grey_attributes)
 #define grey_boxes (corridor_meshes->boxes)
+#define grey_groups (corridor_meshes->groups)
 
 void corridor_meshes_take(void)
 {
@@ -1134,7 +1110,32 @@ static void grey_boxes_work_out(const corridor *passage)
 		r->y_max = JO_MAX(a.y, b.y);
 		grey_boxes[i].centre.x = (short)((r->x_min + r->x_max) >> 1);
 		grey_boxes[i].centre.y = (short)((r->y_min + r->y_max) >> 1);
-		grey_boxes[i].radius = (short)((r->x_max - r->x_min + r->y_max - r->y_min) >> 1);
+		grey_boxes[i].middle = (short)((grey_boxes[i].height + grey_boxes[i].floor) >> 1);
+	}
+	for (int g = 0; g < GREY_GROUPS; ++g)
+	{
+		grey_group *group = &grey_groups[g];
+		int x_min = 32000, x_max = -32000, y_min = 32000, y_max = -32000, z_min = 32000, z_max = -32000;
+
+		group->first = (unsigned char)(g == 0 ? 0 : g == 1 ? GREY_STAIRS : CORRIDOR_BOXES + (g - 2) * GREY_CITY_ROW);
+		group->last = (unsigned char)(g == 0 ? GREY_STAIRS - 1 : g == 1 ? CORRIDOR_BOXES - 1 : group->first + GREY_CITY_ROW - 1);
+		for (int i = group->first; i <= group->last; ++i)
+		{
+			const grey_box *b = &grey_boxes[i];
+
+			x_min = JO_MIN(x_min, b->rect.x_min);
+			x_max = JO_MAX(x_max, b->rect.x_max);
+			y_min = JO_MIN(y_min, b->rect.y_min);
+			y_max = JO_MAX(y_max, b->rect.y_max);
+			z_min = JO_MIN(z_min, b->floor);
+			z_max = JO_MAX(z_max, b->height);
+		}
+		group->middle.x = (x_min + x_max) >> 1;
+		group->middle.y = (y_min + y_max) >> 1;
+		group->middle.z = (z_min + z_max) >> 1;
+		group->half.x = ((x_max - x_min) >> 1) + 1;
+		group->half.y = ((y_max - y_min) >> 1) + 1;
+		group->half.z = ((z_max - z_min) >> 1) + 1;
 	}
 	for (int i = 0; i < GREY_BOXES; ++i)
 	{
@@ -1148,295 +1149,87 @@ static void grey_boxes_work_out(const corridor *passage)
 }
 
 /*
+ * This frame's view on foot (view_frustum, game/frustum.h): the camera's planes, near and the
+ * screen's edges, and the doorway's (below). Every box's sides and top are cut to them in 3D, as
+ * one polygon each: no floor-plan cones, no caps, no columns added where the screen's bottom
+ * crosses, nothing that depends on which way you look. Off (level_view_on false) in the other
+ * views: then everything's drawn uncut, as the iso view always was
+ */
+static frustum level_view;
+static bool level_view_on = false;
+
+/*
  * The corridor's open end (city.h): the right half of its far end, a doorway onto Work RAM's city.
- * From inside, the city's only seen through it, and from the city, the corridor's insides only
- * through it: its walls are drawn behind everything (sorted by their furthest corner), so a tower
- * beyond them would be drawn over them, and the stairs over their outsides. So each frame:
- *   - inside the corridor, the towers are cut to the wedge the doorway makes from the eye, on the
- *     floor plan: from the eye through its two edges, out past it. A tower wholly outside it isn't
- *     drawn; a side partly in it is cut where it crosses the wedge's edges, and a top to the wedge
- *   - out in the city, the corridor's floor and its boxes aren't drawn at all (for now: seen
- *     through the doorway from outside, its insides are missing)
- *   - in the doorway itself (GREY_DOORWAY either side of it), both are drawn, uncut: the wedge
- *     there is too wide to mean anything
- * The sums: which side of a line through the eye a point is, two products. In ints: everything's
- * within a few thousand of the eye, so they're within ~10^8
+ * Two rooms joined by a portal, as a game with doors does it: from one room, the other's only
+ * drawn where it's seen through the opening. The opening's three edges (its two sides, and its
+ * sill: the corridor floor's far edge) are each a plane from the eye (frustum_add_edge), added to
+ * this frame's view:
+ *   - inside the corridor, the city's towers are cut to them. Nothing of the city can be drawn over
+ *     the corridor's walls, and nothing below the sill: that's under the corridor's floor
+ *   - out in the city, the corridor's boxes and floor are cut to them: seen through the doorway,
+ *     and only there
+ *   - in the doorway itself (GREY_DOORWAY either side of it), neither is cut: the planes from an
+ *     eye in the opening are the opening itself
+ * The planes are worked out once a frame (a few divisions each); each box is then tested against
+ * them like the screen's edges: wholly outside one, it's not drawn at all
  */
 #define GREY_DOORWAY 40
 typedef struct
 {
-	bool inside, outside;  // the eye in the corridor (the city cut to the doorway), or out in the city
-	int eye_out, eye_height; // inside: how far out the eye is, and how high
-	world_point eye, edge[2]; // the doorway's two edges, on the floor plan
-	int sign[2];		   // which side of each edge's line (from the eye) is in the wedge
-	world_point quad[4];   // the wedge as a quad, for corridor_clip: the doorway and far out past it
+	bool inside, outside; // the eye in the corridor (the city cut to the doorway), or out in the city
+	unsigned planes;	  // the doorway's planes' bits in level_view (0: none this frame)
 } grey_portal;
 static grey_portal portal;
 
-// Which side of the line a -> b point p is: twice the triangle's signed area
-static int grey_side_of(world_point a, world_point b, world_point p)
+static frustum_point grey_point(world_point p, int z)
 {
-	return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+	frustum_point f;
+
+	f.x = p.x;
+	f.y = p.y;
+	f.z = z;
+	return f;
 }
 
-// How far into the wedge a point is past edge e's line: negative outside
-static int grey_portal_in(int e, world_point p)
+static void grey_portal_set(const corridor *passage)
 {
-	const int side = grey_side_of(portal.eye, portal.edge[e], p);
-
-	return portal.sign[e] > 0 ? side : -side;
-}
-
-// Works out this frame's doorway from the eye. No camera (the iso view): everything drawn, uncut
-static void grey_portal_set(const corridor *passage, const wall_clip_camera *camera)
-{
+	const int middle = (passage->across_min + passage->across_max) >> 1;
+	// The doorway's two sides, standing on the sill, and a point in the opening: the planes' insides
+	const world_point left = corridor_point(passage, CORRIDOR_LENGTH, middle);
+	const world_point right = corridor_point(passage, CORRIDOR_LENGTH, passage->across_max);
+	const world_point opening = corridor_point(passage, CORRIDOR_LENGTH, (middle + passage->across_max) >> 1);
+	const frustum_point in = grey_point(opening, 100);
 	int out;
 
 	portal.inside = portal.outside = false;
-	if (camera == JO_NULL)
+	portal.planes = 0;
+	if (!level_view_on)
 		return;
-	out = corridor_out(passage, camera->eye);
+	{
+		world_point eye;
+
+		eye.x = (short)level_view.eye.x;
+		eye.y = (short)level_view.eye.y;
+		out = corridor_out(passage, eye);
+	}
 	portal.outside = out > CORRIDOR_LENGTH + GREY_DOORWAY;
 	portal.inside = out < CORRIDOR_LENGTH - GREY_DOORWAY;
-	if (!portal.inside)
+	if (!portal.inside && !portal.outside)
 		return;
-	portal.eye = camera->eye;
-	portal.eye_out = out;
-	portal.eye_height = -view_z;
-	portal.edge[0] = corridor_point(passage, CORRIDOR_LENGTH, (passage->across_min + passage->across_max) >> 1);
-	portal.edge[1] = corridor_point(passage, CORRIDOR_LENGTH, passage->across_max);
-	portal.sign[0] = grey_side_of(portal.eye, portal.edge[0], portal.edge[1]) > 0 ? 1 : -1;
-	portal.sign[1] = grey_side_of(portal.eye, portal.edge[1], portal.edge[0]) > 0 ? 1 : -1;
-	// Far out: each edge on along its line from the eye, 6000 past it (the city's slice ends ~2100
-	// past the doorway). Its x and y step in proportion: a division, once a frame for each edge
-	for (int e = 0; e < 2; ++e)
-	{
-		const world_point p = portal.edge[e];
-		const int dx = p.x - portal.eye.x, dy = p.y - portal.eye.y;
-		const int far = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy) ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
-
-		portal.quad[e] = p;
-		portal.quad[3 - e].x = (short)(p.x + (dx * 6000) / far);
-		portal.quad[3 - e].y = (short)(p.y + (dy * 6000) / far);
-	}
+	portal.planes |= frustum_add_edge(&level_view, grey_point(left, 0), grey_point(left, 1000), in);
+	portal.planes |= frustum_add_edge(&level_view, grey_point(right, 0), grey_point(right, 1000), in);
+	portal.planes |= frustum_add_edge(&level_view, grey_point(left, 0), grey_point(right, 0), in); // the sill
 }
 
-// Whether any of a rectangle can be seen through the doorway: not if all its corners are outside
-// one of the wedge's edges
-static bool grey_portal_sees(const world_rect *r)
+void level_view_begin(const corridor *passage, bool free_camera)
 {
-	const world_point corners[4] = {{r->x_min, r->y_min}, {r->x_max, r->y_min}, {r->x_max, r->y_max},
-									{r->x_min, r->y_max}};
-
-	for (int e = 0; e < 2; ++e)
-	{
-		int k = 0;
-
-		while (k < 4 && grey_portal_in(e, corners[k]) < 0)
-			++k;
-		if (k == 4)
-			return false;
-	}
-	return true;
-}
-
-// Whether all of a rectangle's in the wedge: then it needs no cutting to it
-static bool grey_portal_holds(const world_rect *r)
-{
-	const world_point corners[4] = {{r->x_min, r->y_min}, {r->x_max, r->y_min}, {r->x_max, r->y_max},
-									{r->x_min, r->y_max}};
-
-	for (int k = 0; k < 4; ++k)
-		if (grey_portal_in(0, corners[k]) < 0 || grey_portal_in(1, corners[k]) < 0)
-			return false;
-	return true;
-}
-
-// Cuts a box's side (on the line along_x ? y = line : x = line, from `from` to `to` along it) to
-// the wedge: false if none of it's in it. Where it crosses an edge's line: a division, once a
-// crossing. The side's sums are brought down 256 first, so the length x one stays in 32 bits (in
-// 64, the SH-2's division is a library call of hundreds of cycles)
-static bool grey_portal_cut(bool along_x, int line, int *from, int *to)
-{
-	for (int e = 0; e < 2; ++e)
-	{
-		const world_point a = {(short)(along_x ? *from : line), (short)(along_x ? line : *from)};
-		const world_point b = {(short)(along_x ? *to : line), (short)(along_x ? line : *to)};
-		const int in_a = grey_portal_in(e, a), in_b = grey_portal_in(e, b);
-		int crossing;
-
-		if (in_a < 0 && in_b < 0)
-			return false;
-		if (in_a >= 0 && in_b >= 0)
-			continue;
-		{
-			const int a8 = in_a >> 8, span8 = (in_a - in_b) >> 8;
-
-			crossing = *from + (span8 == 0 ? 0 : ((*to - *from) * a8) / span8);
-		}
-		if (in_a < 0)
-			*from = crossing;
-		else
-			*to = crossing;
-	}
-	return *to > *from;
-}
-
-/*
- * Whether a tower's under the corridor floor's far edge, from inside: the city below 0 is seen
- * through the doorway only above that edge. Its top's highest on the screen at its near side
- * (out_min), and it's below the edge if it's further down per unit along than the edge is: (eye -
- * top) / (out_min - eye's out) > eye / (the doorway - eye's out). Both are along the corridor, and
- * any ray from the eye crosses the doorway's line and the tower's near side in the same ratio, so
- * it holds whichever way you look. Multiplied out: no division. From far down the corridor that's
- * every tower below 0, and only the guard pages are left to draw
- */
-static bool grey_under_the_floor(const city_tower *t)
-{
-	const int along = t->out_min - portal.eye_out, to_doorway = CORRIDOR_LENGTH - portal.eye_out;
-
-	return t->height < 0 && (portal.eye_height - t->height) * to_doorway > portal.eye_height * along;
-}
-
-// Whether box i is drawn this frame at all: the corridor's not from out in the city, a tower not
-// from inside the corridor unless it's seen through the doorway, above the floor's far edge
-static bool grey_box_drawn(int i)
-{
-	if (i < CORRIDOR_BOXES)
-		return !portal.outside;
-	return !portal.inside ||
-		   (!grey_under_the_floor(&city_towers[i - CORRIDOR_BOXES]) && grey_portal_sees(&grey_boxes[i].rect));
-}
-
-// One side of a box, added to the band: the columns along it, a piece every GREY_FACE_PIECE or
-// so (halves and quarters: shifts, not a division)
-// whole: the box is wholly well in front and in view (grey_box_whole): its side is added as it is,
-// with none of the cuts, caps or checks below
-static void add_grey_side(int box, int which, bool along_x, int line, int from, int to,
-						  const wall_clip_camera *camera, bool whole)
-{
-	world_point columns[6];
-	int alongs[6];
-	ATTR side;
-	wall_clip_camera low;
-	int length, pieces, shift;
-	const int bottom = grey_boxes[box].bottom[which];
-	const int top = grey_boxes[box].height;
-	const int first = block_low.mesh.data.nbPoint;
-	const int first_polygon = block_low.mesh.data.nbPolygon;
-
-	if (bottom >= top)
-		return; // hidden all the way up
-	if (!whole && box >= CORRIDOR_BOXES && portal.inside && !grey_portal_cut(along_x, line, &from, &to))
-		return; // a tower's side, none of it seen through the doorway
-	length = to - from;
-	pieces = length > 2 * GREY_FACE_PIECE ? 4 : length > GREY_FACE_PIECE ? 2 : 1;
-	shift = pieces == 4 ? 2 : pieces == 2 ? 1 : 0;
-
-	for (int k = 0; k <= pieces; ++k)
-		alongs[k] = from + ((length * k) >> shift);
-	if (camera != JO_NULL && !whole)
-	{
-		// One more column where the screen's bottom edge meets the side's bottom, in its place
-		const int cut = grey_side_crossing(along_x, line, from, to, bottom, camera);
-		int k = pieces;
-
-		if (cut > from && cut < to)
-		{
-			for (; alongs[k] > cut; --k)
-				alongs[k + 1] = alongs[k];
-			if (alongs[k] == cut)
-				for (++k; k <= pieces; ++k) // already a column there: put them back
-					alongs[k] = alongs[k + 1];
-			else
-			{
-				alongs[k + 1] = cut;
-				++pieces;
-			}
-		}
-	}
-	for (int k = 0; k <= pieces; ++k)
-	{
-		columns[k].x = along_x ? (short)alongs[k] : (short)line;
-		columns[k].y = along_x ? (short)line : (short)alongs[k];
-	}
-	if (box & 1)
-		set_corridor_wall_attribute(&side, along_x ? GREY_SIDE_Y_ALT : GREY_SIDE_X_ALT);
-	else
-		set_corridor_wall_attribute(&side, along_x ? GREY_SIDE_Y : GREY_SIDE_X);
-	if (whole)
-	{
-		block_band_add(&block_low, &side, columns, pieces, bottom, top, JO_NULL, 0); // no camera: uncut
-		return;
-	}
-	block_band_add(&block_low, &side, columns, pieces, bottom, top, corridor_strip_camera(camera, top, bottom, &low),
-				   corridor_near_below(top, bottom));
-	if (camera != JO_NULL)
-	{
-		cap_band_tops(&block_low, first, camera);
-		cap_band_bottoms(&block_low, first, camera);
-		lay_wide_pieces_flat(&block_low, first_polygon, along_x, camera); // a front facing you: lying lines
-	}
-}
-
-static int grey_top_place(const wall_clip_camera *camera, const grey_box *box, int height); // below
-
-/*
- * Whether box i's sides can go to VDP1 as they are, uncut (place: grey_top_place's, 1 when it's
- * wholly GLASS_MIN_FORWARD or more in front and in the view's reach). Then none of a side's
- * corners is behind the camera or near it, and none is far off the screen sideways (at most ~370
- * pixels off the middle). Up and down it's checked: its top and its feet (a city tower's, 3000
- * down) no more than 4 x as far from the eye's height as the box is in front, ~830 pixels, inside
- * VDP1's 1023. And not a tower cut to the doorway. The stairs' fronts down the corridor, each a
- * few pixels, were each cut to the view, capped and checked: the box sides were a quarter of the
- * frame
- */
-static bool grey_box_whole(int i, int place, const wall_clip_camera *camera)
-{
-	const grey_box *b = &grey_boxes[i];
-	const int forward = (((b->centre.x - camera->eye.x) * camera->forward_x +
-						  (b->centre.y - camera->eye.y) * camera->forward_y) >> 10) - b->radius;
-	const int eye = -view_z;
-
-	if (place != 1 || (i >= CORRIDOR_BOXES && portal.inside && !grey_portal_holds(&b->rect)))
-		return false;
-	return eye - b->floor <= 4 * forward && b->height - eye <= 4 * forward;
-}
-
-// The boxes' sides: only those facing the eye (a box's other sides are behind it). Added as the
-// corridor's walls are: cut to the cone in front, upright lines
-static void add_grey_box_sides(const corridor *passage, const world_point *eye, const wall_clip_camera *camera)
-{
-	if (corridor_meshes == JO_NULL)
+	level_view_on = view_frustum(free_camera, &level_view);
+	portal.inside = portal.outside = false;
+	portal.planes = 0;
+	if (passage == JO_NULL || !passage->open || corridor_meshes == JO_NULL)
 		return;
 	grey_boxes_work_out(passage);
-	grey_portal_set(passage, camera);
-	corridor_cone = true;
-	upright_lines = true;
-	flat_fog = true;
-	for (int i = 0; i < GREY_BOXES; ++i)
-	{
-		const world_rect *r = &grey_boxes[i].rect;
-
-		const int place = camera != JO_NULL ? grey_top_place(camera, &grey_boxes[i], grey_boxes[i].floor) : 2;
-		bool whole;
-
-		// Not seen from here (grey_box_drawn), or out of the view: none of its sides worked out
-		if (!grey_box_drawn(i) || place == 0)
-			continue;
-		whole = camera != JO_NULL && grey_box_whole(i, place, camera);
-		if (eye->x < r->x_min)
-			add_grey_side(i, GREY_X_MIN, false, r->x_min, r->y_min, r->y_max, camera, whole);
-		if (eye->x > r->x_max)
-			add_grey_side(i, GREY_X_MAX, false, r->x_max, r->y_min, r->y_max, camera, whole);
-		if (eye->y < r->y_min)
-			add_grey_side(i, GREY_Y_MIN, true, r->y_min, r->x_min, r->x_max, camera, whole);
-		if (eye->y > r->y_max)
-			add_grey_side(i, GREY_Y_MAX, true, r->y_max, r->x_min, r->x_max, camera, whole);
-	}
-	corridor_cone = false;
-	upright_lines = false;
-	flat_fog = false;
+	grey_portal_set(passage);
 }
 
 /*
@@ -1509,8 +1302,20 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 	const int top = (WALL_TOP_Z * ((rise * CORRIDOR_WALL_RISE) >> 8)) >> 8;
 
 	const int corridor_frc = jo_time_get_frc(); // the debug line's "co" (utils/perf.h)
-	int sides_frc;
 
+	if (level_view_on && view_is_on_foot())
+	{
+		// On foot, the walls are cut to the view in 3D with the boxes (corridor_walls_add). The glass
+		// behind you is textured: a cut would squash its texture, so it keeps the floor-plan cuts
+		if (!cutaway)
+		{
+			corridor_cone = true;
+			add_corridor_glass(passage, eye, camera, top);
+			corridor_cone = false;
+		}
+		perf_part_add(PERF_CORRIDOR, corridor_frc);
+		return;
+	}
 	set_corridor_wall_attribute(&base, corridor_pulse(frame++));
 	set_corridor_wall_attribute(&body, CORRIDOR_BODY);
 	// Sorted by their furthest corner, not their middle: the corridor's walls bound it, so from
@@ -1598,9 +1403,6 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 		corridor_cone = false;
 	}
 	perf_part_add(PERF_CORRIDOR, corridor_frc);
-	sides_frc = jo_time_get_frc();
-	add_grey_box_sides(passage, eye, camera);
-	perf_part_add(PERF_SIDES, sides_frc);
 }
 
 void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
@@ -1791,14 +1593,173 @@ static bool add_glass(const world_point *corners, int n, jo_color colour, int fo
 	return true;
 }
 
-// The grey box's tops: flat quads at their heights, each cut to what the camera sees of its
-// height (view_floor_quad), as the glass is. Not every box's top fits at once: the furthest are
-// left out first (they're added nearest first... in the order they're listed, up the corridor:
-// near enough for a grey box)
-static jo_3d_mesh grey_top_mesh; // its arrays in Work RAM's memory (corridor_memory)
+/*
+ * Drawing the corridor and the city on foot: every face cut to this frame's view (level_view) in
+ * 3D, one polygon each, by the same few lines (level_face_add). A face is a convex polygon of up to
+ * 8 corners; cut, it has up to FRUSTUM_POLY_MAX, and it's added as a fan of quads (0 1 2 3),
+ * (0 3 4 5) ...; past the last corner, the last again. Two meshes, each rewritten every frame (their
+ * arrays in Work RAM's memory, corridor_memory): the boxes' and walls' (grey_out), and the glass
+ * floor's (glass_out), whose polygons are chained to keep their order (draw_glass_floor)
+ */
+typedef struct
+{
+	POINT *points;
+	POLYGON *polygons;
+	ATTR *attributes;
+	int point_count, quad_count;
+	int points_max, quads_max;
+} level_mesh;
+static level_mesh grey_out, glass_out;
+static jo_3d_mesh grey_mesh;
 
-// Where a box's top stands from the camera, as glass_tile_place for a tile: 0 out of sight, 1 to
-// draw as it is (wholly well in front), 2 to cut to the screen first (near you)
+static void level_mesh_begin(level_mesh *m, POINT *points, POLYGON *polygons, ATTR *attributes, int points_max,
+							 int quads_max)
+{
+	m->points = points;
+	m->polygons = polygons;
+	m->attributes = attributes;
+	m->point_count = m->quad_count = 0;
+	m->points_max = points_max;
+	m->quads_max = quads_max;
+}
+
+// How a face is fogged: not at all, by its colour (one level for it all, its nearest corner's: no
+// Gouraud table written into VDP1 RAM while VDP1 draws), or a level at each corner (Gouraud: long
+// faces, the corridor's walls, whose far end is far deeper in the fog than their near one)
+#define LEVEL_FOG_NONE 0
+#define LEVEL_FOG_FLAT 1
+#define LEVEL_FOG_CORNERS 2
+
+/*
+ * One face (n corners in order round it) into mesh m, cut by the planes in `planes` (0: none, as
+ * it is: level_planes_box or level_planes_rect worked them out), flat colour, sorted by `sort`
+ * (SORT_CEN, SORT_MAX, SORT_BFR). lie: a side (LB, LT, RT, RB) to be filled with lying lines (level_side_lies): listed from its top left instead, the same way
+ * round, before it's cut. The cut keeps the order round, starting where it started, so a wide front
+ * cut at the screen's edge still lies. Returns false if nothing of it was added
+ */
+static bool level_face_add(level_mesh *m, const frustum_point *corners, int n, unsigned planes, jo_color colour, int fog,
+						   int sort, bool lie)
+{
+	frustum_point cut[FRUSTUM_POLY_MAX];
+	frustum_point turned[4];
+	unsigned char levels[FRUSTUM_POLY_MAX];
+	const frustum_point *p = corners;
+	const int first = m->point_count;
+
+	if (lie)
+	{
+		for (int k = 0; k < 4; ++k)
+			turned[k] = corners[(k + 1) & 3]; // LT, RT, RB, LB
+		corners = p = turned;
+	}
+	if (planes == FRUSTUM_OUTSIDE)
+		return false;
+	if (planes != 0)
+	{
+		n = frustum_clip(&level_view, planes, corners, n, cut);
+		p = cut;
+	}
+	if (n < 3 || m->point_count + n > m->points_max || m->quad_count + (n - 1) / 2 > m->quads_max)
+		return false; // gone, or no room left: a face far off missing for a frame, not a crash
+	if (fog != LEVEL_FOG_NONE && object_fog_enabled)
+	{
+		int nearest = 255;
+		// One level for a flat quad: its two columns' (corners 0 and 2 are one in each, listed
+		// upright or lying), the fog going by the distance along the floor
+		const int step = fog == LEVEL_FOG_FLAT && n == 4 ? 2 : 1;
+
+		for (int k = 0; k < n; k += step)
+		{
+			levels[k] = (unsigned char)object_fog_level(p[k].x, p[k].y);
+			if (levels[k] < nearest)
+				nearest = levels[k];
+		}
+		if (fog == LEVEL_FOG_FLAT)
+			colour = object_fog_flat_colour(colour, nearest);
+	}
+	else
+		fog = LEVEL_FOG_NONE;
+	for (int k = 0; k < n; ++k)
+	{
+		m->points[first + k][X] = jo_int2fixed(p[k].x);
+		m->points[first + k][Y] = jo_int2fixed(p[k].y);
+		m->points[first + k][Z] = jo_int2fixed(p[k].z);
+	}
+	for (int k = 1; k < n - 1; k += 2)
+	{
+		POLYGON *q = &m->polygons[m->quad_count];
+		ATTR *a = &m->attributes[m->quad_count];
+		const int last = k + 2 < n ? k + 2 : n - 1;
+
+		q->norm[X] = JO_FIXED_0; // unused: unlit, both faces drawn
+		q->norm[Y] = JO_FIXED_0;
+		q->norm[Z] = JO_FIXED_1;
+		q->Vertices[0] = (Uint16)first;
+		q->Vertices[1] = (Uint16)(first + k);
+		q->Vertices[2] = (Uint16)(first + k + 1);
+		q->Vertices[3] = (Uint16)(first + last);
+		set_corridor_wall_attribute(a, colour);
+		a->sort = (Uint8)((a->sort & ~3) | sort); // the sort is the low 2 bits (SKILLS.md)
+		if (fog == LEVEL_FOG_CORNERS)
+			object_fog_set_quad(a, levels[0], levels[k], levels[k + 1], levels[last]);
+		++m->quad_count;
+	}
+	m->point_count += n;
+	return true;
+}
+
+/*
+ * Whether a side, uncut (corners LB, LT, RT, RB), is filled with fewer lines lying than upright
+ * (block_band_add, lay_wide_pieces_flat: the same rule, for the same reasons). On the screen a
+ * column h tall at depth d is h x F / d pixels (F, 160 at 90 degrees: about the same on foot), and
+ * its two ends, s0 and s1 aside, are |s1 / d1 - s0 / d0| x F apart. Times d0 x d1 / F, both:
+ * column 0's h x d1, column 1's h x d0, the width |s1 x d0 - s0 x d1|. Lying when it's square on
+ * to you (its columns within 5:4), wider than tall, and upright would be over 80 lines (F / 2:
+ * the width x 2 over d0 x d1). Depths and asides are along the camera's own directions, so it holds
+ * looking up or down too. Only within 4096: the products stay in 32 bits, and further off no front
+ * is that big. And only a face across your view: one running along it (the camera's forward along
+ * the face over half) has no part square on to you, and isn't measured at all
+ */
+static bool level_side_lies(const frustum_point *c)
+{
+	const frustum *v = &level_view;
+	const int along = c[0].x != c[3].x ? v->forward[0] : v->forward[1]; // x1024
+	int dx0, dy0, dx1, dy1, d0, d1, s0, s1, wide;
+
+	if (along > 512 || along < -512)
+		return false;
+	dx0 = c[0].x - v->eye.x;
+	dy0 = c[0].y - v->eye.y;
+	dx1 = c[3].x - v->eye.x;
+	dy1 = c[3].y - v->eye.y;
+	d0 = (dx0 * v->forward[0] + dy0 * v->forward[1] + (c[0].z - v->eye.z) * v->forward[2]) >> 10;
+	d1 = (dx1 * v->forward[0] + dy1 * v->forward[1] + (c[3].z - v->eye.z) * v->forward[2]) >> 10;
+	if (d0 <= 0 || d1 <= 0 || d0 > 4096 || d1 > 4096)
+		return false;
+	if ((d0 > d1 ? d0 : d1) * 4 > (d0 > d1 ? d1 : d0) * 5)
+		return false; // tapered: upright
+	s0 = (dx0 * v->right[0] + dy0 * v->right[1]) >> 10;
+	s1 = (dx1 * v->right[0] + dy1 * v->right[1]) >> 10;
+	wide = s1 * d0 - s0 * d1;
+	if (wide < 0)
+		wide = -wide;
+	return (c[1].z - c[0].z) * (d0 > d1 ? d1 : d0) < wide && wide * 2 > d0 * d1;
+}
+
+// The corners of a side on the line along_x ? y = line : x = line, from `from` to `to` along it,
+// bottom to top: LB, LT, RT, RB
+static void level_side_corners(bool along_x, int line, int from, int to, int bottom, int top, frustum_point *c)
+{
+	for (int k = 0; k < 4; ++k)
+	{
+		const int along = k < 2 ? from : to;
+
+		c[k].x = along_x ? along : line;
+		c[k].y = along_x ? line : along;
+		c[k].z = (k == 1 || k == 2) ? top : bottom;
+	}
+}
+
 // A top's grey: GREY_TOP at the corridor's floor and above, darker the lower it is (a step of 1 in
 // 255 every 4 units down, to 100 darker), so the city's roofs one below another read apart: all one
 // grey, the street between two looked like more roof
@@ -1809,94 +1770,424 @@ static jo_color grey_top_colour(int height)
 	return JO_COLOR_RGB(150 - dim, 150 - dim, 164 - (dim >> 1));
 }
 
-static int grey_top_place(const wall_clip_camera *camera, const grey_box *box, int height)
-{
-	const int dx = box->centre.x - camera->eye.x;
-	const int dy = box->centre.y - camera->eye.y;
-	const int forward = (dx * camera->forward_x + dy * camera->forward_y) >> 10;
-	const int side = (dx * camera->forward_y - dy * camera->forward_x) >> 10;
-	// The view's half width there; looking down, wider by how far below the eye it is
-	// (corridor_cone_below: x16)
-	const int reach = (((forward > 0 ? forward : 0) * camera->view_width) >> 4) + (corridor_cone_below(height) >> 4);
+static unsigned level_planes_rect(const frustum_point *a, const frustum_point *b, unsigned planes); // below
 
-	if (forward + box->radius < 0)
-		return 0;
-	if ((side < 0 ? -side : side) > reach + box->radius + GLASS_MIN_FORWARD)
-		return 0;
-	return forward - box->radius >= GLASS_MIN_FORWARD ? 1 : 2;
+// One side of box i: from what hides its foot (bottom: grey_side_bottom) to its top. test: the
+// planes to test it against (0: its box is wholly in view, so it is too)
+static void grey_side_add(int i, int which, bool along_x, int line, int from, int to, unsigned test)
+{
+	const grey_box *b = &grey_boxes[i];
+	frustum_point c[4];
+	jo_color colour;
+
+	if (b->bottom[which] >= b->height)
+		return; // hidden all the way up
+	level_side_corners(along_x, line, from, to, b->bottom[which], b->height, c);
+	if (i & 1)
+		colour = along_x ? GREY_SIDE_Y_ALT : GREY_SIDE_X_ALT;
+	else
+		colour = along_x ? GREY_SIDE_Y : GREY_SIDE_X;
+	level_face_add(&grey_out, c, 4, test != 0 ? level_planes_rect(&c[0], &c[2], test) : 0, colour, LEVEL_FOG_FLAT,
+				   SORT_CEN, level_view_on && level_side_lies(c));
+}
+
+/*
+ * The planes a box lined up with the axes needs cutting by (centre, and half its size each way; a
+ * face is a box with no thickness: level_planes_rect). It's tested against the screen's edges (and
+ * a portal's, in `planes`): wholly outside one, FRUSTUM_OUTSIDE, it's not drawn; wholly inside them
+ * all, 0, it's drawn as it is. Crossing some, it's cut by the near plane and the portal's. And by
+ * a screen's edge only if it reaches past the guard band beyond that edge (game/frustum.h:
+ * FRUSTUM_GUARD): something a little over the edge is left for VDP1 (walking a few pixels off the
+ * screen costs it less than the cut costs the CPU), but something reaching far past it is cut at
+ * the edge itself. Cut at the guard band instead, the stairs' fronts (lying lines, each the cut
+ * width) were walked out to twice the screen's width, and VDP1 went to two frames (30 fps).
+ * frustum_classify_box: exact, as its corners. level_cut_exact: cut at every edge it crosses (the
+ * glass floor's far quads, always far wider than the screen)
+ */
+static bool level_cut_exact = false;
+
+static unsigned level_planes_box(frustum_point centre, frustum_point half, unsigned planes)
+{
+	const unsigned crossed = frustum_classify_box(&level_view, centre, half, planes);
+
+	unsigned reach;
+
+	if (crossed == 0 || crossed == FRUSTUM_OUTSIDE || level_cut_exact)
+		return crossed;
+	// The screen's edges are bits 1 .. 4, the guard band's 5 .. 8: four up. Which guard band edges
+	// it reaches past, then the screen's edges they're beyond, four back down
+	reach = frustum_classify_box(&level_view, centre, half, (crossed & ~0x1Eu) | ((crossed & 0x1Eu) << 4));
+	return (reach & ~0x1E0u) | ((reach & 0x1E0u) >> 4);
+}
+
+// The same for a flat rectangle lined up with the axes, from two opposite corners of it (a box's
+// side or top, a strip of the floor)
+static unsigned level_planes_rect(const frustum_point *a, const frustum_point *b, unsigned planes)
+{
+	frustum_point centre, half;
+
+	centre.x = (a->x + b->x) >> 1;
+	centre.y = (a->y + b->y) >> 1;
+	centre.z = (a->z + b->z) >> 1;
+	half.x = (a->x > b->x ? a->x - b->x : b->x - a->x) >> 1;
+	half.y = (a->y > b->y ? a->y - b->y : b->y - a->y) >> 1;
+	half.z = (a->z > b->z ? a->z - b->z : b->z - a->z) >> 1;
+	// Rounded down, a half could be a unit short: one more keeps it the whole rectangle or more
+	++half.x;
+	++half.y;
+	++half.z;
+	return level_planes_box(centre, half, planes);
+}
+
+static void grey_boxes_add(void)
+{
+	const frustum_point *e = &level_view.eye;
+
+	for (int g = 0; g < GREY_GROUPS; ++g)
+	{
+		const grey_group *group = &grey_groups[g];
+		const bool city = group->first >= CORRIDOR_BOXES;
+		// The screen's edges, and the doorway's if the group is in the other room from you
+		const unsigned planes = FRUSTUM_SCREEN | ((city ? portal.inside : portal.outside) ? portal.planes : 0);
+		// The planes the group crosses (0: it's all in view)
+		unsigned crossed = 0;
+
+		if (level_view_on)
+		{
+			crossed = frustum_classify_box(&level_view, group->middle, group->half, planes);
+			if (crossed == FRUSTUM_OUTSIDE)
+				continue; // none of it can be seen from here
+		}
+		for (int i = group->first; i <= group->last; ++i)
+		{
+			const grey_box *b = &grey_boxes[i];
+			const world_rect *r = &b->rect;
+			// What its faces are tested against: only the planes it crosses (none if it's all in view)
+			unsigned test = 0;
+
+			if (crossed != 0)
+			{
+				const frustum_point middle = {b->centre.x, b->centre.y, b->middle};
+				const frustum_point half = {((r->x_max - r->x_min) >> 1) + 1, ((r->y_max - r->y_min) >> 1) + 1,
+											((b->height - b->floor) >> 1) + 1};
+
+				test = frustum_classify_box(&level_view, middle, half, crossed);
+				if (test == FRUSTUM_OUTSIDE)
+					continue; // none of it can be seen from here
+			}
+			if (e->x < r->x_min || !level_view_on)
+				grey_side_add(i, GREY_X_MIN, false, r->x_min, r->y_min, r->y_max, test);
+			if (e->x > r->x_max || !level_view_on)
+				grey_side_add(i, GREY_X_MAX, false, r->x_max, r->y_min, r->y_max, test);
+			if (e->y < r->y_min || !level_view_on)
+				grey_side_add(i, GREY_Y_MIN, true, r->y_min, r->x_min, r->x_max, test);
+			if (e->y > r->y_max || !level_view_on)
+				grey_side_add(i, GREY_Y_MAX, true, r->y_max, r->x_min, r->x_max, test);
+			if (-view_z > b->height)
+			{
+				const frustum_point top[4] = {{r->x_min, r->y_min, b->height},
+											  {r->x_max, r->y_min, b->height},
+											  {r->x_max, r->y_max, b->height},
+											  {r->x_min, r->y_max, b->height}};
+
+				level_face_add(&grey_out, top, 4, test != 0 ? level_planes_rect(&top[0], &top[2], test) : 0,
+							   grey_top_colour(b->height), LEVEL_FOG_NONE, SORT_CEN, false);
+			}
+		}
+	}
+}
+
+/*
+ * The corridor's walls on foot (corridor_faces: its two sides and the far end's left half), as
+ * the boxes are: each 250 piece a quad for the glowing base and one for the dark body above it,
+ * cut to the view. Sorted by their furthest corner: they bound the corridor, so from inside they're
+ * behind everything in it (a piece's middle came out nearer than the stairs' fronts beside it, and
+ * was drawn over their ends). Out in the city they're its outside, seen from behind (both faces are
+ * drawn). Fogged a level at each corner: a 250 piece runs a long way into the fog
+ */
+#define CORRIDOR_TOP_ON_FOOT ((WALL_TOP_Z * CORRIDOR_WALL_RISE) >> 8) // risen full: a third of the arena's
+static unsigned int corridor_frame = 0; // the frames the corridor's walls are drawn: the base's pulse
+
+static void corridor_walls_add(const corridor *passage)
+{
+	world_point from[CORRIDOR_FACES], to[CORRIDOR_FACES];
+	const jo_color base = corridor_pulse(corridor_frame++);
+	// Each piece's two parts, bottom to top
+	const int part_bottom[2] = {WALL_BOTTOM_Z, WALL_BASE_TOP_Z};
+	const int part_top[2] = {WALL_BASE_TOP_Z, CORRIDOR_TOP_ON_FOOT};
+
+	corridor_faces(passage, from, to);
+	for (int i = 0; i < CORRIDOR_FACES; ++i)
+	{
+		const bool along_x = from[i].y == to[i].y;
+		const int line = along_x ? from[i].y : from[i].x;
+		const int start = along_x ? from[i].x : from[i].y;
+		const int end = along_x ? to[i].x : to[i].y;
+		const int dir = end > start ? 1 : -1;
+		const int eye_along = along_x ? level_view.eye.x : level_view.eye.y;
+
+		for (int a = start; a != end;)
+		{
+			// The next column 250 on near you, 500 or 1000 further along (each piece's fog goes in
+			// a straight line between its ends; far off, a piece is a few pixels across); or the
+			// face's end if that's nearer (the far end's half)
+			const int off = a - eye_along < 0 ? eye_along - a : a - eye_along;
+			const int step = dir * (off < 1000 ? 250 : off < 2000 ? 500 : 1000);
+			const int b = (dir > 0 ? a + step > end : a + step < end) ? end : a + step;
+
+			for (int k = 0; k < 2; ++k)
+			{
+				frustum_point c[4];
+				unsigned planes;
+
+				level_side_corners(along_x, line, a, b, part_bottom[k], part_top[k], c);
+				planes = level_planes_rect(&c[0], &c[2], FRUSTUM_SCREEN);
+				if (planes != FRUSTUM_OUTSIDE)
+					level_face_add(&grey_out, c, 4, planes, k == 0 ? base : CORRIDOR_BODY, LEVEL_FOG_CORNERS, SORT_MAX,
+								   level_side_lies(c));
+			}
+			a = b;
+		}
+	}
 }
 
 void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera)
 {
-	int points = 0, quads = 0;
-	const int eye = -view_z;
-
+	(void)camera; // cut to level_view, this frame's planes (level_view_begin)
 	if (passage == JO_NULL || !passage->open || corridor_meshes == JO_NULL)
 		return;
 	grey_boxes_work_out(passage);
-	grey_portal_set(passage, camera);
-	for (int i = 0; i < GREY_BOXES; ++i)
+	level_mesh_begin(&grey_out, grey_mesh_points, grey_mesh_polygons, grey_mesh_attributes, GREY_POINTS_MAX,
+					 GREY_QUADS_MAX);
 	{
-		const world_rect *r = &grey_boxes[i].rect;
-		const world_point corners[4] = {{r->x_min, r->y_min}, {r->x_max, r->y_min}, {r->x_max, r->y_max},
-										{r->x_min, r->y_max}};
-		const world_point *top = corners;
-		const int place = camera != JO_NULL ? grey_top_place(camera, &grey_boxes[i], grey_boxes[i].height) : 2;
-		world_point seen[4], cut[CORRIDOR_CLIP_MAX], through[CORRIDOR_CLIP_MAX];
-		int n = 4;
+		int frc = jo_time_get_frc(); // the debug line's "sd": the boxes (utils/perf.h)
 
-		if (place == 0 || eye <= grey_boxes[i].height || !grey_box_drawn(i))
-			continue; // out of sight, the eye's not above it (its top can't be seen), or hidden
-		// A tower's top seen from inside the corridor: only what's through the doorway
-		if (i >= CORRIDOR_BOXES && portal.inside && !grey_portal_holds(r))
-		{
-			n = corridor_clip(corners, 4, portal.quad, through);
-			if (n < 3)
-				continue;
-			top = through;
-		}
-		// Only a top near you is cut to what the camera sees (corridor_clip's 64-bit sums): one
-		// well in front is drawn as it is
-		if (place == 2)
-		{
-			if (!view_roof_quad(grey_boxes[i].height, seen))
-				continue;
-			n = corridor_clip(top, n, seen, cut);
-			top = cut;
-		}
-		if (n < 3 || points + n > GREY_TOP_POINTS_MAX || quads + (n - 1) / 2 > GREY_TOP_QUADS_MAX)
-			continue;
-		for (int k = 0; k < n; ++k)
-		{
-			grey_top_points[points + k][X] = jo_int2fixed(top[k].x);
-			grey_top_points[points + k][Y] = jo_int2fixed(top[k].y);
-			grey_top_points[points + k][Z] = jo_int2fixed(grey_boxes[i].height);
-		}
-		// A fan, as the glass's: (0 1 2 3), (0 3 4 5) ...; past the last corner, the last again
-		for (int k = 1; k < n - 1; k += 2)
-		{
-			POLYGON *q = &grey_top_polygons[quads];
-
-			q->norm[X] = JO_FIXED_0;
-			q->norm[Y] = JO_FIXED_0;
-			q->norm[Z] = JO_FIXED_1;
-			q->Vertices[0] = (Uint16)points;
-			q->Vertices[1] = (Uint16)(points + k);
-			q->Vertices[2] = (Uint16)(points + k + 1);
-			q->Vertices[3] = (Uint16)(points + (k + 2 < n ? k + 2 : n - 1));
-			set_corridor_wall_attribute(&grey_top_attributes[quads], grey_top_colour(grey_boxes[i].height));
-			++quads;
-		}
-		points += n;
+		grey_boxes_add();
+		perf_part_add(PERF_SIDES, frc);
+		frc = jo_time_get_frc(); // and "co": the corridor's walls
+		if (level_view_on && view_is_on_foot())
+			corridor_walls_add(passage); // else with the arena's (draw_corridor_walls)
+		perf_part_add(PERF_CORRIDOR, frc);
 	}
-	if (quads == 0)
+	if (grey_out.quad_count == 0)
 		return;
-	grey_top_mesh.data.pntbl = grey_top_points;
-	grey_top_mesh.data.pltbl = grey_top_polygons;
-	grey_top_mesh.data.attbl = grey_top_attributes;
-	grey_top_mesh.data.nbPoint = (Uint16)points;
-	grey_top_mesh.data.nbPolygon = (Uint16)quads;
-	jo_3d_mesh_draw(&grey_top_mesh);
+	grey_mesh.data.pntbl = grey_mesh_points;
+	grey_mesh.data.pltbl = grey_mesh_polygons;
+	grey_mesh.data.attbl = grey_mesh_attributes;
+	grey_mesh.data.nbPoint = (Uint16)grey_out.point_count;
+	grey_mesh.data.nbPolygon = (Uint16)grey_out.quad_count;
+	jo_3d_mesh_draw(&grey_mesh);
+}
+
+/*
+ * The glass floor on foot, cut to the view in 3D as everything else, and seen through the doorway
+ * from the city. All in one mesh:
+ *   - near you (within GLASS_NEAR along the corridor), the tiles, each outlined in white: the
+ *     seams. They used to be the arena's floor (VDP2) showing through the gaps between the tiles,
+ *     but that floor is one plane at one height: on foot it had to lie under the city, 3000 down,
+ *     where its grid shimmered and fogged black (the black over the hexagons at the start). VDP2 is
+ *     left the sky and a black background now (main.c). A white floor under the tiles (VDP1) took
+ *     VDP1 to two frames: it filled the floor twice. Outlines are VDP1 lines, a few pixels each,
+ *     on the tiles' own corners (glass_outline_add): no second fill, no extra corners for SGL
+ *   - further off both ways, the glass as one quad (no seams show that far into the fog)
+ * The tiles must lie over the far glass, which is under everything else. So the polygons are
+ * chained (SORT_BFR: each drawn straight after the one before), behind a first one that's sorted
+ * by its furthest corner (SORT_MAX): a dot at the floor's deepest point (glass_anchor)
+ */
+#define GLASS_SEAM JO_COLOR_RGB(255, 255, 255)
+#define GLASS_NEAR (GLASS_DETAIL - 2 * CORRIDOR_HEX_R)
+// Only tiles this near (along the corridor) are outlined: past it the seams are a pixel or two in the
+// fog, and each outline is three more polygons for SGL to sort (the stairs' view went to 30 fps)
+#define GLASS_OUTLINED 1000
+
+// Which of mesh m's points from `first` to before `last` is deepest in front of the camera
+static int level_deepest(const level_mesh *m, int first, int last)
+{
+	const frustum *v = &level_view;
+	int deepest = first, depth = -32000 * FRUSTUM_ONE;
+
+	for (int k = first; k < last; ++k)
+	{
+		const int d = (jo_fixed2int(m->points[k][X]) - v->eye.x) * v->forward[0] +
+					  (jo_fixed2int(m->points[k][Y]) - v->eye.y) * v->forward[1] +
+					  (jo_fixed2int(m->points[k][Z]) - v->eye.z) * v->forward[2];
+
+		if (d > depth)
+		{
+			depth = d;
+			deepest = k;
+		}
+	}
+	return deepest;
+}
+
+/*
+ * The chain's first polygon (slot 0, kept for it): a quad with all four corners on one point, the
+ * floor's deepest (a dot; drawn first, and the floor drawn over it), sorted SORT_MAX. Every other
+ * polygon of the floor is SORT_BFR, drawn straight after it in the order they were added: so the
+ * whole floor's drawn at its deepest point's depth, behind everything stood on it, the tiles on the
+ * far glass and the outlines on the tiles. Chained off a tile instead (one moved to the front), its
+ * outline had gone in before it, and the tile was drawn over it
+ */
+static void glass_anchor(level_mesh *m, int point)
+{
+	POLYGON *q = &m->polygons[0];
+
+	for (int k = 0; k < 4; ++k)
+		q->Vertices[k] = (Uint16)point;
+	q->norm[X] = JO_FIXED_0;
+	q->norm[Y] = JO_FIXED_0;
+	q->norm[Z] = JO_FIXED_1;
+	set_corridor_wall_attribute(&m->attributes[0], JO_COLOR_RGB(0, 0, 0));
+	m->attributes[0].sort = (Uint8)((m->attributes[0].sort & ~3) | SORT_MAX);
+}
+
+// The seams' white, fogged by level: twice as fast as a tile darkens (object_fog_flat_colour only
+// takes off up to 16 of 31 steps: the white seams stayed grey to the far glass), so they fade out
+static jo_color glass_seam_colour(int level)
+{
+	const int steps = 31 - (object_fog_flat_colour(GLASS_SEAM, level) & 31);
+
+	return (jo_color)depth_fog_darken((unsigned short)GLASS_SEAM, steps * 2);
+}
+
+// One outline polygon into mesh m: a polyline (sprPolyLine: a quad's four edges, nothing filled) or
+// a line (sprLine: from its first corner to its second), on the points given, chained (SORT_BFR)
+static void glass_line_add(level_mesh *m, int p0, int p1, int p2, int p3, unsigned int kind, jo_color colour)
+{
+	POLYGON *q;
+	ATTR *a;
+
+	if (m->quad_count >= m->quads_max)
+		return;
+	q = &m->polygons[m->quad_count];
+	a = &m->attributes[m->quad_count];
+	q->norm[X] = JO_FIXED_0;
+	q->norm[Y] = JO_FIXED_0;
+	q->norm[Z] = JO_FIXED_1;
+	q->Vertices[0] = (Uint16)p0;
+	q->Vertices[1] = (Uint16)p1;
+	q->Vertices[2] = (Uint16)p2;
+	q->Vertices[3] = (Uint16)p3;
+	a->flag = Dual_Plane;
+	a->sort = (Uint8)(SORT_BFR | ((kind >> 16) & 0x1c) | No_Option);
+	a->texno = No_Texture;
+	a->atrb = (Uint16)((CL32KRGB | No_Gouraud) | ((kind >> 24) & 0xc0));
+	a->colno = colour;
+	a->gstb = 0;
+	a->dir = (Uint16)(kind & 0x3f);
+	++m->quad_count;
+}
+
+/*
+ * A white outline on the polygon at mesh m's points first .. first + n - 1 (a tile, just added),
+ * chained after it so it's drawn on it. VDP1 lines: a polyline listed a, b, c, b draws just a-b
+ * and b-c (and back: the same pixels), with no line across the tile; a line (sprLine) one edge.
+ * whole: all of it (a tile cut by the corridor's wall or the view, or one of the scattered ones by
+ * the hole). Otherwise a whole hexagon, and only its three edges from corner 2 to 5 (corridor.c
+ * lists them round from its point at +out): one of each pair of opposite edges, so every seam
+ * between two tiles gets exactly one line, its neighbour drawing the edge it doesn't. Outlined on
+ * both sides, every seam's two lines were twice the pixels for VDP1, each drawn twice over: the
+ * stairs' foot went to 30 fps
+ */
+static void glass_outline_add(level_mesh *m, int first, int n, bool whole, jo_color colour)
+{
+	if (!whole)
+	{
+		glass_line_add(m, first + 2, first + 3, first + 4, first + 3, sprPolyLine, colour);
+		glass_line_add(m, first + 4, first + 5, first + 5, first + 4, sprLine, colour);
+		return;
+	}
+	for (int k = 0; k < n; k += 2)
+	{
+		// An odd count: the last corner's edge back to the first, alone
+		if (k + 1 >= n)
+			glass_line_add(m, first + k, first, first, first, sprLine, colour);
+		else
+			glass_line_add(m, first + k, first + k + 1, first + (k + 2 < n ? k + 2 : 0), first + k + 1, sprPolyLine,
+						   colour);
+	}
+}
+
+static void draw_glass_floor(const corridor *passage)
+{
+	const unsigned planes = FRUSTUM_SCREEN | (portal.outside ? portal.planes : 0);
+	world_point eye_floor;
+	int eye_out, near_from, near_to, tiles_from;
+
+	if (level_view.eye.z <= 0)
+		return; // under the floor (a roof in the city below it): its top can't be seen
+	eye_floor.x = (short)level_view.eye.x;
+	eye_floor.y = (short)level_view.eye.y;
+	eye_out = corridor_out(passage, eye_floor);
+	near_from = JO_MAX(eye_out - GLASS_NEAR, 0);
+	near_to = JO_MIN(eye_out + GLASS_NEAR, CORRIDOR_LENGTH);
+	level_mesh_begin(&glass_out, corridor_points, corridor_polygons, corridor_attributes, CORRIDOR_POINTS_MAX,
+					 CORRIDOR_QUADS_MAX);
+	glass_out.quad_count = 1; // slot 0: the chain's first (glass_anchor)
+	// The far glass either side: each a quad across the corridor, the corners fogged (Gouraud)
+	for (int part = 0; part < 2; ++part)
+	{
+		const int from = part == 0 ? 0 : near_to;
+		const int to = part == 0 ? near_from : CORRIDOR_LENGTH;
+		const world_point a = corridor_point(passage, from, passage->across_min);
+		const world_point b = corridor_point(passage, to, passage->across_max);
+		const frustum_point c[4] = {{a.x, a.y, 0}, {b.x, a.y, 0}, {b.x, b.y, 0}, {a.x, b.y, 0}};
+		unsigned need;
+
+		if (from >= to)
+			continue;
+		level_cut_exact = true; // far wider than the screen: cut at its edges
+		need = level_planes_rect(&c[0], &c[2], planes);
+		level_cut_exact = false;
+		if (need != FRUSTUM_OUTSIDE)
+			level_face_add(&glass_out, c, 4, need, glass_shades[1], LEVEL_FOG_CORNERS, SORT_BFR, false);
+	}
+	tiles_from = glass_out.point_count;
+	// The tiles near you, each with its outline
+	for (int t = 0; t < passage->tile_count; ++t)
+	{
+		const corridor_tile *tile = &passage->tiles[t];
+		const int out = corridor_out(passage, tile->centre);
+		frustum_point corners[CORRIDOR_TILE_CORNERS];
+		// Every corner's within CORRIDOR_HEX_R of its centre: the square round that holds it
+		const frustum_point centre = {tile->centre.x, tile->centre.y, 0};
+		const frustum_point half = {CORRIDOR_HEX_R, CORRIDOR_HEX_R, 0};
+		const int first_point = glass_out.point_count;
+		unsigned need;
+		int level;
+
+		if (out < near_from - CORRIDOR_HEX_R || out > near_to + CORRIDOR_HEX_R)
+			continue; // over the far glass: no tiles out there
+		need = level_planes_box(centre, half, planes);
+		if (need == FRUSTUM_OUTSIDE)
+			continue;
+		if (glass_out.quad_count + 8 > glass_out.quads_max)
+			break; // no room: the rest are left out this frame
+		for (int k = 0; k < tile->count; ++k)
+		{
+			corners[k].x = tile->corners[k].x;
+			corners[k].y = tile->corners[k].y;
+			corners[k].z = 0;
+		}
+		level = object_fog_enabled ? object_fog_level(tile->centre.x, tile->centre.y) : 0;
+		if (!level_face_add(&glass_out, corners, tile->count, need, object_fog_flat_colour(glass_shades[tile->shade], level),
+							LEVEL_FOG_NONE, SORT_BFR, false))
+			continue;
+		if (out > eye_out - GLASS_OUTLINED && out < eye_out + GLASS_OUTLINED)
+			glass_outline_add(&glass_out, first_point, glass_out.point_count - first_point,
+							  need != 0 || tile->count != 6 || out < CORRIDOR_TAIL_COLUMNS * CORRIDOR_HEX_STEP + CORRIDOR_HEX_R,
+							  glass_seam_colour(level));
+	}
+	if (glass_out.point_count == 0)
+		return; // none of the floor's on the screen
+	// The deepest point of the far glass, or with none on the screen (near the corridor's end,
+	// looking at it), of the tiles: the chain's first
+	glass_anchor(&glass_out, tiles_from > 0 ? level_deepest(&glass_out, 0, tiles_from)
+											: level_deepest(&glass_out, 0, glass_out.point_count));
+	corridor_mesh.data.nbPoint = (Uint16)glass_out.point_count;
+	corridor_mesh.data.nbPolygon = (Uint16)glass_out.quad_count;
+	jo_3d_mesh_draw(&corridor_mesh);
 }
 
 void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera)
@@ -1918,7 +2209,11 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 
 	if (passage == JO_NULL || !passage->open || corridor_meshes == JO_NULL)
 		return;
-	grey_portal_set(passage, camera);
+	if (level_view_on && view_is_on_foot())
+	{
+		draw_glass_floor(passage); // cut to the view in 3D, and seen through the doorway from the city
+		return;
+	}
 	if (portal.outside)
 		return; // out in the city: the corridor's floor is behind its walls (grey_portal)
 	// Past the detail, the rest of the corridor as one quad of glass, cut to the screen: from a

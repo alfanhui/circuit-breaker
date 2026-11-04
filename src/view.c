@@ -412,6 +412,52 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 	return true;
 }
 
+// How near in front of the eye anything's drawn on foot: the near plane. Nearer, a wall you walk
+// right up to is cut open (you'd be inside it: the walker keeps WALKER_RADIUS off every wall)
+#define VIEW_NEAR 8
+
+bool view_frustum(bool free_camera, frustum *out)
+{
+	frustum_point eye;
+	int forward[3], right[3], up[3];
+	int tan_side, tan_up;
+
+	if (free_camera || spectating || !first_person || arrival_frame >= 0)
+		return false;
+	{
+		// The camera's three directions, x1024 (as view_push_world_matrix turns the world: the
+		// heading view_rz, then the pitch: view_rx under FIRST_PERSON_RX looks down by the
+		// difference). Heading 0 faces north (-y); right is east (-x)
+		const int below = FIRST_PERSON_RX - view_rx; // + looking down
+		const int sin_b = slSin((ANGLE)below) >> 6, cos_b = slCos((ANGLE)below) >> 6;
+		const int ahead_x = -(slSin(view_rz) >> 6), ahead_y = -(slCos(view_rz) >> 6);
+
+		// Forward: ahead on the floor, tipped down by the pitch; up: tipped forward by it
+		forward[0] = (ahead_x * cos_b) >> 10;
+		forward[1] = (ahead_y * cos_b) >> 10;
+		forward[2] = -sin_b;
+		up[0] = (ahead_x * sin_b) >> 10;
+		up[1] = (ahead_y * sin_b) >> 10;
+		up[2] = cos_b;
+		right[0] = -(slCos(view_rz) >> 6);
+		right[1] = slSin(view_rz) >> 6;
+		right[2] = 0;
+	}
+	// The screen's edges, a sixteenth wider: tan(half the FOV), and 240 / 320 of it up and down
+	// (jo_3d_window: the projection's 320 x 240, its middle at 160, 120)
+	tan_side = ((slTan((ANGLE)(fov_now >> 1)) >> 6) * 17) >> 4;
+	tan_up = (tan_side * 3) >> 2;
+	// Leant (the designed crash rolls the camera up to 11 degrees), the screen's corners turn out
+	// past the level edges: both reach as far as a corner does (its diagonal: 1.25 x the side's)
+	if (view_roll != 0)
+		tan_side = tan_up = (tan_side * 5) >> 2;
+	eye.x = view_x;
+	eye.y = view_y;
+	eye.z = -view_z; // view_z moves the world: the eye's height is -view_z
+	frustum_set_camera(out, eye, forward, right, up, tan_side, tan_up, VIEW_NEAR);
+	return true;
+}
+
 bool view_fog_camera(bool free_camera, world_point *eye, int *forward_x, int *forward_y)
 {
 	// The point on the floor under the camera, and the way it faces: the floor fog measures its
@@ -452,6 +498,11 @@ void view_on_foot(int yaw, int look_x, int look_y, int bob)
 	look_target = look_x * LOOK_ANGLE;
 	look_pitch_target = look_y > 0 ? -LOOK_UP_ANGLE : look_y < 0 ? LOOK_DOWN_ANGLE : 0;
 	foot_bob = bob;
+}
+
+bool view_is_on_foot(void)
+{
+	return on_foot;
 }
 
 int view_look_pitch(void)

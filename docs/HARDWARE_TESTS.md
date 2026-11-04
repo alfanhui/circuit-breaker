@@ -196,6 +196,20 @@ the Saturn. The emulator figures below are the ones to compare against.
 - [ ] **Down the corridor, from where you stand up**: `cpu` read 78-81% in Mednafen. Laying far,
       small fronts flat made it slower there (60 to 54 fps) for no reason worked out: if the
       Saturn's quicker with them flat, `LAY_FLAT_LINES` (level.c) can come down.
+- [ ] **On foot, everything's cut to the view in 3D** (`game/frustum.h`, 2026-11-03): turn slowly
+      on the spot at the start, by the tower, and out on the city's entry roof, looking up and
+      down too. Look for a crack or a one-pixel gap along the screen's edges (a cut there is a
+      sixteenth past the edge), a box side or tile popping in or out at the edge, and spikes (a
+      corner VDP1 wrapped). The cut leaves things up to twice the screen's width uncut: if the
+      Saturn's slower than Mednafen at the stairs' foot or facing the tower, that guard band
+      (`FRUSTUM_GUARD_X16`) is the first thing to narrow.
+- [ ] **The seams are VDP1 lines** (`glass_outline_add`): a thin white line round each tile, near
+      you, fading out with the fog. Look for lines that flicker, break up, or show through things
+      standing on the floor (they're chained right after their tile). Mednafen: 60 fps at the
+      start and the stairs' foot.
+- [ ] **The ground under the city is black** on foot (the VDP2 floor's palette): no shimmer of
+      navy and white while turning out on the roofs. Looking back from the city through the
+      doorway you see the corridor's floor and stairs; Mednafen shows 38-44 fps there.
 
 Result: ________
 
