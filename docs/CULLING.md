@@ -205,3 +205,30 @@ arena's walls behind it are still drawn by the old path, unseen behind the corri
 Still to do from here: the tiles' seams as textures on the tiles (as the other game's floors
 are), the arena's walls culled from the city, and cells with lists worked out ahead (step 2),
 which the doorway's planes are the first piece of.
+
+## Occlusion: what a wall hides (2026-11-04, uncommitted)
+
+VDP1 has no depth buffer, so a face hidden behind a nearer one is still sent and filled. Looking
+down the corridor from the city, all the arena's walls were drawn behind the corridor's: 65
+polygons, ~22% of the CPU, for nothing. `game/occluder.h` (unit-tested) is one shape for two jobs:
+an upright rectangle and the eye make a pyramid (4 planes, `frustum_add_edge`) plus the
+rectangle's own plane.
+
+- **A wall** hides a box wholly inside all five (`occluder_hides`): the corridor's three walls.
+- **A hole** shows only what's not wholly outside the four sides (`occluder_shows`): from outside
+  the arena, below its walls' tops, its inside is seen only through the hole you broke, above
+  the breach glass. This is the doorway portal's trick, used the other way round.
+
+What made it pay (it first cost more CPU than it saved):
+
+- Test the biggest thing first: a whole side's span, a whole block, a whole run. One test hides
+  them all, before their pieces are worked out.
+- A hidden end of a run is found by **halving**: if the first m pieces are hidden as one box, so
+  are fewer. About 5 tests, not 30. A piece at a time was ~400 tests a frame.
+- A wall's own plane is tested first, and each test stops at the first plane that fails: most
+  boxes are on the near side of most walls.
+- Check the result against a build with the thing switched off: the "identical without the
+  arena" judgement was wrong at first (its top rises above the corridor's walls and is seen).
+
+Next: the corridor's boxes as occluders (the tower and the stairs hide the far end), and the
+city's towers once there are many (they'd fit cells and portals, step 2, better).

@@ -3,6 +3,7 @@
 #include "game/arena.h"
 #include "game/surround.h"
 #include "game/city.h"
+#include "game/occluder.h"
 #include "object_fog_vdp1.h"
 #include "view.h"
 #include "utils/perf.h"
@@ -196,6 +197,41 @@ void init_arena_walls(void)
 static bool corridor_cone = false;
 #define CORRIDOR_CONE_REACH16 24
 
+// Set while the arena's walls are added on foot (draw_arena_walls): fill_strip leaves out the
+// pieces at a run's ends that can't be seen (arena_piece_hidden, below). STRIP_SEEN_ALL: nothing
+// left out; STRIP_OUTSIDE: an outer side's face, seen from outside; STRIP_INSIDE: the square's inside
+// (a far side's inner face, a block), seen from outside only through the hole
+#define STRIP_SEEN_ALL 0
+#define STRIP_OUTSIDE 1
+#define STRIP_INSIDE 2
+static int strip_seen = STRIP_SEEN_ALL;
+static bool arena_piece_hidden(world_point a, world_point b, int z_bottom, int z_top, bool inside);
+
+/*
+ * How many of a run's pieces at one end can't be seen, as one box: end is that end's column, and the
+ * run's `count` pieces go on from it the way `step` says (+1: columns[1], [2] ...; -1: back). The
+ * whole run isn't hidden (fill_strip tests it first). Hidden-ness only falls as the box grows (a
+ * part of a hidden box is hidden), so it's found by halving: hidden lo pieces, not hidden hi, and
+ * the gap halved each test, ~5 tests for a 30 piece side, not 30. A shift, no division. The ends
+ * need one reason each (one wall's shadow, or out of the hole's sight): an end hidden by two walls
+ * in turn is drawn, never one seen left out
+ */
+static int strip_hidden_end(const world_point *end, int count, int step, int z_bottom, int z_top, bool inside)
+{
+	int lo = 0, hi = count;
+
+	while (hi - lo > 1)
+	{
+		const int mid = (lo + hi) >> 1;
+
+		if (arena_piece_hidden(end[0], end[step * mid], z_bottom, z_top, inside))
+			lo = mid;
+		else
+			hi = mid;
+	}
+	return lo;
+}
+
 static int fill_strip(POINT *points, unsigned char *fog_levels, const world_point *columns, int pieces, int z_bottom,
 					  int z_top, const wall_clip_camera *camera, int min_forward)
 {
@@ -210,6 +246,37 @@ static int fill_strip(POINT *points, unsigned char *fog_levels, const world_poin
 							: wall_clip_strip(columns, pieces, camera, min_forward);
 		first = run.first;
 		count = run.count;
+		/*
+		 * On foot, the pieces at each end of the run that can't be seen are left off it (a piece
+		 * in the middle stays: the strip is one mesh, its pieces sharing columns). Behind the
+		 * corridor seen from the city, that's all of them. A piece dropped from an end takes its
+		 * slid end with it: the next piece's starts at its own column. Each test is the whole
+		 * piece, slid or not: a little more than's drawn, so it's never wrongly left out.
+		 * The whole run's tested first, as one box: hidden, that's one test. Then each end's hidden
+		 * pieces are found by halving (strip_hidden_end): a piece at a time, 3 walls' 5 planes each,
+		 * was ~400 tests a frame and cost more than drawing them (30 fps still)
+		 */
+		if (strip_seen != STRIP_SEEN_ALL && count > 0)
+		{
+			const bool inside = strip_seen == STRIP_INSIDE;
+			int drop;
+
+			if (arena_piece_hidden(columns[first], columns[first + count], z_bottom, z_top, inside))
+				return 0;
+			drop = strip_hidden_end(&columns[first], count, 1, z_bottom, z_top, inside);
+			if (drop > 0)
+			{
+				first += drop;
+				count -= drop;
+				run.start = columns[first];
+			}
+			drop = strip_hidden_end(&columns[first + count], count, -1, z_bottom, z_top, inside);
+			if (drop > 0)
+			{
+				count -= drop;
+				run.end = columns[first + count];
+			}
+		}
 	}
 	if (count == 0)
 		return 0;
@@ -608,6 +675,25 @@ static void draw_side(wall_side *side, int s, const world_rect *view, const worl
 	int along_min, along_max;
 	int section_min, section_max;
 
+	// On foot, the whole of the side that's in view tested at once (arena_piece_hidden): all
+	// hidden, none of its pieces is worked out at all
+	if (strip_seen != STRIP_SEEN_ALL)
+	{
+		const int half = arena_half();
+		const int wall = side->fixed * half;
+		world_point a, b;
+
+		view_along(side, view, &along_min, &along_max);
+		along_min = along_min < -half ? -half : along_min;
+		along_max = along_max > half ? half : along_max;
+		a.x = (short)(side->along_x ? along_min : wall);
+		a.y = (short)(side->along_x ? wall : along_min);
+		b.x = (short)(side->along_x ? along_max : wall);
+		b.y = (short)(side->along_x ? wall : along_max);
+		if (along_min <= along_max &&
+			arena_piece_hidden(a, b, WALL_BOTTOM_Z, (WALL_TOP_Z * rise) >> 8, strip_seen == STRIP_INSIDE))
+			return;
+	}
 	if (flicker == JO_NULL || flicker->count == 0 || flicker->side != s)
 	{
 		draw_side_run(side, &side->low, &side->high, view, eye, camera, cutaway, rise);
@@ -681,6 +767,16 @@ static void draw_blocks(const world_rect *view, const world_point *eye, const wa
 		const int width = b->x_max - b->x_min;
 		const int depth = b->y_max - b->y_min;
 
+		// On foot, the block as a whole first: from outside the square it's the inside, and it's
+		// tested as a box from corner to corner (arena_piece_hidden takes any two)
+		if (strip_seen != STRIP_SEEN_ALL)
+		{
+			const world_point lo = {b->x_min, b->y_min}, hi = {b->x_max, b->y_max};
+
+			if (arena_piece_hidden(lo, hi, WALL_BOTTOM_Z, (WALL_TOP_Z * rise) >> 8, true))
+				continue;
+		}
+
 		// North face (y_min), seen from the north: east (-x) on the left, as the south side's
 		if (!cull || eye->y < b->y_min)
 			add_block_face(true, b->y_min, b->x_min, 1, width, view, eye, camera, cutaway, rise);
@@ -708,6 +804,8 @@ static void draw_blocks(const world_rect *view, const world_point *eye, const wa
  * 60, and it reads as outside the arena
  */
 #define CORRIDOR_WALL_RISE 85
+// On foot, risen full: a third of the arena's (corridor_walls_add)
+#define CORRIDOR_TOP_ON_FOOT ((WALL_TOP_Z * CORRIDOR_WALL_RISE) >> 8)
 /*
  * On foot (game/walker.h) you can walk right up to these walls: 40 from them. The arena's strips
  * start well in front of the camera (HIGH_MIN_FORWARD, 240) instead, as a tall piece nearer than
@@ -1405,6 +1503,93 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 	perf_part_add(PERF_CORRIDOR, corridor_frc);
 }
 
+/*
+ * On foot, the arena's walls that can't be seen aren't drawn (game/occluder.h). Looking down the
+ * corridor from the city, all of them were drawn behind the corridor's, unseen: 65 polygons, ~22% of
+ * the frame, and 30 fps. Two reasons a piece can't be seen, both worked out once a frame:
+ *   - it's wholly behind one of the corridor's walls (its two sides, the far end's left half: as
+ *     drawn on foot, both faces, WALL_BOTTOM_Z to CORRIDOR_TOP_ON_FOOT): arena_hiders
+ *   - it's the square's inside, the eye's outside it, and lower than the walls' tops: every ray
+ *     from the eye to it crosses a wall at a height under the tops, so a wall's in the way. All
+ *     but where the wall's open: the hole you broke through (the flicker's section, all its pieces
+ *     gone), above the glass over its bottom. So the inside is drawn only where it's seen through
+ *     that, the doorway's trick again: arena_hole
+ * An outer side's face seen from outside isn't the inside: it's only hidden behind the corridor.
+ * Not in the iso view, the debug camera or riding (level_view off, or the eye inside the square)
+ */
+static occluder arena_hiders[CORRIDOR_FACES];
+static occluder arena_hole;
+static bool arena_culling = false;		 // on foot this frame: the rest is set
+static bool arena_inside_hidden = false; // the eye's outside the square and under the walls' tops
+static bool arena_hole_open = false;	 // and the hole's open: the inside's seen through arena_hole
+
+static void arena_culling_begin(const corridor *passage, const wall_flicker *flicker, int rise)
+{
+	const frustum_point e = level_view.eye;
+	const int half = arena_half();
+	const int top = (WALL_TOP_Z * rise) >> 8;
+
+	arena_culling = false;
+	if (!level_view_on || !view_is_on_foot())
+		return;
+	arena_culling = true;
+	arena_inside_hidden = (e.x > half || e.x < -half || e.y > half || e.y < -half) && e.z < top;
+	arena_hole_open = false;
+	if (arena_inside_hidden && flicker != JO_NULL && flicker->count > 0 && flicker->hidden != 0)
+	{
+		const wall_side *side = &sides[flicker->side];
+
+		// The glass over the hole (add_corridor_glass) is as wide as it (the corridor is the hole's
+		// width, whole pieces) and as tall as the corridor's walls: the inside's seen only above it.
+		// From the city, the far side's top is below the glass's (it's 16000 further): hidden
+		const int glass_top = (WALL_TOP_Z * ((rise * CORRIDOR_WALL_RISE) >> 8)) >> 8;
+
+		// The whole section, even if only some of its pieces are out: a little more than the hole
+		occluder_set(&arena_hole, e, side->along_x, side->fixed * half, flicker->along_min,
+					 wall_flicker_along_max(flicker), glass_loaded ? glass_top : WALL_BOTTOM_Z, top);
+		arena_hole_open = true;
+	}
+	if (passage != JO_NULL && passage->open)
+	{
+		world_point from[CORRIDOR_FACES], to[CORRIDOR_FACES];
+
+		corridor_faces(passage, from, to);
+		for (int i = 0; i < CORRIDOR_FACES; ++i)
+		{
+			const bool along_x = from[i].y == to[i].y;
+
+			occluder_set(&arena_hiders[i], e, along_x, along_x ? from[i].y : from[i].x, along_x ? from[i].x : from[i].y,
+						 along_x ? to[i].x : to[i].y, WALL_BOTTOM_Z, CORRIDOR_TOP_ON_FOOT);
+		}
+	}
+	else
+		for (int i = 0; i < CORRIDOR_FACES; ++i)
+			arena_hiders[i].on = false;
+}
+
+// Whether the piece of wall from column a to b, z_bottom to z_top, can't be seen (above). inside:
+// it's the square's inside
+static bool arena_piece_hidden(world_point a, world_point b, int z_bottom, int z_top, bool inside)
+{
+	frustum_point centre, half;
+
+	if (!arena_culling)
+		return false;
+	centre.x = (a.x + b.x) >> 1;
+	centre.y = (a.y + b.y) >> 1;
+	centre.z = (z_bottom + z_top) >> 1;
+	// Rounded down, a half could be a unit short: one more keeps it the whole piece or more
+	half.x = ((a.x > b.x ? a.x - b.x : b.x - a.x) >> 1) + 1;
+	half.y = ((a.y > b.y ? a.y - b.y : b.y - a.y) >> 1) + 1;
+	half.z = ((z_top - z_bottom) >> 1) + 1;
+	if (inside && arena_inside_hidden && (!arena_hole_open || !occluder_shows(&arena_hole, centre, half)))
+		return true;
+	for (int i = 0; i < CORRIDOR_FACES; ++i)
+		if (occluder_hides(&arena_hiders[i], centre, half))
+			return true;
+	return false;
+}
+
 void draw_arena_walls(const world_rect *view, const world_point *eye, const wall_clip_camera *camera, bool cutaway,
 					  int rise, const wall_flicker *flicker, const corridor *passage)
 {
@@ -1416,12 +1601,24 @@ void draw_arena_walls(const world_rect *view, const world_point *eye, const wall
 
 	block_band_begin(&block_low);
 	block_band_begin(&block_high);
+	arena_culling_begin(passage, flicker, rise);
 	for (int s = 0; s < 4; ++s)
+	{
+		// From outside, a side's outer face is seen if the eye's beyond its line; else it's its
+		// inner face, the square's inside
+		const int eye_across = sides[s].along_x ? level_view.eye.y : level_view.eye.x;
+
+		if (arena_culling && camera != JO_NULL && !cutaway)
+			strip_seen = eye_across * sides[s].fixed > arena_half() ? STRIP_OUTSIDE : STRIP_INSIDE;
 		// Cutaway: the south and west walls stand between the iso camera (which sits on the +x, +y
 		// side of the cycle) and the cycle. Full height they'd hide it, and their tops would rise
 		// behind the camera. Just the glowing base, lower than the cycle, still marks the edge
 		draw_side(&sides[s], s, view, eye, camera, cutaway && sides[s].fixed > 0, rise, flicker);
+	}
+	if (arena_culling && camera != JO_NULL && !cutaway)
+		strip_seen = STRIP_INSIDE; // the blocks stand inside the square
 	draw_blocks(view, eye, camera, cutaway, rise);
+	strip_seen = STRIP_SEEN_ALL; // the corridor's walls and glass, below, are all drawn
 	perf_part_add(PERF_ARENA, frc);
 	if (passage != JO_NULL && passage->open)
 		draw_corridor_walls(passage, view, eye, camera, cutaway, rise);
@@ -1905,7 +2102,6 @@ static void grey_boxes_add(void)
  * was drawn over their ends). Out in the city they're its outside, seen from behind (both faces are
  * drawn). Fogged a level at each corner: a 250 piece runs a long way into the fog
  */
-#define CORRIDOR_TOP_ON_FOOT ((WALL_TOP_Z * CORRIDOR_WALL_RISE) >> 8) // risen full: a third of the arena's
 static unsigned int corridor_frame = 0; // the frames the corridor's walls are drawn: the base's pulse
 
 static void corridor_walls_add(const corridor *passage)

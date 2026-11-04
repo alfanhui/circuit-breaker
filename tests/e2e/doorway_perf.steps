@@ -1,0 +1,61 @@
+# Looking back from the city through the doorway, then turning left until you face straight down
+# the corridor: a second's debug reading at each step. dwp_l3 .. l5 are the slow view (Mednafen,
+# 2026-11-04: 30 fps, poly ~285, cpu 95%, VDP1 busy 90; the backlog's "Looking back down the
+# corridor from the city"). Film it: tests\e2e\run_e2e.ps1 -Steps doorway_perf.steps
+wait_up
+hold up 13
+hold l 3
+keydown up
+wait 1.8
+keyup up
+wait 0.5
+# city_turn.steps' turn, its shots included: a turn eases on between presses, so the pauses count
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+shot dwp_turn
+hold right 0.2
+# The turn doesn't land the same each run: back left a little, to face the doorway
+hold left 0.3
+wait 2.5
+shot dwp_00
+wait 2
+shot dwp_01
+wait 2
+shot dwp_02
+# Then left in small steps, a second's reading at each
+hold left 0.1
+wait 2.2
+shot dwp_l1
+hold left 0.1
+wait 2.2
+shot dwp_l2
+hold left 0.1
+wait 2.2
+shot dwp_l3
+hold left 0.1
+wait 2.2
+shot dwp_l4
+hold left 0.1
+wait 2.2
+shot dwp_l5
+hold left 0.1
+wait 2.2
+shot dwp_l6
