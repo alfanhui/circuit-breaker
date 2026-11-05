@@ -10,8 +10,9 @@
  * Gouraud shading gives each corner of a quad a colour, and VDP1 blends between them across
  * the quad, adding the result to the quad's own colour or texture. The four colours sit in a
  * small table in VDP1's RAM (8 bytes), and each quad's attribute (ATTR.gstb) says which table.
- * Corners are fogged by distance (game/depth_fog.h), so every visible quad needs its own table,
- * rewritten every frame. Quads with no fog at any corner share one table that changes nothing.
+ * Corners are fogged by distance (game/depth_fog.h). A wall or trail piece's corners are two
+ * levels in one of two orders: those share 512 tables written once at start-up. Any other quad
+ * gets its own, rewritten every frame. Quads with no fog at any corner share one that changes nothing.
  *
  * Usage, when object_fog_enabled:
  *   - every frame, before drawing: object_fog_begin_frame

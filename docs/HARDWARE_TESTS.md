@@ -115,7 +115,10 @@ Result: 1st ____ % · iso ____ %
 ## 1e. Wall and trail fog (Gouraud)
 
 **What it is.** Walls and trails dim with distance, matching the floor: VDP1 Gouraud shading,
-a small colour table per quad written into VDP1's RAM every frame (`src/object_fog_vdp1.c`).
+a small colour table per quad in VDP1's RAM (`src/object_fog_vdp1.c`). Since 2026-11-04 a wall or
+trail piece uses one of 512 tables written once at start-up (its corners are two levels: `game/
+depth_fog.h`); only faces cut by the view on foot get one written per frame (0-1 a frame in
+Mednafen, was one per fogged quad). Each write stops VDP1 drawing (SEGA's VDP1 manual).
 Switch: `WALL_TRAIL_FOG` in `main.c`. Emulator check only so far.
 
 - [ ] Look back along a long trail (lay one, then U-turn): it fades from bright cyan to dim teal.
@@ -130,6 +133,10 @@ Switch: `WALL_TRAIL_FOG` in `main.c`. Emulator check only so far.
       The game checks at start-up; it would show an error instead.
 - [ ] CPU with the X trail, fog on vs off (`object_fog_perf.steps` in Mednafen: 1st person
       36% off, 42% on; iso 20% off, 27% on).
+- [ ] VDP1's `busy` (debug line 7) riding beside a wall and along a long trail, fog on vs off.
+      Mednafen showed no difference from the shared tables (it may not stop VDP1 for CPU
+      writes); on the Saturn the old per-quad writes would have. If fog on still costs VDP1 much
+      more than off, it's Gouraud itself (the backlog's "Gouraud fog's cost: re-check the cause").
 - [ ] Does it look good? Does dimming the far walls lose the arena's sense of size?
 
 Result: ________

@@ -6,7 +6,13 @@
  * (jo_set_gouraud_shading_colors) counts up from the first table, so these start after
  * TABLES_FOR_JO of them.
  *
- * VDP1 draws one frame while the CPU builds the next. If this frame's tables overwrote the ones
+ * Most quads use a shared table (game/depth_fog.h: a wall or trail piece's corners are two levels,
+ * in one of two orders), all 512 written once at start-up. Only a quad whose corners are neither
+ * gets a table of its own, written as it's drawn: each such write stops VDP1 drawing until it's
+ * done (the CPU always wins: SEGA's VDP1 manual), and before the shared tables every fogged
+ * quad's was written so, hundreds a frame.
+ *
+ * VDP1 draws one frame while the CPU builds the next. If this frame's own tables overwrote the ones
  * VDP1 is still drawing with, the picture on screen would get the new frame's shading: pieces
  * move between frames, so it would flicker. So there are two sets, used on alternate frames.
  */
@@ -15,9 +21,10 @@
 #define TABLE_BYTES 8									  // four 2-byte colours
 #define TABLES_FOR_JO 256								  // left for jo's sprite shading
 #define NEUTRAL_TABLE TABLES_FOR_JO						  // all four corners unchanged: shared
-#define FRAME_TABLES 1024								  // per frame: walls (~500) + trail (~200)
-#define FIRST_FRAME_TABLE (NEUTRAL_TABLE + 1)			  // set 0; set 1 follows it
-#define TABLES_END (FIRST_FRAME_TABLE + 2 * FRAME_TABLES) // 0x74808: what textures mustn't reach
+#define FIRST_SHARED_TABLE (NEUTRAL_TABLE + 1)			  // DEPTH_FOG_SHARED_TABLES of them (512)
+#define FRAME_TABLES 1024								  // per frame: the faces on foot cut to the view
+#define FIRST_FRAME_TABLE (FIRST_SHARED_TABLE + DEPTH_FOG_SHARED_TABLES) // set 0; set 1 follows it
+#define TABLES_END (FIRST_FRAME_TABLE + 2 * FRAME_TABLES) // 0x75808: below jo's area's end (0x7FEF8)
 
 // jo's textures fill VDP1 RAM upwards from 0xE1C0 (its user area: 0x71D38 bytes up to 0x7FEF8).
 // They must stop below the tables; jo reports how much of that area is used, as a percentage
@@ -58,6 +65,16 @@ void object_fog_init(void)
 		colours[level] = depth_fog_gouraud_colour(level);
 	for (int corner = 0; corner < 4; ++corner)
 		neutral[corner] = DEPTH_FOG_GOURAUD_NEUTRAL;
+	// The shared tables, once: never written again
+	for (int t = 0; t < DEPTH_FOG_SHARED_TABLES; ++t)
+	{
+		volatile unsigned short *table = table_address(FIRST_SHARED_TABLE + t);
+		int levels[4];
+
+		depth_fog_shared_levels(t, levels);
+		for (int corner = 0; corner < 4; ++corner)
+			table[corner] = colours[levels[corner]];
+	}
 	object_fog_enabled = true;
 }
 
@@ -82,11 +99,19 @@ int object_fog_level(int x, int y)
 
 unsigned short object_fog_quad(int level0, int level1, int level2, int level3)
 {
+	int shared;
 	volatile unsigned short *table;
 
-	// No fog at any corner (all near ones), or out of tables: the shared table that changes nothing.
-	// | is 0 only if every level is 0
-	if ((level0 | level1 | level2 | level3) == 0 || next_table == end_table)
+	// No fog at any corner (all near ones): the table that changes nothing. | is 0 only if every
+	// level is 0
+	if ((level0 | level1 | level2 | level3) == 0)
+		return table_gstb(NEUTRAL_TABLE);
+	// A wall or trail piece's two levels: its shared table. Nothing written, so VDP1 isn't stopped
+	shared = depth_fog_shared_table(level0, level1, level2, level3);
+	if (shared >= 0)
+		return table_gstb(FIRST_SHARED_TABLE + shared);
+	// Any other: one of its own this frame, or out of them, none (unfogged, a frame)
+	if (next_table == end_table)
 		return table_gstb(NEUTRAL_TABLE);
 	table = table_address(next_table);
 	table[0] = colours[level0];

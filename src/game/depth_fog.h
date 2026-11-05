@@ -64,4 +64,25 @@ unsigned short depth_fog_gouraud_colour(int level);
  */
 unsigned short depth_fog_darken(unsigned short colour, int steps);
 
+/*
+ * Gouraud tables shared by every quad that needs the same one, written once at start-up instead
+ * of one per quad every frame. A wall or trail piece runs between two columns, and a column's top
+ * and bottom are the same distance along the floor, so the same level: its four corners are only
+ * ever two levels, a and b, in one of two orders round it:
+ *   - a a b b: listed from column one's bottom, up, across, down (the trails, upright walls)
+ *   - a b b a: listed from column one's top, across, down, back (the arena's strips, lying walls)
+ * With 16 levels that's 256 tables each, 512 in all (4 KB of VDP1 RAM). Writing a table into VDP1
+ * RAM stops VDP1 drawing while the CPU does it (SEGA's VDP1 manual: the CPU always wins), and
+ * hundreds were written every frame while it drew. Now only a quad whose corners are neither
+ * (a face cut by the view, on foot) gets one of its own.
+ * Table t: a a b b is t = a x 16 + b; a b b a is 256 + a x 16 + b
+ */
+#define DEPTH_FOG_SHARED_TABLES (2 * DEPTH_FOG_LEVELS * DEPTH_FOG_LEVELS)
+
+// The shared table with these corners' levels (in the quad's vertex order), or -1 if none has them
+int depth_fog_shared_table(int level0, int level1, int level2, int level3);
+
+// The levels at a shared table's four corners, to write it (at start-up)
+void depth_fog_shared_levels(int table, int levels[4]);
+
 #endif
