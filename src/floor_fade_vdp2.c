@@ -123,14 +123,48 @@ static unsigned int hblanks_before_picture(unsigned int row)
 }
 
 /*
+ * Stopping the DMA safely, before its registers are written (SEGA's SCU final precautions):
+ *   - 23: a level's mode (D0MD) and address steps (D0AD) mustn't be written while it's
+ *     transferring: the Saturn hangs. Clearing the enable stops new transfers starting, not one
+ *     already running, and that was all arm_dma did before writing them
+ *   - 13: the DMA status register that would say whether one's running was deleted
+ *   - 22: a transfer started by an HBlank must end within its line (4 bytes take far less)
+ * So: clear the enable, then wait for the row counter to move on twice. The first move may come
+ * straight after, but the second is a whole line later: nothing can still be running by then.
+ * ~1.5 lines on average (~95 us, ~0.6% of a frame), once a frame in VBlank. Bounded, in case the
+ * counter ever stands still: a line is ~1700 CPU cycles, a few dozen of these reads
+ */
+#define ROW_WAIT_READS 2000
+
+static void stop_dma(void)
+{
+	unsigned int row;
+	int moves = 0;
+
+	*SCU_D0EN = 0;
+	row = current_row();
+	for (int reads = 0; moves < 2 && reads < ROW_WAIT_READS; ++reads)
+	{
+		const unsigned int now = current_row();
+
+		if (now != row)
+		{
+			row = now;
+			++moves;
+		}
+	}
+}
+
+/*
  * The DMA: one 4-byte entry per HBlank, from the table (the read address moves on, ready for
  * the next row) to CCRR and CCRLB, 2 bytes apart (CCRLB holds the line colour and back
  * screen ratios, which this blend doesn't use). The write address goes back each time.
- * from: the entry the next HBlank copies. Six register writes
+ * from: the entry the next HBlank copies. Six register writes. Only after stop_dma: never while
+ * it might be transferring. The table's in Work RAM-H (the game's static data), which the SCU's
+ * DMA can read; it can't read Work RAM-L (precaution 4)
  */
 static void arm_dma(const unsigned int *from)
 {
-	*SCU_D0EN = 0;
 	*SCU_D0R = PHYSICAL(from);
 	*SCU_D0W = VDP2_CCRR_PHYSICAL;
 	*SCU_D0C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
@@ -167,23 +201,33 @@ void floor_fade_init(void)
 	slLineColDisp(RBG0ON);					// insert the line colour under the floor...
 	slColorCalc(CC_RATE | CC_TOP | RBG0ON); // ...and blend by RBG0's ratio (CCRR), set per row below
 
+	stop_dma(); // not running yet, but a CD read (GFS) may have left this level going
 	arm_dma(dma_table);
 }
 
 void floor_fade_vblank(void)
 {
-	unsigned int left;
+	unsigned int left, row;
 
 	if (line_table == JO_NULL)
 		return;
-	// The HBlanks still to come before row 0 (at the end of this row and every one after it)
-	// use the last that many padding entries
-	left = hblanks_before_picture(current_row());
-	if (left > MAX_BLANK_ROWS)
-		return; // still in the picture (shouldn't happen in a VBlank callback): leave it running
 	// The whole channel, not just its read address: a CD read (GFS) sets up this same level for
-	// itself and leaves it that way. Six register writes a frame, so nothing can stop the fog for good
-	arm_dma(&dma_table[MAX_BLANK_ROWS - left]);
+	// itself and leaves it that way. Six register writes a frame, so nothing can stop the fog for
+	// good. Stopped first, safely (stop_dma), which takes a line or two: the row's read after it.
+	// It returns just after the row counter moves on, so the row read here is a fresh one: an
+	// HBlank between reading it and arming the DMA (the fog a row out for that frame) is less
+	// likely than before, not ruled out (where in a line the counter moves isn't known here)
+	stop_dma();
+	row = current_row();
+	left = hblanks_before_picture(row);
+	if (left <= MAX_BLANK_ROWS)
+		// The HBlanks still to come before row 0 (at the end of this row and every one after it)
+		// use the last that many padding entries
+		arm_dma(&dma_table[MAX_BLANK_ROWS - left]);
+	else
+		// Still in the picture (shouldn't happen in a VBlank callback): row r's HBlank sets up
+		// row r + 1, from entry MAX_BLANK_ROWS + r. Stopped, it has to be started again here
+		arm_dma(&dma_table[MAX_BLANK_ROWS + (row < JO_TV_HEIGHT ? row : 0)]);
 }
 
 void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
