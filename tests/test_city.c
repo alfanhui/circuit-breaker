@@ -19,7 +19,7 @@ static void run(walker *w, walker_controls c, const walker_area *area, int frame
 		walker_update(w, c, area);
 }
 
-// The plan's shape: 500 towers, touching in blocks of two, a street of 100 after every second one;
+// The plan's shape: 500 towers, touching in blocks of two, a street (200) after every second one;
 // the entry right at the corridor's far end, filling its right half, level with its floor
 static void the_towers_are_on_the_plans_grid(void)
 {
@@ -36,8 +36,8 @@ static void the_towers_are_on_the_plans_grid(void)
 	CHECK_EQ(0, entry->height);
 	// Columns 0 and 1 touch; a street before column 2. Rows 5 and 6: a street
 	CHECK_EQ(city_towers[6].out_max, city_towers[7].out_min);
-	CHECK_EQ(100, city_towers[8].out_min - city_towers[7].out_max);
-	CHECK_EQ(100, city_towers[9].across_min - city_towers[6].across_max);
+	CHECK_EQ(CITY_STREET, city_towers[8].out_min - city_towers[7].out_max);
+	CHECK_EQ(CITY_STREET, city_towers[9].across_min - city_towers[6].across_max);
 	CHECK_EQ(city_towers[9].across_max, city_towers[12].across_min); // rows 6 and 7 touch
 }
 
@@ -81,8 +81,7 @@ static void out_of_the_corridor_onto_the_entry(void)
 }
 
 // A run across the entry's roof jumps the street at its south side (across +: +y, a half turn)
-// onto the next block's tower, 60 down: clean. From 60 across: the sealed roof on the entry's
-// north side is 60 up, a wall, and you're kept 40 off it
+// onto the next block's tower, 60 down: clean. From 60 across: clear of the entry's north edge
 static void a_run_jumps_the_first_street(void)
 {
 	corridor c;
@@ -93,7 +92,7 @@ static void a_run_jumps_the_first_street(void)
 
 	open_round_five(&c);
 	corridor_walker_area(&c, &area);
-	walker_init(&w, corridor_point(&c, CORRIDOR_LENGTH + 250, 60), 0x8000); // clear of the sealed roof beside
+	walker_init(&w, corridor_point(&c, CORRIDOR_LENGTH + 250, 60), 0x8000);
 	for (frames = 0; frames < 400 && !w.falling; ++frames)
 		walker_update(&w, ahead, &area);
 	CHECK(w.falling);
@@ -103,7 +102,26 @@ static void a_run_jumps_the_first_street(void)
 	CHECK(!w.falling);
 	CHECK_EQ(-60, walker_height(&w));
 	CHECK_EQ(0, w.stagger);
-	CHECK(walker_position(&w).y >= 600); // across the street
+	CHECK(walker_position(&w).y >= 500 + CITY_STREET); // across the street
+}
+
+// Dropped off the entry onto the tower beside it (50 down), you can run back and climb up onto
+// the entry again: facing back towards the corridor (east, -x here: a quarter turn)
+static void a_drop_off_the_entry_climbs_back(void)
+{
+	corridor c;
+	walker_area area;
+	walker w;
+	const walker_controls ahead = {0, 1, 0, 0, 0};
+	int frames;
+
+	open_round_five(&c);
+	corridor_walker_area(&c, &area);
+	walker_init_at(&w, corridor_point(&c, CORRIDOR_LENGTH + CITY_TOWER_SIZE + 450, 250), -50, 0x4000);
+	for (frames = 0; frames < 400 && walker_height(&w) == -50; ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK_EQ(0, walker_height(&w)); // up on the entry
+	CHECK(corridor_out(&c, walker_position(&w)) <= CORRIDOR_LENGTH + CITY_TOWER_SIZE);
 }
 
 // Walking (not running) to the street's edge, you stop at its lip, and pushing on never takes you
@@ -131,4 +149,5 @@ void run_city_tests(void)
 	RUN(out_of_the_corridor_onto_the_entry);
 	RUN(a_run_jumps_the_first_street);
 	RUN(a_street_never_lets_you_fall);
+	RUN(a_drop_off_the_entry_climbs_back);
 }

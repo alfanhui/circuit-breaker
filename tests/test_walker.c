@@ -550,7 +550,7 @@ static void a_full_run_jumps_a_lip(void)
 	CHECK_EQ(WALKER_RUN_SPEED, w.forward);
 	CHECK(walker_position(&w).x >= 0 && walker_position(&w).x <= 6); // from the lip, not before it
 	highest = run_at_the_lip(&w, &area, 100);
-	CHECK(highest >= 300 + 15); // the hop: 18 up
+	CHECK(highest >= 300 + 40); // the hop: 45 up
 	CHECK(!w.falling);
 	CHECK_EQ(220, walker_height(&w));
 	CHECK_EQ(0, w.stagger);
@@ -578,8 +578,9 @@ static void a_full_run_stops_at_a_long_drop(void)
 	CHECK(w.forward <= WALKER_FORWARD_SPEED + WALKER_RUN_SPEED_UP);
 }
 
-// Two roofs at the same height with a gap between, nothing below: a run jumps a gap of 120 (2.8
-// m), not one of 250. The one too far holds you at the lip, however long you push
+// Two roofs at the same height with a gap between, nothing below: a run jumps a gap of 200 (4.6
+// m: the city's streets), not one of 300. The one too far holds you at the lip, however long you
+// push
 static void a_full_run_jumps_a_gap_in_reach(void)
 {
 	walker w;
@@ -588,16 +589,16 @@ static void a_full_run_jumps_a_gap_in_reach(void)
 
 	walker_area_clear(&area);
 	walker_area_add_roof(&area, 0, -1000, 2000, 1000, 300);
-	walker_area_add_roof(&area, -1000, -1000, -120, 1000, 300);
+	walker_area_add_roof(&area, -1000, -1000, -200, 1000, 300);
 	walker_init_at(&w, at, 300, 0x4000);
-	run_at_the_lip(&w, &area, 400);
+	CHECK(run_at_the_lip(&w, &area, 400) >= 300 + 40); // up near your waist at the top
 	CHECK(!w.falling);
 	CHECK_EQ(300, walker_height(&w));
-	CHECK(walker_position(&w).x < -120); // over
+	CHECK(walker_position(&w).x < -200); // over
 
 	walker_area_clear(&area);
 	walker_area_add_roof(&area, 0, -1000, 2000, 1000, 300);
-	walker_area_add_roof(&area, -1000, -1000, -250, 1000, 300);
+	walker_area_add_roof(&area, -1000, -1000, -300, 1000, 300);
 	walker_init_at(&w, at, 300, 0x4000);
 	run(&w, pad(0, 1, 0), &area, 600);
 	CHECK(!w.falling);
@@ -648,16 +649,186 @@ static void a_full_run_vaults_a_low_wall(void)
 	CHECK_EQ(wall, walker_height(&w));
 	CHECK_EQ(0, walker_step_lag(&w));
 	CHECK_EQ(WALKER_RUN_SPEED, w.forward); // without breaking stride
+}
 
-	// Taller than your waist: a wall, run or not
-	walker_area_clear(&area);
-	walker_area_add_roof(&area, -1000, -1000, 2000, 1000, 0);
-	walker_area_add_roof(&area, -1000, -1000, 200, 1000, WALKER_WAIST + 1);
+// A floor, and west of x = 200 a box `height` high and `depth` deep (from 200 down to 200 - depth),
+// the floor going on beyond it. Running at it from x = 1000, facing east (-x)
+static void box_ahead(walker_area *area, int height, int depth)
+{
+	walker_area_clear(area);
+	walker_area_add_roof(area, -2000, -1000, 2000, 1000, 0);
+	walker_area_add_roof(area, 200 - depth, -1000, 200, 1000, height);
+}
+
+// A ledge above your waist, up to WALKER_CLIMB: walking, a wall; at a full run you climb up onto
+// it. Slower than a vault (the eye takes longer to follow), and it costs the run. Higher is a
+// wall, run or not
+static void a_full_run_climbs_a_ledge(void)
+{
+	walker w;
+	walker_area area;
+	world_point at = {1000, 0};
+	int frames;
+
+	box_ahead(&area, 90, 1000);
 	walker_init_at(&w, at, 0, 0x4000);
-	run(&w, pad(0, 1, 0), &area, 300);
+	// Walking up to it: stopped at its foot
+	{
+		walker walking;
+
+		walker_init_at(&walking, at, 0, 0x4000);
+		for (frames = 0; frames < 400; ++frames)
+			walker_update(&walking, pad(0, 1, 1), &area); // strafing too: never a run
+		CHECK_EQ(0, walker_height(&walking));
+		CHECK(walker_position(&walking).x >= 200);
+	}
+	// Running: up onto it
+	for (frames = 0; frames < 400 && walker_height(&w) == 0; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK_EQ(90, walker_height(&w));
+	CHECK(walker_position(&w).x <= 200); // on its top
+	CHECK_EQ(90, walker_step_lag(&w));	 // the eye's still down there
+	CHECK(w.forward <= WALKER_FORWARD_SPEED); // a climb takes your run
+	run(&w, pad(0, 0, 0), &area, 6);
+	CHECK(walker_step_lag(&w) > 40); // following at half a step's pace: still well below after 6
+	run(&w, pad(0, 0, 0), &area, 40);
+	CHECK_EQ(0, walker_step_lag(&w));
+
+	// Just above the climb: a wall
+	box_ahead(&area, WALKER_CLIMB + 1, 1000);
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 400);
 	CHECK_EQ(0, walker_height(&w));
 	CHECK(walker_position(&w).x >= 200 + WALKER_RADIUS && walker_position(&w).x <= 200 + WALKER_RADIUS + 6);
 }
+
+// Dropped from one roof to the next one down (60: a clean drop), you can run back and climb up
+// again: drops in the city aren't one way
+static void a_drop_can_be_climbed_back(void)
+{
+	walker w;
+	walker_area area;
+	world_point at = {-800, 0};
+
+	two_roofs(&area, 300, 240); // the high roof's west of x = 0 (+x), the low one east
+	walker_init_at(&w, at, 240, 0xC000); // facing west (+x), at the high roof's side
+	for (int frames = 0; frames < 400 && walker_height(&w) == 240; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK_EQ(300, walker_height(&w));
+	CHECK(walker_position(&w).x >= 0);
+}
+
+// Something low and thin (a rail, 30 deep): walking, it stops you. At a full run you vault over
+// it: your feet onto its near edge, a small hop, and you land beyond it on the floor, running on.
+// A deep one (a crate's top you'd come down on) you vault up onto instead
+static void a_full_run_vaults_over_a_rail(void)
+{
+	walker w;
+	walker_area area;
+	world_point at = {1000, 0};
+	int frames;
+
+	box_ahead(&area, 40, 30);
+	walker_init_at(&w, at, 0, 0x4000);
+	for (frames = 0; frames < 400 && !w.falling; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK(w.falling);
+	CHECK_EQ(40, walker_height(&w)); // hands on its top
+	CHECK(walker_position(&w).x <= 200 && walker_position(&w).x >= 170);
+	CHECK_EQ(WALKER_RUN_SPEED, w.forward);
+	for (frames = 0; frames < 100 && w.falling; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK(!w.falling);
+	CHECK_EQ(0, walker_height(&w)); // down beyond it
+	CHECK(walker_position(&w).x < 170);
+	CHECK_EQ(0, w.stagger);
+	run(&w, pad(0, 1, 0), &area, 1);
+	CHECK(w.forward >= WALKER_RUN_SPEED - WALKER_SLOW_DOWN); // running on
+
+	// Walking: a wall at your foot
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 1), &area, 400);
+	CHECK_EQ(0, walker_height(&w));
+	CHECK(walker_position(&w).x >= 200);
+
+	// Deep: up onto it, not over
+	box_ahead(&area, 40, 600);
+	walker_init_at(&w, at, 0, 0x4000);
+	for (frames = 0; frames < 400 && walker_height(&w) == 0; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK_EQ(40, walker_height(&w));
+	CHECK(!w.falling);
+}
+
+// A floor, and a bar across it west of x = 200, `depth` deep, from `bottom` up to 140
+static void bar_ahead(walker_area *area, int bottom, int depth)
+{
+	walker_area_clear(area);
+	walker_area_add_roof(area, -2000, -1000, 2000, 1000, 0);
+	CHECK(walker_area_add_bar(area, 200 - depth, -1000, 200, 1000, bottom, 140));
+}
+
+// A bar at your chest (bottom 50: above a slide, below your head): walking, it stops you. At a full
+// run you slide under it, low, the pad not steering, and come up beyond it with room to stand.
+// Lower than a slide clears, or too deep to come out from under, it stops you, run or not
+static void a_full_run_slides_under_a_bar(void)
+{
+	walker w;
+	walker_area area;
+	world_point at = {1000, 0};
+	int frames, lowest = WALKER_EYE;
+
+	bar_ahead(&area, 50, 60);
+	CHECK_EQ(140, walker_area_height(&area, 170, 0)); // its top's a roof
+
+	// Walking: stopped by it, your body off it
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 1), &area, 400);
+	CHECK(walker_position(&w).x >= 200);
+
+	// Running: a slide
+	walker_init_at(&w, at, 0, 0x4000);
+	for (frames = 0; frames < 400 && !walker_sliding(&w); ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK(walker_sliding(&w));
+	CHECK(walker_position(&w).x >= 200);
+	for (frames = 0; frames < 100 && walker_sliding(&w); ++frames)
+	{
+		walker_update(&w, pad(1, 0, 0), &area); // turning and letting go: neither steers it
+		lowest = walker_eye(&w) < lowest ? walker_eye(&w) : lowest;
+	}
+	CHECK(!walker_sliding(&w));
+	CHECK_EQ(WALKER_SLIDE_FRAMES, frames);
+	CHECK(lowest <= WALKER_EYE_SLIDE + 2);
+	CHECK(walker_position(&w).x < 200 - 60 - WALKER_RADIUS); // out the far side, standing room
+	CHECK_EQ(0, walker_position(&w).y);						 // straight on
+	CHECK_EQ(0x4000, w.yaw);
+	CHECK_EQ(0, walker_height(&w));
+	CHECK(w.forward <= WALKER_FORWARD_SPEED);
+	run(&w, pad(0, 0, 0), &area, 60);
+	CHECK_EQ(WALKER_EYE, walker_eye(&w)); // stood back up
+
+	// Too low to slide under (bottom 30): a wall
+	bar_ahead(&area, 30, 60);
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 400);
+	CHECK(!walker_sliding(&w));
+	CHECK(walker_position(&w).x >= 200);
+
+	// Too deep to come out from under (400): no slide
+	bar_ahead(&area, 50, 400);
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 400);
+	CHECK(!walker_sliding(&w));
+	CHECK(walker_position(&w).x >= 200);
+
+	// High enough to walk under (bottom 80, over your head): you just go on
+	bar_ahead(&area, 80, 60);
+	walker_init_at(&w, at, 0, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 400);
+	CHECK(walker_position(&w).x < 0);
+}
+
 
 void run_walker_tests(void)
 {
@@ -668,6 +839,10 @@ void run_walker_tests(void)
 	RUN(a_full_run_jumps_a_gap_in_reach);
 	RUN(the_air_doesnt_steer);
 	RUN(a_full_run_vaults_a_low_wall);
+	RUN(a_full_run_climbs_a_ledge);
+	RUN(a_drop_can_be_climbed_back);
+	RUN(a_full_run_vaults_over_a_rail);
+	RUN(a_full_run_slides_under_a_bar);
 	RUN(roofs_have_heights);
 	RUN(a_kerb_steps_up_a_wall_stops_you);
 	RUN(a_lip_stops_you_until_you_push);

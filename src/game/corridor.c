@@ -203,7 +203,8 @@ static int scatter(int column, int row)
 // Whether a tile (corners in (out, across)) lies wholly under the grey box's boxes, every corner
 // under one or another: then it's never seen, and drawing it only costs VDP1 the pixels again
 // (the boxes are drawn over it). A tile's wider than a step: most lie under two. (Boxes with a
-// gap between them narrower than a tile could hide one wrongly; the grey box has none)
+// gap between them narrower than a tile could hide one wrongly; the grey box has none.) Not a
+// bar: the floor's seen under it
 static int under_a_box(const corridor *c, const world_point *corners, int n)
 {
 	const int width = c->across_max - c->across_min;
@@ -216,7 +217,7 @@ static int under_a_box(const corridor *c, const world_point *corners, int n)
 		{
 			const corridor_box *box = &corridor_boxes[b];
 
-			if (corners[i].x >= box->out_min && corners[i].x <= box->out_max &&
+			if (box->floor == 0 && corners[i].x >= box->out_min && corners[i].x <= box->out_max &&
 				corners[i].y >= c->across_min + ((width * box->across_min) >> 4) &&
 				corners[i].y <= c->across_min + ((width * box->across_max) >> 4))
 				break;
@@ -332,11 +333,16 @@ const corridor_box corridor_boxes[CORRIDOR_BOXES] = {
 	// the top step (one box across, its front was drawn all the way down behind the stairs)
 	{3600, 3900, 0, 8, 160},
 	{3600, 3900, 8, 16, 160},
-	{3900, 4200, 0, 8, 64},  // a clean drop from it, on the left (96)
-	{4200, 4400, 0, 8, 400}, // a tower beyond: a wall
+	{3900, 4300, 0, 8, 64},  // a clean drop from it, on the left (96): long enough to land a run's jump
+	{4300, 4450, 0, 8, 400}, // a tower beyond: a wall
 	// Last, so the stairs stay first: a crate before them, where you stand up (a quarter across).
-	// Waist-high: walking, your foot meets it; at a run you vault onto it and jump off its end
+	// Waist-high: walking, your foot meets it; at a run you vault over it (walker.h)
 	{3000, 3060, 2, 6, 40},
+	// The yard, on the right half (walker.h's moves at a run, in the order you meet them):
+	{1600, 1630, 8, 16, 40},	  // a rail, waist-high and thin: vault over it
+	{1900, 1960, 8, 16, 130, 50}, // a duct, its bottom at your chest (50): slide under it
+	{2450, 2650, 8, 12, 90},	  // a ledge over your head (2.1 m): climb it (a run-up after the slide)
+	{2450, 2650, 12, 16, 140},	  // beside it, one out of reach (3.2 m): a wall
 };
 
 void corridor_box_corners(const corridor *c, const corridor_box *box, world_point *a, world_point *b)
@@ -374,7 +380,10 @@ void corridor_walker_area(const corridor *c, walker_area *area)
 		world_point a, b;
 
 		corridor_box_corners(c, &corridor_boxes[i], &a, &b);
-		walker_area_add_roof(area, a.x, a.y, b.x, b.y, corridor_boxes[i].height);
+		if (corridor_boxes[i].floor > 0)
+			walker_area_add_bar(area, a.x, a.y, b.x, b.y, corridor_boxes[i].floor, corridor_boxes[i].height);
+		else
+			walker_area_add_roof(area, a.x, a.y, b.x, b.y, corridor_boxes[i].height);
 	}
 	city_walker_area_add(c, area); // and beyond the far end, the city's towers
 }

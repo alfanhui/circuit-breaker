@@ -44,11 +44,17 @@ int walker_area_add(walker_area *a, int x0, int y0, int x1, int y1)
 
 int walker_area_add_roof(walker_area *a, int x0, int y0, int x1, int y1, int height)
 {
+	return walker_area_add_bar(a, x0, y0, x1, y1, WALKER_NO_FLOOR, height); // all the way down
+}
+
+int walker_area_add_bar(walker_area *a, int x0, int y0, int x1, int y1, int bottom, int height)
+{
 	world_rect *r;
 
 	if (a->count >= WALKER_AREA_RECTS_MAX)
 		return 0;
 	a->heights[a->count] = (short)height;
+	a->bottoms[a->count] = (short)bottom;
 	r = &a->rects[a->count++];
 	// Smallest corner first: the roof as it is, out to its edges
 	r->x_min = (short)(x0 < x1 ? x0 : x1);
@@ -101,10 +107,12 @@ void walker_init_at(walker *w, world_point at, int z, int yaw)
 	w->z = z * WALKER_SUB;
 	w->fall_speed = 0;
 	w->fall_from = z;
+	w->take_off = z;
 	w->air_dx = 0;
 	w->air_dy = 0;
 	w->falling = 0;
 	w->lag = 0;
+	w->slide = 0;
 	w->push = 0;
 	w->stagger = 0;
 	w->dip = 0;
@@ -155,15 +163,54 @@ static int clamp_speed(int speed, int limit)
 	return speed > limit ? limit : speed < -limit ? -limit : speed;
 }
 
-// Whether a roof higher than `top` (a kerb above your feet, walking) stands in your way at a
-// point: its side's a wall. You keep WALKER_RADIUS off a tall one, but only WALKER_FOOT off one
-// lower than your waist (a step you can't step: your foot hits it, not your body)
-static int wall_at(const walker_area *a, int x, int y, int feet, int top)
+// How high your head is above your feet: lower sliding
+static int head_room(const walker *w)
+{
+	return w->slide > 0 ? WALKER_SLIDE_HEAD : WALKER_HEAD;
+}
+
+/*
+ * What stands in your way at a point, your feet at `feet` and your head at `head`: every roof
+ * higher than `top` (a kerb above your feet, walking) whose bottom is below your head (a bar you
+ * pass under isn't in the way). You keep WALKER_RADIUS off a tall one or a bar (your body hits
+ * it), but only WALKER_FOOT off one lower than your waist (a step you can't step: your foot hits
+ * it). How many there are, the highest top among them, and the lowest bottom
+ */
+typedef struct
+{
+	int count, top, bottom;
+} walker_block;
+
+static walker_block blocked_by(const walker_area *a, int x, int y, int feet, int top, int head)
 {
 	const int waist = feet + WALKER_WAIST;
+	walker_block b = {0, -32768, 32767};
 
 	for (int i = 0; i < a->count; ++i)
-		if (a->heights[i] > top && on_roof(&a->rects[i], x, y, a->heights[i] > waist ? WALKER_RADIUS : WALKER_FOOT))
+	{
+		const int body = a->heights[i] > waist || a->bottoms[i] > feet;
+
+		if (a->heights[i] > top && a->bottoms[i] < head && on_roof(&a->rects[i], x, y, body ? WALKER_RADIUS : WALKER_FOOT))
+		{
+			++b.count;
+			b.top = a->heights[i] > b.top ? a->heights[i] : b.top;
+			b.bottom = a->bottoms[i] < b.bottom ? a->bottoms[i] : b.bottom;
+		}
+	}
+	return b;
+}
+
+static int wall_at(const walker_area *a, int x, int y, int feet, int top, int head)
+{
+	return blocked_by(a, x, y, feet, top, head).count > 0;
+}
+
+// Whether anything's solid at a point between `feet` and `head` (no margin): in the air, what
+// you'd go into the side of
+static int solid_at(const walker_area *a, int x, int y, int feet, int head)
+{
+	for (int i = 0; i < a->count; ++i)
+		if (a->heights[i] > feet && a->bottoms[i] < head && on_roof(&a->rects[i], x, y, 0))
 			return 1;
 	return 0;
 }
@@ -191,6 +238,7 @@ static int step_off(walker *w, const walker_area *area, int along_x, int sign, i
 	w->falling = 1;
 	w->fall_speed = 0;
 	w->fall_from = feet;
+	w->take_off = feet;
 	w->push = 0;
 	return 1;
 }
@@ -217,10 +265,10 @@ static void lag_by(walker *w, int rise)
 /*
  * One axis of a step on the roofs (x or y: the other's left as it is): 0 blocked, 1 moved, 2 at a
  * lip, 3 vaulted up. Where you'd be:
- *   - within WALKER_RADIUS of a roof more than a kerb above your feet: a wall, blocked. At a full
- *     run, though, a roof no higher than your waist you vault up onto: it's a step that big, and
- *     you're carried on, WALKER_FOOT, onto its top (walk). Left with your middle still over the
- *     ground, more than a kerb below your feet, the next step was a lip: you jumped straight off
+ *   - within WALKER_RADIUS of a roof more than `rise` above your feet: a wall, blocked. The rise
+ *     is a kerb (WALKER_STEP_UP), or at a full run your waist: a vault up onto something that
+ *     low is a step that big, and you're carried on, WALKER_FOOT, onto its top (walk). Left with
+ *     your middle still over the ground, the next step was a lip: you jumped straight off
  *   - your middle on a roof no more than a kerb up or down: moved
  *   - otherwise (lower, or nothing): a lip. You can stand right at a roof's edge, to look over
  * Moved, your feet go to the highest roof under your footprint (a kerb up at most), not just
@@ -228,18 +276,14 @@ static void lag_by(walker *w, int rise)
  * once your middle got there, the eye (35 up) was below the next step's top 3 units from its
  * front, too near to draw it: you saw in under the stairs. The eye follows the feet (lag_by)
  */
-static int step_axis(walker *w, const walker_area *area, int x, int y, int full_run)
+static int step_axis(walker *w, const walker_area *area, int x, int y, int rise)
 {
 	const int feet = w->z >> WALKER_SUB_SHIFT;
-	int top = feet + WALKER_STEP_UP; // the highest you can step up to
+	const int top = feet + rise; // the highest you can step up to
 	int under, to;
 
-	if (wall_at(area, x, y, feet, top))
-	{
-		if (!full_run || wall_at(area, x, y, feet, feet + WALKER_WAIST))
-			return 0;
-		top = feet + WALKER_WAIST; // a vault up: as a step, up to your waist
-	}
+	if (wall_at(area, x, y, feet, top, feet + head_room(w)))
+		return 0;
 	under = roof_at(area, x, y, top);
 	if (under < 0 || area->heights[under] < feet - WALKER_STEP_UP)
 		return 2;
@@ -272,27 +316,33 @@ static int fall(walker *w, const walker_area *area)
 	feet = w->z >> WALKER_SUB_SHIFT;
 	if (feet > w->fall_from)
 		w->fall_from = feet; // still going up
-	if (walker_area_height(area, (w->x + w->air_dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT) <= across)
+	if (!solid_at(area, (w->x + w->air_dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, across, across + WALKER_HEAD))
 		w->x += w->air_dx;
 	else if (w->air_dx != 0)
 		clear = 0;
-	if (walker_area_height(area, w->x >> WALKER_SUB_SHIFT, (w->y + w->air_dy) >> WALKER_SUB_SHIFT) <= across)
+	if (!solid_at(area, w->x >> WALKER_SUB_SHIFT, (w->y + w->air_dy) >> WALKER_SUB_SHIFT, across, across + WALKER_HEAD))
 		w->y += w->air_dy;
 	else if (w->air_dy != 0)
 		clear = 0;
 
 	// Landing: on the highest roof under you lower than where you fell from (not the one you
-	// stepped off, still under your middle for the first frame or two)
-	under = roof_at(area, w->x >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, w->fall_from - 1);
+	// stepped off, still under your middle for the first frame or two), and no higher than your
+	// feet were before this frame's drop (not a bar you're passing under: you've not come down
+	// onto it)
+	under = roof_at(area, w->x >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT,
+					w->fall_from - 1 < across ? w->fall_from - 1 : across);
 	if (under >= 0 && feet <= area->heights[under])
 	{
-		const int drop = w->fall_from - area->heights[under];
+		// The eye dips with the landing: an eighth of the fall (from the jump's top), up to 8 (12
+		// for a long drop). But whether it's a long drop goes by where you left from: a jump's
+		// hop doesn't turn a clean drop into a long one
+		const int fall = w->fall_from - area->heights[under];
+		const int drop = w->take_off - area->heights[under];
 
 		w->falling = 0;
 		w->fall_speed = 0;
 		w->z = area->heights[under] * WALKER_SUB;
-		// The eye dips with the landing: an eighth of the drop, up to 8 (12 for a long drop)
-		w->dip = (unsigned char)((drop >> 3) > 8 ? 8 : drop >> 3);
+		w->dip = (unsigned char)((fall >> 3) > 8 ? 8 : fall >> 3);
 		if (drop > WALKER_CLEAN_DROP)
 		{
 			w->stagger = WALKER_STAGGER_FRAMES;
@@ -300,6 +350,37 @@ static int fall(walker *w, const walker_area *area)
 		}
 	}
 	return clear;
+}
+
+/*
+ * The roofs near a point: those within `reach` of it, as an area of their own. A move's worked out
+ * whole before it starts (a jump's flight, a slide), up to 64 frames of it, each testing every
+ * roof several times: against the whole area (56 roofs in the corridor and the city) that was
+ * half a frame's work in one frame, and the frame was late (46 fps at the yard's duct). Nothing
+ * further than the move can carry you (and WALKER_RADIUS round that) can touch it, so the same
+ * frames against just these give the same answer, from a handful of roofs. One area, kept here:
+ * a walker_area's ~780 bytes are too many for the stack, and it's only ever used one move at a time
+ */
+#define WALKER_FLIGHT_REACH (WALKER_FLIGHT_FRAMES_MAX * 6 + 2 * WALKER_RADIUS) // a run's 6 a frame
+#define WALKER_SLIDE_REACH (160 + 2 * WALKER_RADIUS)							 // a slide's ~155
+static walker_area near_area;
+
+static const walker_area *roofs_near(const walker_area *a, int x, int y, int reach)
+{
+	// a may be near_area itself, narrowed already (run_on, then a flight or a slide within it): kept
+	// roofs only move down the list, so it's narrowed again in place. Its count's read first
+	const int count = a->count;
+
+	near_area.count = 0;
+	for (int i = 0; i < count; ++i)
+		if (on_roof(&a->rects[i], x, y, reach))
+		{
+			near_area.rects[near_area.count] = a->rects[i];
+			near_area.heights[near_area.count] = a->heights[i];
+			near_area.bottoms[near_area.count] = a->bottoms[i];
+			near_area.count++;
+		}
+	return &near_area;
 }
 
 /*
@@ -317,6 +398,8 @@ static int vault_off(walker *w, const walker_area *area)
 	flight.falling = 1;
 	flight.fall_speed = -WALKER_VAULT_HOP;
 	flight.fall_from = w->z >> WALKER_SUB_SHIFT;
+	flight.take_off = flight.fall_from;
+	area = roofs_near(area, flight.x >> WALKER_SUB_SHIFT, flight.y >> WALKER_SUB_SHIFT, WALKER_FLIGHT_REACH);
 	for (int i = 0; i < WALKER_FLIGHT_FRAMES_MAX; ++i)
 	{
 		if (!fall(&flight, area))
@@ -328,11 +411,204 @@ static int vault_off(walker *w, const walker_area *area)
 			w->falling = 1; // as the copy started
 			w->fall_speed = -WALKER_VAULT_HOP;
 			w->fall_from = w->z >> WALKER_SUB_SHIFT;
+			w->take_off = w->fall_from;
 			w->push = 0;
 			return 1;
 		}
 	}
 	return 0; // still falling: over nothing, or too far down
+}
+
+/*
+ * Getting onto what's in front of you (the vault over's start, and a climb): from (x, y), where
+ * you were blocked, on along the axis (sign: -1 or 1) a few units at a time, until your middle's
+ * on a roof `height` high with room to stand on it. Up to WALKER_RADIUS + 2 x WALKER_FOOT on: you
+ * were blocked up to WALKER_RADIUS off its edge. Returns whether there's such a place: in
+ * *px, *py (whole units)
+ */
+static int onto_top(const walker_area *area, int x, int y, int along_x, int sign, int height, int *px, int *py)
+{
+	for (int on = 0; on <= WALKER_RADIUS + 2 * WALKER_FOOT; on += WALKER_FOOT >> 1)
+	{
+		const int cx = x + (along_x ? sign * on : 0);
+		const int cy = y + (along_x ? 0 : sign * on);
+		const int under = roof_at(area, cx, cy, height);
+
+		if (under >= 0 && area->heights[under] == height &&
+			!wall_at(area, cx, cy, height, height + WALKER_STEP_UP, height + WALKER_HEAD))
+		{
+			*px = cx;
+			*py = cy;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/*
+ * A vault over something low (no higher than your waist, solid to the ground) in your way at
+ * (x, y): onto its near edge, then a small hop off it, flying on at your speed. Flown first on a
+ * copy, as a jump is (vault_off): taken only if you come down clean beyond it, lower than its
+ * top. Too deep to clear, you'd come down on it: that's a vault up onto it instead (walk). Returns
+ * whether you vaulted: you're in the air, your feet on its top (the eye following)
+ */
+static int vault_over(walker *w, const walker_area *area, int along_x, int sign, int x, int y)
+{
+	const int feet = w->z >> WALKER_SUB_SHIFT;
+	const walker_block b = blocked_by(area, x, y, feet, feet + WALKER_STEP_UP, feet + WALKER_HEAD);
+	walker flight;
+	int px, py;
+
+	if (b.count == 0 || b.top > feet + WALKER_WAIST || b.bottom > feet)
+		return 0; // nothing, too high, or a bar (it's not low and solid)
+	if (!onto_top(area, x, y, along_x, sign, b.top, &px, &py))
+		return 0;
+	flight = *w;
+	flight.x = px * WALKER_SUB;
+	flight.y = py * WALKER_SUB;
+	flight.z = b.top * WALKER_SUB;
+	flight.falling = 1;
+	flight.fall_speed = -WALKER_VAULT_OVER_HOP;
+	flight.fall_from = b.top;
+	flight.take_off = b.top;
+	area = roofs_near(area, flight.x >> WALKER_SUB_SHIFT, flight.y >> WALKER_SUB_SHIFT, WALKER_FLIGHT_REACH);
+	for (int i = 0; i < WALKER_FLIGHT_FRAMES_MAX; ++i)
+	{
+		if (!fall(&flight, area))
+			return 0; // into the side of something
+		if (!flight.falling)
+		{
+			if (flight.stagger > 0 || walker_height(&flight) >= b.top)
+				return 0; // a long drop beyond, or down on its own top: not over it
+			lag_by(w, b.top - feet);
+			w->x = px * WALKER_SUB;
+			w->y = py * WALKER_SUB;
+			w->z = b.top * WALKER_SUB;
+			w->falling = 1; // as the copy started
+			w->fall_speed = -WALKER_VAULT_OVER_HOP;
+			w->fall_from = b.top;
+			w->take_off = b.top;
+			w->push = 0;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/*
+ * A climb onto a ledge in your way at (x, y), no more than WALKER_CLIMB above your feet: you're
+ * on its top, just past its edge, your feet up at once and the eye following slowly (walker_update
+ * eases a big lag at half the pace). It takes your run: you're at a walk on top. Returns whether
+ * you climbed
+ */
+static int climb(walker *w, const walker_area *area, int along_x, int sign, int x, int y)
+{
+	const int feet = w->z >> WALKER_SUB_SHIFT;
+	const walker_block b = blocked_by(area, x, y, feet, feet + WALKER_STEP_UP, feet + WALKER_HEAD);
+	int px, py;
+
+	if (b.count == 0 || b.top > feet + WALKER_CLIMB)
+		return 0;
+	if (!onto_top(area, x, y, along_x, sign, b.top, &px, &py))
+		return 0;
+	lag_by(w, b.top - feet);
+	w->x = px * WALKER_SUB;
+	w->y = py * WALKER_SUB;
+	w->z = b.top * WALKER_SUB;
+	if (w->forward > WALKER_FORWARD_SPEED)
+		w->forward = WALKER_FORWARD_SPEED;
+	w->push = 0;
+	return 1;
+}
+
+static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing); // below
+
+/*
+ * One frame of a slide: on the way you were facing as it started (the pad doesn't steer it, and
+ * doesn't turn you), slowing by WALKER_SLIDE_FRICTION, your head low (head_room). Walls and lips
+ * stop you as walking would: you never slide off a roof
+ */
+static void slide_frame(walker *w, const walker_area *area)
+{
+	const int forward_x = -walker_sin(w->yaw);
+	const int forward_y = -walker_cos(w->yaw);
+	int dx, dy;
+
+	w->forward -= WALKER_SLIDE_FRICTION;
+	if (w->forward < 0)
+		w->forward = 0;
+	w->side = 0;
+	dx = (forward_x * w->forward) >> 10;
+	dy = (forward_y * w->forward) >> 10;
+	w->air_dx = dx;
+	w->air_dy = dy;
+	walk(w, dx, dy, area, 0);
+	if (w->slide > 0)
+		w->slide--;
+}
+
+/*
+ * A slide under a bar in your way at (x, y): only if it's in your way standing but not sliding
+ * (its bottom between WALKER_SLIDE_HEAD and WALKER_HEAD above your feet), and only if the whole
+ * slide, run first on a copy of you, ends with room to stand. Otherwise you'd be left lying under
+ * it. Returns whether it started (you move from next frame)
+ */
+static int slide_under(walker *w, const walker_area *area, int x, int y)
+{
+	const int feet = w->z >> WALKER_SUB_SHIFT;
+	walker copy;
+	world_point at;
+
+	if (!wall_at(area, x, y, feet, feet + WALKER_STEP_UP, feet + WALKER_HEAD) ||
+		wall_at(area, x, y, feet, feet + WALKER_STEP_UP, feet + WALKER_SLIDE_HEAD))
+		return 0; // not in your way, or in it even sliding
+	copy = *w;
+	copy.slide = WALKER_SLIDE_FRAMES;
+	area = roofs_near(area, x, y, WALKER_SLIDE_REACH);
+	while (copy.slide > 0)
+		slide_frame(&copy, area);
+	at = walker_position(&copy);
+	if (copy.falling ||
+		wall_at(area, at.x, at.y, walker_height(&copy), walker_height(&copy) + WALKER_STEP_UP,
+				walker_height(&copy) + WALKER_HEAD))
+		return 0; // still under it at the end (or under another)
+	w->slide = WALKER_SLIDE_FRAMES;
+	w->push = 0;
+	return 1;
+}
+
+/*
+ * Blocked head on at a full run, going `d` (x256) along an axis: the moves that carry you on, in
+ * order: slide under a bar, vault over something low and thin, vault up onto something low, climb
+ * a ledge. Returns whether one did
+ */
+static int run_on(walker *w, const walker_area *area, int along_x, int d)
+{
+	const int sign = d > 0 ? 1 : -1;
+	const int x = (w->x + (along_x ? d : 0)) >> WALKER_SUB_SHIFT;
+	const int y = (w->y + (along_x ? 0 : d)) >> WALKER_SUB_SHIFT;
+	int s;
+
+	// The roofs a move from here can reach, once: each move tries several tests (a climb up to
+	// ten places on the ledge), and against every roof the frame a climb started cost ~8% of it.
+	// A flight reaches furthest, so every move's within it (and narrows it again for itself). A
+	// vault over's flight starts on the top, up to WALKER_RADIUS + 2 x WALKER_FOOT further on
+	// (onto_top): that much more, so its own narrowing never needs a roof this left out
+	area = roofs_near(area, x, y, WALKER_FLIGHT_REACH + WALKER_RADIUS + 2 * WALKER_FOOT);
+	if (slide_under(w, area, x, y) || vault_over(w, area, along_x, sign, x, y))
+		return 1;
+	s = step_axis(w, area, x, y, WALKER_WAIST);
+	if (s == 1 || s == 3)
+	{
+		const int on = d + sign * WALKER_FOOT * WALKER_SUB; // onto its top
+
+		if (along_x)
+			w->x += on;
+		else
+			w->y += on;
+		return 1;
+	}
+	return climb(w, area, along_x, sign, x, y);
 }
 
 /*
@@ -349,13 +625,15 @@ static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing
 
 	if (dx != 0)
 	{
-		const int sx = step_axis(w, area, (w->x + dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, full_run);
+		const int sx = step_axis(w, area, (w->x + dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, WALKER_STEP_UP);
 
-		if (sx == 1 || sx == 3)
-			w->x += dx + (sx == 3 ? (dx > 0 ? WALKER_FOOT : -WALKER_FOOT) * WALKER_SUB : 0);
+		if (sx == 1)
+			w->x += dx;
 		else
 		{
 			head_on = 2 * ax >= ay;
+			if (sx == 0 && full_run && head_on && run_on(w, area, 1, dx))
+				return;
 			if (sx == 2)
 			{
 				lip = 1;
@@ -372,13 +650,15 @@ static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing
 	}
 	if (dy != 0)
 	{
-		const int sy = step_axis(w, area, w->x >> WALKER_SUB_SHIFT, (w->y + dy) >> WALKER_SUB_SHIFT, full_run);
+		const int sy = step_axis(w, area, w->x >> WALKER_SUB_SHIFT, (w->y + dy) >> WALKER_SUB_SHIFT, WALKER_STEP_UP);
 
-		if (sy == 1 || sy == 3)
-			w->y += dy + (sy == 3 ? (dy > 0 ? WALKER_FOOT : -WALKER_FOOT) * WALKER_SUB : 0);
+		if (sy == 1)
+			w->y += dy;
 		else
 		{
 			head_on |= 2 * ay >= ax;
+			if (sy == 0 && full_run && 2 * ay >= ax && run_on(w, area, 0, dy))
+				return;
 			if (sy == 2 && !lip)
 			{
 				lip = 1;
@@ -398,11 +678,43 @@ static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing
 		w->push = 0; // let go of the lip: pushing starts again from the beginning
 }
 
+// The landing's dip dying away, and the eye catching up with your feet after a step: a quarter of
+// the way a frame, at least 1. After a climb (more than your waist up) an eighth: you pull
+// yourself up, slower than a step
+static void ease_eye(walker *w)
+{
+	if (w->dip > 0)
+		w->dip--;
+	if (w->lag != 0)
+	{
+		const int step = w->lag > WALKER_WAIST ? w->lag >> 3 : w->lag >> 2; // rounds down: -1 for -1..-4
+
+		w->lag = (signed char)(w->lag - (step != 0 ? step : 1));
+	}
+}
+
 void walker_update(walker *w, walker_controls controls, const walker_area *area)
 {
 	int forward_wanted, side_wanted, dx, dy;
 	const int forward_x = -walker_sin(w->yaw); // facing (x1024): north is -y, east -x (world.h)
 	const int forward_y = -walker_cos(w->yaw);
+
+	// Sliding: the slide moves you, not the pad (slide_frame). The eye drops low, a quarter of the
+	// way a frame; afterwards it straightens back up as from the crash (below)
+	if (w->slide > 0 && !w->falling)
+	{
+		const int step = (w->eye - WALKER_EYE_SLIDE) >> 2;
+
+		w->eye = (unsigned char)(w->eye > WALKER_EYE_SLIDE ? w->eye - (step > 0 ? step : 1) : w->eye);
+		w->turn_speed = 0;
+		ease_eye(w);
+		if (area != 0 && area->count > 0)
+			slide_frame(w, area);
+		else
+			w->slide = 0;
+		w->stride = (w->stride + ((w->forward * 3) >> 1)) & 0xFFFF;
+		return;
+	}
 
 	// Turning: a small first step, quicker each frame it's held, and stopped dead on letting go
 	// (or on turning the other way: the first step that way, from nothing)
@@ -455,15 +767,7 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 			w->forward = approach(w->forward, forward_wanted);
 		w->side = approach(w->side, side_wanted);
 	}
-	if (w->dip > 0)
-		w->dip--;
-	// The eye catching up with your feet after a step: a quarter of the way a frame, at least 1
-	if (w->lag != 0)
-	{
-		const int step = w->lag >> 2; // rounds down: -1 for -1..-4, never 0 below 0
-
-		w->lag = (signed char)(w->lag - (step != 0 ? step : 1));
-	}
+	ease_eye(w);
 	// Straightening up: an eighth of the way a frame, at least 1 (most of it in ~half a second)
 	if (w->eye < WALKER_EYE)
 	{
@@ -540,4 +844,9 @@ int walker_eye(const walker *w)
 int walker_step_lag(const walker *w)
 {
 	return w->lag;
+}
+
+int walker_sliding(const walker *w)
+{
+	return w->slide > 0;
 }

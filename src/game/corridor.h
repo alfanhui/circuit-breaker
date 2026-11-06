@@ -94,18 +94,23 @@ int corridor_clip(const world_point *poly, int n, const world_point quad[4], wor
  * the corridor:
  *   - stairs up its left half: twenty steps, each 8 higher than the last (18 cm)
  *   - a platform across it, 160 up (3.7 m)
- *   - past it, on the left, a lower roof at 64: a clean drop (96)
+ *   - past it, on the left, a lower roof at 64: a clean drop (96), long enough to land a run's jump
  *   - on the right, the floor: a long drop (160), a stagger
  *   - beyond the lower roof, a tower too tall to climb: a wall
- *   - before the stairs, a crate waist-high (40: 92 cm): a wall walking, a vault at a run
+ *   - before the stairs, a crate waist-high (40: 92 cm): a wall walking, a vault over at a run
+ *   - before that, on the right half (across 8 .. 16, which is on your left as you face out: the
+ *     halves go by across, not by your view), a yard to try the run's moves on (walker.h), each a wall
+ *     walking: a rail to vault over, a duct to slide under, a ledge to climb (90) beside one too
+ *     high to (140). The left half's left clear: the way to the stairs
  */
-#define CORRIDOR_BOXES 25
+#define CORRIDOR_BOXES 29
 
 typedef struct
 {
 	short out_min, out_max;
 	unsigned char across_min, across_max; // sixteenths of the corridor's width
 	short height;
+	short floor; // its bottom: 0 stands on the floor; higher, it's a bar you can pass under
 } corridor_box;
 
 extern const corridor_box corridor_boxes[CORRIDOR_BOXES];

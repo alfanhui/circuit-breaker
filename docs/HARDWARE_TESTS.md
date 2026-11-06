@@ -189,6 +189,8 @@ the real chip; Mednafen's VDP1 timing is only an estimate.
 | On foot, the corridor's start | `over 0 busy 0% cmd 238`, cpu 76% | ____ |
 | On foot, the city's roof | `over 0 busy 100% cmd ~95`, 60 fps, cpu 48% | ____ |
 | On foot, looking back at the doorway from the city | `over 0 busy 94% cmd 282`, 37 fps, cpu 82% | ____ |
+| The same, after the doorway culls (2026-11-05, film `doorway_perf.steps`) | `over 0 busy 90-100% cmd ~190`, 60 fps, cpu 77-81% | ____ |
+| On foot, the roof beside the doorway (`dwp_l9`) | `over 0 busy 100% cmd ~100`, 60 fps, cpu 65-70% (was 30 fps) | ____ |
 
 - [ ] Does `over` ever go above 0? That's a frame shown half-drawn: note the scene.
 - [ ] If `busy` is much higher on the Saturn than in Mednafen, Mednafen is kinder to VDP1 than
@@ -238,7 +240,10 @@ the real chip; Mednafen's VDP1 timing is only an estimate.
       start and the stairs' foot.
 - [ ] **The ground under the city is black** on foot (the VDP2 floor's palette): no shimmer of
       navy and white while turning out on the roofs. Looking back from the city through the
-      doorway you see the corridor's floor and stairs; Mednafen shows 38-44 fps there.
+      doorway you see the corridor's floor and stairs; Mednafen shows 38-44 fps there (60 since
+      2026-11-05: from the city the tiles stop where their outlines do, the far glass beyond).
+      Through the doorway, look for the floor's far glass meeting the tiles about 1000 in: a
+      seam or a step in shade there would be new.
 
 Result: ________
 

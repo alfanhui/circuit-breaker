@@ -226,6 +226,45 @@ static void a_box_is_tested_as_its_corners_are(void)
 	CHECK_EQ(0, differ);
 }
 
+// Looking into a corridor through its doorway (level.c grey_portal). The corridor runs north
+// from 500 north of you, its side walls at x 150 and x -150 (east is -x); its far end's doorway
+// is from x 50 (the near jamb, the end of a wall) to x -150 (the far jamb: the side wall's end).
+// You're at x 0, between them, not beyond the side wall at -150. Then the sill (the floor's far
+// edge) and the far jamb can't hide any of the floor: it's inside both, so level.c leaves them
+// out of the floor's tests. The near jamb does hide some: the floor behind the wall beside it
+static void a_doorway_s_sill_and_far_jamb_hide_no_floor(void)
+{
+	frustum f;
+	const frustum_point in = {-50, -500, 100}; // in the opening
+	unsigned near_jamb, far_jamb, sill;
+	int inside_all = 0, tried = 0, near_hides = 0;
+
+	level_camera(&f);
+	near_jamb = frustum_add_edge(&f, at(50, -500, 0), at(50, -500, 1000), in);
+	far_jamb = frustum_add_edge(&f, at(-150, -500, 0), at(-150, -500, 1000), in);
+	sill = frustum_add_edge(&f, at(50, -500, 0), at(-150, -500, 0), in);
+	CHECK(near_jamb != 0 && far_jamb != 0 && sill != 0);
+	for (int x = -140; x <= 140; x += 20)
+		for (int y = -510; y >= -3000; y -= 100)
+		{
+			const frustum_point p[1] = {{x, y, 0}};
+
+			++tried;
+			if (frustum_classify(&f, p, 1, far_jamb | sill) == 0)
+				++inside_all;
+			if (frustum_classify(&f, p, 1, near_jamb) == FRUSTUM_OUTSIDE)
+				++near_hides;
+		}
+	CHECK_EQ(tried, inside_all);
+	CHECK(near_hides > 0);
+	// Below the floor, the sill does hide (seen from inside, the city's roofs under it)
+	{
+		const frustum_point under[1] = {{-50, -1000, -200}};
+
+		CHECK_EQ(FRUSTUM_OUTSIDE, frustum_classify(&f, under, 1, sill));
+	}
+}
+
 // Wholly outside after a cut: nothing comes back
 static void a_polygon_behind_you_is_dropped(void)
 {
@@ -248,5 +287,6 @@ void run_frustum_tests(void)
 	RUN(looking_down_sees_your_feet);
 	RUN(a_portal_edge_is_a_plane_from_the_eye);
 	RUN(a_box_is_tested_as_its_corners_are);
+	RUN(a_doorway_s_sill_and_far_jamb_hide_no_floor);
 	RUN(a_polygon_behind_you_is_dropped);
 }

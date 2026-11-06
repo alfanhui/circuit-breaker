@@ -1037,6 +1037,7 @@ static void cap_band_bottoms(block_band *band, int first, const wall_clip_camera
 // tops are above the eye), and one grey for them all read as one flat wall
 #define GREY_SIDE_X_ALT JO_COLOR_RGB(116, 116, 130)
 #define GREY_SIDE_Y_ALT JO_COLOR_RGB(88, 88, 102)
+#define GREY_UNDERSIDE JO_COLOR_RGB(48, 48, 60) // a bar's, seen from below: in its own shadow
 
 /*
  * The boxes as the world has them, worked out once when the corridor's open (and again only if
@@ -1096,6 +1097,9 @@ typedef struct
 	ATTR grey_attributes[GREY_QUADS_MAX];
 	grey_box boxes[GREY_BOXES];
 	grey_group groups[GREY_GROUPS];
+	frustum_point stairs_ramp[4], stairs_side[4]; // the stairs far off: grey_stairs_ramp
+	short stairs_open_line, stairs_open_out; // their open side: its line (x or y), and outside it, +1 or -1
+	bool stairs_open_along_x;				 // the open side runs along x (it's at y = line)
 } corridor_memory;
 static corridor_memory *corridor_meshes = JO_NULL;
 // The arrays by their names, as when they were static
@@ -1107,6 +1111,11 @@ static corridor_memory *corridor_meshes = JO_NULL;
 #define grey_mesh_attributes (corridor_meshes->grey_attributes)
 #define grey_boxes (corridor_meshes->boxes)
 #define grey_groups (corridor_meshes->groups)
+#define grey_stairs_ramp_corners (corridor_meshes->stairs_ramp)
+#define grey_stairs_side_corners (corridor_meshes->stairs_side)
+#define grey_stairs_open_line (corridor_meshes->stairs_open_line)
+#define grey_stairs_open_out (corridor_meshes->stairs_open_out)
+#define grey_stairs_open_along_x (corridor_meshes->stairs_open_along_x)
 
 void corridor_meshes_take(void)
 {
@@ -1169,6 +1178,8 @@ static int grey_side_bottom(int box, bool along_x, int line, int from, int to, i
 	return bottom;
 }
 
+static frustum_point grey_point(world_point p, int z); // below
+
 static void grey_boxes_work_out(const corridor *passage)
 {
 	const int key = passage->wall * 4 + passage->side;
@@ -1194,7 +1205,7 @@ static void grey_boxes_work_out(const corridor *passage)
 		{
 			corridor_box_corners(passage, &corridor_boxes[i], &a, &b);
 			grey_boxes[i].height = corridor_boxes[i].height;
-			grey_boxes[i].floor = 0;
+			grey_boxes[i].floor = corridor_boxes[i].floor; // a bar's above the floor
 		}
 		else
 		{
@@ -1209,6 +1220,32 @@ static void grey_boxes_work_out(const corridor *passage)
 		grey_boxes[i].centre.x = (short)((r->x_min + r->x_max) >> 1);
 		grey_boxes[i].centre.y = (short)((r->y_min + r->y_max) >> 1);
 		grey_boxes[i].middle = (short)((grey_boxes[i].height + grey_boxes[i].floor) >> 1);
+	}
+	// The stairs as a ramp (grey_stairs_ramp): its slope through the steps' front edges, from the
+	// first step's top (8) up to the platform (160), and its side's profile on the open side (the
+	// other's against the corridor's wall, its back against the platform: never seen)
+	{
+		const corridor_box *first = &corridor_boxes[0], *last = &corridor_boxes[GREY_STAIRS - 1];
+		const int width = passage->across_max - passage->across_min;
+		const int wall_side = passage->across_min + ((width * first->across_min) >> 4);
+		const int open_side = passage->across_min + ((width * first->across_max) >> 4);
+		const world_point front_wall = corridor_point(passage, first->out_min, wall_side);
+		const world_point front_open = corridor_point(passage, first->out_min, open_side);
+		const world_point back_wall = corridor_point(passage, last->out_max, wall_side);
+		const world_point back_open = corridor_point(passage, last->out_max, open_side);
+
+		grey_stairs_ramp_corners[0] = grey_point(front_wall, first->height);
+		grey_stairs_ramp_corners[1] = grey_point(front_open, first->height);
+		grey_stairs_ramp_corners[2] = grey_point(back_open, last->height);
+		grey_stairs_ramp_corners[3] = grey_point(back_wall, last->height);
+		grey_stairs_side_corners[0] = grey_point(front_open, 0);
+		grey_stairs_side_corners[1] = grey_point(back_open, 0);
+		grey_stairs_side_corners[2] = grey_point(back_open, last->height);
+		grey_stairs_side_corners[3] = grey_point(front_open, first->height);
+		// Which line the open side's on, and which way's outside it (away from the wall side)
+		grey_stairs_open_along_x = front_open.y == back_open.y;
+		grey_stairs_open_line = grey_stairs_open_along_x ? front_open.y : front_open.x;
+		grey_stairs_open_out = (short)((grey_stairs_open_along_x ? front_open.y - front_wall.y : front_open.x - front_wall.x) > 0 ? 1 : -1);
 	}
 	for (int g = 0; g < GREY_GROUPS; ++g)
 	{
@@ -1276,6 +1313,12 @@ typedef struct
 {
 	bool inside, outside; // the eye in the corridor (the city cut to the doorway), or out in the city
 	unsigned planes;	  // the doorway's planes' bits in level_view (0: none this frame)
+	// From the city, the planes that can hide the corridor's floor and what stands on it (the
+	// rest of planes can't: testing them is wasted). The sill is the floor's own far edge, so all
+	// of the floor and everything above it is on its inside, while the eye's above the floor. The
+	// right side is the corridor's side wall: it hides nothing unless you stand beyond that wall
+	unsigned floor_planes;
+	int eye_across; // the eye's across the corridor, as corridor_point's across
 } grey_portal;
 static grey_portal portal;
 
@@ -1297,10 +1340,15 @@ static void grey_portal_set(const corridor *passage)
 	const world_point right = corridor_point(passage, CORRIDOR_LENGTH, passage->across_max);
 	const world_point opening = corridor_point(passage, CORRIDOR_LENGTH, (middle + passage->across_max) >> 1);
 	const frustum_point in = grey_point(opening, 100);
-	int out;
+	// The eye's across the corridor: corridor_point puts across straight into x or y, whichever
+	// the corridor's across runs along (the other changes with out)
+	const world_point origin = corridor_point(passage, 0, 0);
+	const bool across_x = corridor_point(passage, 0, 1).x != origin.x;
+	unsigned left_plane, right_plane, sill_plane;
+	int out, eye_across;
 
 	portal.inside = portal.outside = false;
-	portal.planes = 0;
+	portal.planes = portal.floor_planes = 0;
 	if (!level_view_on)
 		return;
 	{
@@ -1309,14 +1357,22 @@ static void grey_portal_set(const corridor *passage)
 		eye.x = (short)level_view.eye.x;
 		eye.y = (short)level_view.eye.y;
 		out = corridor_out(passage, eye);
+		eye_across = across_x ? eye.x : eye.y;
+		portal.eye_across = eye_across;
 	}
 	portal.outside = out > CORRIDOR_LENGTH + GREY_DOORWAY;
 	portal.inside = out < CORRIDOR_LENGTH - GREY_DOORWAY;
 	if (!portal.inside && !portal.outside)
 		return;
-	portal.planes |= frustum_add_edge(&level_view, grey_point(left, 0), grey_point(left, 1000), in);
-	portal.planes |= frustum_add_edge(&level_view, grey_point(right, 0), grey_point(right, 1000), in);
-	portal.planes |= frustum_add_edge(&level_view, grey_point(left, 0), grey_point(right, 0), in); // the sill
+	left_plane = frustum_add_edge(&level_view, grey_point(left, 0), grey_point(left, 1000), in);
+	right_plane = frustum_add_edge(&level_view, grey_point(right, 0), grey_point(right, 1000), in);
+	sill_plane = frustum_add_edge(&level_view, grey_point(left, 0), grey_point(right, 0), in);
+	portal.planes = left_plane | right_plane | sill_plane;
+	portal.floor_planes = portal.planes;
+	if (level_view.eye.z > 0)
+		portal.floor_planes &= ~sill_plane;
+	if (eye_across <= passage->across_max)
+		portal.floor_planes &= ~right_plane;
 }
 
 void level_view_begin(const corridor *passage, bool free_camera)
@@ -1969,6 +2025,8 @@ static jo_color grey_top_colour(int height)
 
 static unsigned level_planes_rect(const frustum_point *a, const frustum_point *b, unsigned planes); // below
 
+static bool grey_stairs_profiled(int i, bool along_x, int line); // below
+
 // One side of box i: from what hides its foot (bottom: grey_side_bottom) to its top. test: the
 // planes to test it against (0: its box is wholly in view, so it is too)
 static void grey_side_add(int i, int which, bool along_x, int line, int from, int to, unsigned test)
@@ -1977,8 +2035,8 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 	frustum_point c[4];
 	jo_color colour;
 
-	if (b->bottom[which] >= b->height)
-		return; // hidden all the way up
+	if (b->bottom[which] >= b->height || grey_stairs_profiled(i, along_x, line))
+		return; // hidden all the way up, or the stairs' profile stands in for it
 	level_side_corners(along_x, line, from, to, b->bottom[which], b->height, c);
 	if (i & 1)
 		colour = along_x ? GREY_SIDE_Y_ALT : GREY_SIDE_X_ALT;
@@ -2019,21 +2077,85 @@ static unsigned level_planes_box(frustum_point centre, frustum_point half, unsig
 
 // The same for a flat rectangle lined up with the axes, from two opposite corners of it (a box's
 // side or top, a strip of the floor)
+static void level_rect_box(const frustum_point *a, const frustum_point *b, frustum_point *centre, frustum_point *half)
+{
+	centre->x = (a->x + b->x) >> 1;
+	centre->y = (a->y + b->y) >> 1;
+	centre->z = (a->z + b->z) >> 1;
+	// Rounded down, a half could be a unit short: one more keeps it the whole rectangle or more
+	half->x = ((a->x > b->x ? a->x - b->x : b->x - a->x) >> 1) + 1;
+	half->y = ((a->y > b->y ? a->y - b->y : b->y - a->y) >> 1) + 1;
+	half->z = ((a->z > b->z ? a->z - b->z : b->z - a->z) >> 1) + 1;
+}
+
 static unsigned level_planes_rect(const frustum_point *a, const frustum_point *b, unsigned planes)
 {
 	frustum_point centre, half;
 
-	centre.x = (a->x + b->x) >> 1;
-	centre.y = (a->y + b->y) >> 1;
-	centre.z = (a->z + b->z) >> 1;
-	half.x = (a->x > b->x ? a->x - b->x : b->x - a->x) >> 1;
-	half.y = (a->y > b->y ? a->y - b->y : b->y - a->y) >> 1;
-	half.z = (a->z > b->z ? a->z - b->z : b->z - a->z) >> 1;
-	// Rounded down, a half could be a unit short: one more keeps it the whole rectangle or more
-	++half.x;
-	++half.y;
-	++half.z;
+	level_rect_box(a, b, &centre, &half);
 	return level_planes_box(centre, half, planes);
+}
+
+// The planes the rectangle crosses, just as they are (no guard band): for leaving things out
+static unsigned level_rect_classify(const frustum_point *a, const frustum_point *b, unsigned planes)
+{
+	frustum_point centre, half;
+
+	level_rect_box(a, b, &centre, &half);
+	return frustum_classify_box(&level_view, centre, half, planes);
+}
+
+/*
+ * The stairs far off, as a ramp: past GREY_STAIRS_RAMP each step (8 high, 12 deep) is about a
+ * pixel on the screen, and the twenty of them were ~40 faces, each tested, cut and handed to SGL:
+ * from the yard, looking down the corridor at them ~1700 away, a tenth of the frame. Two faces
+ * now: the slope through the steps' front edges, and the open side's profile. Only how it's
+ * drawn: you still walk up the steps (game/corridor.h)
+ */
+#define GREY_STAIRS_RAMP 1000
+#define GREY_STAIRS_SLOPE JO_COLOR_RGB(106, 106, 120) // between the steps' two fronts' greys
+
+/*
+ * Nearer than that, past GREY_STAIRS_PROFILE, the stairs' open side (seen from beside them) is one
+ * face, the ramp's profile, in place of the twenty steps' sides: each a whole rectangle from the
+ * floor up to its own top, twenty overlapping faces for one wall (the yard's end, ~600 off: ~10%
+ * of the CPU, and VDP1 filling the side twenty times over). The profile's slope edge cuts off the
+ * steps' corners (8 x 12): under 3 pixels from that far. The fronts and tops stay, step by step
+ */
+#define GREY_STAIRS_PROFILE 400
+static bool grey_stairs_profile_on = false; // this frame: the steps' open sides are left out
+
+// Whether a step's side (box i, on a line) is the open side the profile stands in for this frame
+static bool grey_stairs_profiled(int i, bool along_x, int line)
+{
+	return grey_stairs_profile_on && i < GREY_STAIRS && along_x == grey_stairs_open_along_x &&
+		   line == grey_stairs_open_line;
+}
+
+// How far the eye is outside the box round group g, along x or y, whichever's more (no square root)
+static int grey_group_distance(const grey_group *group, const frustum_point *e)
+{
+	const int dx = (e->x > group->middle.x ? e->x - group->middle.x : group->middle.x - e->x) - group->half.x;
+	const int dy = (e->y > group->middle.y ? e->y - group->middle.y : group->middle.y - e->y) - group->half.y;
+
+	return dx > dy ? dx : dy;
+}
+
+// Whether the stairs (group g) are far enough off to be the ramp: further than GREY_STAIRS_RAMP
+static bool grey_stairs_far(const grey_group *group, const frustum_point *e)
+{
+	return grey_group_distance(group, e) > GREY_STAIRS_RAMP;
+}
+
+// The ramp's two faces, tested against the planes the stairs' group crosses (0: none)
+static void grey_stairs_ramp(unsigned crossed)
+{
+	const frustum_point *ramp = grey_stairs_ramp_corners, *side = grey_stairs_side_corners;
+
+	level_face_add(&grey_out, ramp, 4, crossed != 0 ? level_planes_rect(&ramp[0], &ramp[2], crossed) : 0,
+				   GREY_STAIRS_SLOPE, LEVEL_FOG_FLAT, SORT_CEN, false);
+	level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
+				   GREY_SIDE_Y, LEVEL_FOG_FLAT, SORT_CEN, false);
 }
 
 static void grey_boxes_add(void)
@@ -2044,8 +2166,10 @@ static void grey_boxes_add(void)
 	{
 		const grey_group *group = &grey_groups[g];
 		const bool city = group->first >= CORRIDOR_BOXES;
-		// The screen's edges, and the doorway's if the group is in the other room from you
-		const unsigned planes = FRUSTUM_SCREEN | ((city ? portal.inside : portal.outside) ? portal.planes : 0);
+		// The screen's edges, and the doorway's if the group is in the other room from you (from
+		// the city, the corridor's boxes stand on its floor: only the planes that can hide that)
+		const unsigned planes =
+			FRUSTUM_SCREEN | (city ? (portal.inside ? portal.planes : 0) : (portal.outside ? portal.floor_planes : 0));
 		// The planes the group crosses (0: it's all in view)
 		unsigned crossed = 0;
 
@@ -2054,6 +2178,21 @@ static void grey_boxes_add(void)
 			crossed = frustum_classify_box(&level_view, group->middle, group->half, planes);
 			if (crossed == FRUSTUM_OUTSIDE)
 				continue; // none of it can be seen from here
+			if (g == 0 && grey_stairs_far(group, e))
+			{
+				grey_stairs_ramp(crossed); // the stairs (the first group), far off
+				continue;
+			}
+		}
+		grey_stairs_profile_on = false;
+		if (g == 0 && level_view_on && grey_group_distance(group, e) > GREY_STAIRS_PROFILE &&
+			((grey_stairs_open_along_x ? e->y : e->x) - grey_stairs_open_line) * grey_stairs_open_out > 0)
+		{
+			const frustum_point *side = grey_stairs_side_corners;
+
+			grey_stairs_profile_on = true; // you're outside the open side: its profile, once
+			level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
+						   GREY_SIDE_Y, LEVEL_FOG_FLAT, SORT_CEN, false);
 		}
 		for (int i = group->first; i <= group->last; ++i)
 		{
@@ -2090,6 +2229,17 @@ static void grey_boxes_add(void)
 				level_face_add(&grey_out, top, 4, test != 0 ? level_planes_rect(&top[0], &top[2], test) : 0,
 							   grey_top_colour(b->height), LEVEL_FOG_NONE, SORT_CEN, false);
 			}
+			// A bar (its floor above the corridor's): its underside, from below it
+			if (b->floor > 0 && -view_z < b->floor)
+			{
+				const frustum_point under[4] = {{r->x_min, r->y_min, b->floor},
+												{r->x_max, r->y_min, b->floor},
+												{r->x_max, r->y_max, b->floor},
+												{r->x_min, r->y_max, b->floor}};
+
+				level_face_add(&grey_out, under, 4, test != 0 ? level_planes_rect(&under[0], &under[2], test) : 0,
+							   GREY_UNDERSIDE, LEVEL_FOG_NONE, SORT_CEN, false);
+			}
 		}
 	}
 }
@@ -2121,15 +2271,49 @@ static void corridor_walls_add(const corridor *passage)
 		const int end = along_x ? to[i].x : to[i].y;
 		const int dir = end > start ? 1 : -1;
 		const int eye_along = along_x ? level_view.eye.x : level_view.eye.y;
+		// From the city, a side wall you're not beyond (0: across_min's, 1: across_max's) shows
+		// only its inside, and only through the doorway: the rest is behind the far end's wall. So
+		// a piece wholly outside one of the doorway's planes is hidden, and isn't drawn. Only
+		// left out, never cut by them (as before, the far end's wall is drawn over what's behind
+		// it). The doorway's planes that can hide the floor (floor_planes) do: the sill can't hide
+		// a wall that stands on the floor, and the right side hides nothing unless you're beyond
+		// across_max's wall, when it's left in
+		const bool beyond = i == 0 ? portal.eye_across < passage->across_min : portal.eye_across > passage->across_max;
+		unsigned hiding = portal.outside && i < 2 && !beyond ? portal.floor_planes : 0;
+
+		// The whole face first: wholly outside, none of it's drawn; wholly inside, no piece needs
+		// testing
+		if (hiding != 0)
+		{
+			frustum_point c[4];
+
+			level_side_corners(along_x, line, start, end, WALL_BOTTOM_Z, CORRIDOR_TOP_ON_FOOT, c);
+			hiding = level_rect_classify(&c[0], &c[2], hiding);
+			if (hiding == FRUSTUM_OUTSIDE)
+				continue;
+		}
 
 		for (int a = start; a != end;)
 		{
 			// The next column 250 on near you, 500 or 1000 further along (each piece's fog goes in
 			// a straight line between its ends; far off, a piece is a few pixels across); or the
-			// face's end if that's nearer (the far end's half)
+			// face's end if that's nearer (the far end's half). Near you, 500 too if there's no fog
+			// at either end of it: it's all nearer than the fog starts (depth along a straight piece
+			// goes evenly from one end to the other), so there's nothing for the fog to follow, and
+			// the near pieces, always cut at the screen's edges, are halved
 			const int off = a - eye_along < 0 ? eye_along - a : a - eye_along;
-			const int step = dir * (off < 1000 ? 250 : off < 2000 ? 500 : 1000);
-			const int b = (dir > 0 ? a + step > end : a + step < end) ? end : a + step;
+			int step = dir * (off < 1000 ? 250 : off < 2000 ? 500 : 1000);
+			int b;
+
+			if (off < 1000)
+			{
+				const int b2 = (dir > 0 ? a + 2 * step > end : a + 2 * step < end) ? end : a + 2 * step;
+
+				if (object_fog_level(along_x ? a : line, along_x ? line : a) == 0 &&
+					object_fog_level(along_x ? b2 : line, along_x ? line : b2) == 0)
+					step *= 2;
+			}
+			b = (dir > 0 ? a + step > end : a + step < end) ? end : a + step;
 
 			for (int k = 0; k < 2; ++k)
 			{
@@ -2137,6 +2321,8 @@ static void corridor_walls_add(const corridor *passage)
 				unsigned planes;
 
 				level_side_corners(along_x, line, a, b, part_bottom[k], part_top[k], c);
+				if (hiding != 0 && level_rect_classify(&c[0], &c[2], hiding) == FRUSTUM_OUTSIDE)
+					continue; // behind the far end's wall, from the city
 				planes = level_planes_rect(&c[0], &c[2], FRUSTUM_SCREEN);
 				if (planes != FRUSTUM_OUTSIDE)
 					level_face_add(&grey_out, c, 4, planes, k == 0 ? base : CORRIDOR_BODY, LEVEL_FOG_CORNERS, SORT_MAX,
@@ -2178,7 +2364,7 @@ void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera
 /*
  * The glass floor on foot, cut to the view in 3D as everything else, and seen through the doorway
  * from the city. All in one mesh:
- *   - near you (within GLASS_NEAR along the corridor), the tiles, each outlined in white: the
+ *   - near you (within GLASS_OUTLINED along the corridor), the tiles, each outlined in white: the
  *     seams. They used to be the arena's floor (VDP2) showing through the gaps between the tiles,
  *     but that floor is one plane at one height: on foot it had to lie under the city, 3000 down,
  *     where its grid shimmered and fogged black (the black over the hexagons at the start). VDP2 is
@@ -2191,7 +2377,6 @@ void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera
  * by its furthest corner (SORT_MAX): a dot at the floor's deepest point (glass_anchor)
  */
 #define GLASS_SEAM JO_COLOR_RGB(255, 255, 255)
-#define GLASS_NEAR (GLASS_DETAIL - 2 * CORRIDOR_HEX_R)
 // Only tiles this near (along the corridor) are outlined: past it the seams are a pixel or two in the
 // fog, and each outline is three more polygons for SGL to sort (the stairs' view went to 30 fps)
 #define GLASS_OUTLINED 1000
@@ -2307,17 +2492,26 @@ static void glass_outline_add(level_mesh *m, int first, int n, bool whole, jo_co
 
 static void draw_glass_floor(const corridor *passage)
 {
-	const unsigned planes = FRUSTUM_SCREEN | (portal.outside ? portal.planes : 0);
+	// From the city, only the doorway's planes that can hide the floor (grey_portal)
+	const unsigned planes = FRUSTUM_SCREEN | (portal.outside ? portal.floor_planes : 0);
 	world_point eye_floor;
 	int eye_out, near_from, near_to, tiles_from;
+	// The column of tiles being worked through (they're laid a column at a time, along out), and
+	// the planes it crosses: tested once as a box, its tiles only against those
+	int column_out = -1;
+	unsigned column_planes = 0;
 
 	if (level_view.eye.z <= 0)
 		return; // under the floor (a roof in the city below it): its top can't be seen
 	eye_floor.x = (short)level_view.eye.x;
 	eye_floor.y = (short)level_view.eye.y;
 	eye_out = corridor_out(passage, eye_floor);
-	near_from = JO_MAX(eye_out - GLASS_NEAR, 0);
-	near_to = JO_MIN(eye_out + GLASS_NEAR, CORRIDOR_LENGTH);
+	// Tiles only as far as they're outlined (GLASS_OUTLINED), either way: past that they're a
+	// few pixels each in the fog, and the far glass in their place is a shade apart at most. Each
+	// tile drawn is tested, cut and fogged: out to 1750, as before, the view looking down the
+	// corridor from the yard (and in from the doorway, from the city) was a few % short of 60 fps
+	near_from = JO_MAX(eye_out - GLASS_OUTLINED, 0);
+	near_to = JO_MIN(eye_out + GLASS_OUTLINED, CORRIDOR_LENGTH);
 	level_mesh_begin(&glass_out, corridor_points, corridor_polygons, corridor_attributes, CORRIDOR_POINTS_MAX,
 					 CORRIDOR_QUADS_MAX);
 	glass_out.quad_count = 1; // slot 0: the chain's first (glass_anchor)
@@ -2355,7 +2549,24 @@ static void draw_glass_floor(const corridor *passage)
 
 		if (out < near_from - CORRIDOR_HEX_R || out > near_to + CORRIDOR_HEX_R)
 			continue; // over the far glass: no tiles out there
-		need = level_planes_box(centre, half, planes);
+		// A new column: the whole of it as one box, across the corridor and a hexagon along out.
+		// From the city most columns are wholly outside the doorway (one test, not one a tile),
+		// and a column wholly in view (0) has nothing left to test or cut. Every tile's centre in
+		// a column is at the same out (corridor_open)
+		if (out != column_out)
+		{
+			const world_point a = corridor_point(passage, out - CORRIDOR_HEX_R, passage->across_min);
+			const world_point b = corridor_point(passage, out + CORRIDOR_HEX_R, passage->across_max);
+			const frustum_point column_centre = {(a.x + b.x) >> 1, (a.y + b.y) >> 1, 0};
+			const frustum_point column_half = {((a.x > b.x ? a.x - b.x : b.x - a.x) >> 1) + 1,
+											   ((a.y > b.y ? a.y - b.y : b.y - a.y) >> 1) + 1, 0};
+
+			column_out = out;
+			column_planes = frustum_classify_box(&level_view, column_centre, column_half, planes);
+		}
+		if (column_planes == FRUSTUM_OUTSIDE)
+			continue;
+		need = column_planes != 0 ? level_planes_box(centre, half, column_planes) : 0;
 		if (need == FRUSTUM_OUTSIDE)
 			continue;
 		if (glass_out.quad_count + 8 > glass_out.quads_max)

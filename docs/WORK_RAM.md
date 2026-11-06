@@ -138,15 +138,22 @@ The pad has no button left, so speed does the work: how long you've held forward
 | Run | Holding forward straight on for ~0.8 s ramps up to 6 a frame. Turning hard (a turn held to its full speed: past ~15 degrees), strafing, backing off, or running into a wall or lip head on drops you back to a walk. A tap of a turn steers without losing it | Loud. You commit to it, and it's how you vault |
 | Stop at a lip | Walking into a roof's edge stops you there, as a wall does | You never walk off a roof by accident |
 | Drop | Keep pushing against the lip for ~0.3 s and you step off. Your head looks down at the drop as you push, so you see what you're dropping into | You meant it |
-| Jump | At a full run, a lip with a clean landing in reach: you jump off it (18 up) and fly on at your speed, across a gap or down onto a lower roof. The whole flight's worked out as you leave | Mirror's Edge's flow, with no jump button |
-| Vault up | At a full run, a wall no higher than your waist (48): you're up onto it in a stride, the eye following | |
+| Jump | At a full run, a lip with a clean landing in reach: you jump off it (45 up: about your waist) and fly on at your speed, across a street (200) or down onto a lower roof. The whole flight's worked out as you leave | Mirror's Edge's flow, with no jump button. 18 up over 100-wide streets didn't read as a jump from the eye |
+| Vault over | At a full run, something no higher than your waist and thin enough to clear (a rail, a crate): hands on its near edge, a small hop, and you land beyond it, still running | Flown first, as a jump: too deep to clear, it's a vault up instead |
+| Vault up | At a full run, a wall no higher than your waist (48), too deep to vault over: you're up onto it in a stride, the eye following | |
+| Climb | At a full run, a ledge up to 100 (2.3 m, a ledge your hands reach): you climb up onto it. The eye follows at half a step's pace, and you're down to a walk on top. Higher is a wall | A drop within a block isn't one way: you can climb back. Across a street you can't |
+| Slide | At a full run, a bar you'd hit your head on with room under it (its bottom 34-76 up: a duct, a pipe): you slide under it, the eye low (26), 0.6 s, slowing to a walk, the pad not steering. Only if you'll come out with room to stand | No crouch button: the run does it, as everything else |
 | Running at an edge with nothing clean in reach | You stop at the lip, the run lost (a long drop below: push on to step off, as walking) | Never killed, or staggered, for running |
 
 Built (2026-11-03, `game/walker.h`): the run, the jump off lips and across gaps, the vault up,
-and the eye easing up and down steps (the feet snap, the view glides over a few frames). The
-grey box has a crate before the stairs to vault. At this scale (the eye 68 up, a unit ~2.3 cm)
-a jump clears a gap of ~140 on the level, lands up to a clean drop (120) below, and a vault up
-is to 48. The numbers below are from before the rescale.
+and the eye easing up and down steps (the feet snap, the view glides over a few frames).
+2026-11-06: the climb, the vault over and the slide; jumps 45 up (were 18), clearing ~225 on the
+level; the city's streets 200 (were 100). A landing's drop counts from where you left, so a
+jump's hop never makes a clean drop a long one. Roofs can have a bottom (a bar, to slide under).
+The grey box has a yard on the corridor's right half to try them (a rail, a duct, a ledge of 90
+beside one of 140) and the crate before the stairs, now vaulted over. Later, hands and arms on
+screen will show which move it is. At this scale (the eye 68 up, a unit ~2.3 cm) a jump lands
+up to a clean drop (120) below. The numbers below are from before the rescale.
 
 Numbers to start from (units: the cycle is 50 tall, the eye 35 up, a grid cell 250):
 

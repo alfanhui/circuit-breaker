@@ -12,12 +12,13 @@ agreed, the same map becomes a C table, and the checks here become unit tests.
 The rules (WORK_RAM.md, "Moving"; game/walker.h), in world units at the rescaled size (2026-11-02:
 the eye 68 up, a unit ~2.3 cm, a grid cell 250):
   - Each map character is one tower, 500 x 500 (11.5 m). Two side by side in one block (2 x 2
-    towers) touch: you drop off a lip onto the lower one, or step up a kerb (16). Up to 120 down
-    is a clean drop; further is a long drop (a stagger, and the drone's called).
+    towers) touch: you drop off a lip onto the lower one, step up a kerb (16), or at a full run
+    climb up to 100 (2026-11-06: so a drop isn't one way). Up to 120 down is a clean drop;
+    further is a long drop (a stagger, and the drone's called).
   - Blocks are apart, across a street: crossing is a jump, at a full run. The landing must be no
     higher than you left and up to 120 below (further below: a long drop at the end of it).
-    Streets are 100: a jump clears ~140 on the level. (The high bank's longer flight isn't built:
-    it's 100 there too for now.)
+    Streets are 200: a jump clears ~225 on the level (2026-11-06: was 100 and ~140, too small to
+    read as a jump from the eye). (The high bank's longer flight isn't built: 200 there too.)
   - A street, or a freed block, is a fall to nothing: a reset.
   - The data bus's bridges join the two banks, across the channel.
   - Each hub has a lift back up to the entry: a safe zone.
@@ -64,11 +65,11 @@ PATROLS = [  # the watchdog's routes, as loops of tower corners (column, row), a
 ]
 
 QUARTER = 500
-LOW_STREET, HIGH_STREET, CHANNEL = 100, 100, 1200
+LOW_STREET, HIGH_STREET, CHANNEL = 200, 200, 1200
 TOP, STEP, LOWEST = 0, 50, -2400
 CLEAN_DROP, LONG_DROP_MAX = 120, 600
-KERB, LOW_REACH, HIGH_REACH = 16, 140, 140  # walker.h: WALKER_STEP_UP, a jump on the level
-GUARD_ABOVE, SEALED_ABOVE = 400, 60  # far over a vault up (48); over it
+KERB, CLIMB, LOW_REACH, HIGH_REACH = 16, 100, 225, 225  # walker.h: WALKER_STEP_UP, WALKER_CLIMB, a jump
+GUARD_ABOVE, SEALED_ABOVE = 400, 120  # far over a climb (100); over it
 
 # --- Towers -------------------------------------------------------------------------------------
 
@@ -171,6 +172,8 @@ def moves_from(a):
             if gap == 0:
                 if -CLEAN_DROP <= dz <= KERB:
                     out.append(('drop', b))
+                elif KERB < dz <= CLIMB:
+                    out.append(('climb', b))
                 elif -LONG_DROP_MAX <= dz < -CLEAN_DROP:
                     out.append(('long', b))
             elif 0 < gap <= (HIGH_REACH if a.high else LOW_REACH):
@@ -224,7 +227,7 @@ def route(start, goal, kinds):
     return None
 
 
-OPEN = {'drop', 'long', 'vault', 'longvault', 'bridge'}
+OPEN = {'drop', 'climb', 'long', 'vault', 'longvault', 'bridge'}
 E = (entry.col, entry.row)
 lifts = {k for k, t in towers.items() if t.lift}
 
@@ -297,7 +300,7 @@ svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw}" height="{ch_}" '
        f'<rect width="{cw}" height="{ch_}" fill="#07070d"/>',
        '<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" '
        'orient="auto"><path d="M0 0 8 4 0 8z" fill="context-stroke"/></marker></defs>',
-       f'<text x="{PAD}" y="{PAD}" fill="#e8e6f0" font-size="20">Work RAM: floor plan, draft 3 (rescaled)'
+       f'<text x="{PAD}" y="{PAD}" fill="#e8e6f0" font-size="20">Work RAM: floor plan, draft 4 (wider streets, climbs)'
        f'</text>',
        f'<text x="{PAD}" y="{PAD + 20}" fill="#7a789a" font-size="12">top down, north up. A grid of '
        f'memory, as a spreadsheet; guard pages wall off the straight way. Roofs show their height'
@@ -306,10 +309,10 @@ svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw}" height="{ch_}" '
 lx1, hx0 = X(corner(7, 0)[0] + QUARTER), X(corner(8, 0)[0])
 svg.append(f'<text x="{X(0)}" y="{oy - 24}" fill="#9a98b8" font-size="13">LOW WORK RAM 0x0020_0000'
            f'</text><text x="{X(0)}" y="{oy - 10}" fill="#5c5a78" font-size="11">slow DRAM: streets '
-           f'100, jumps up to 140</text>')
+           f'200, jumps up to 225, climbs up to 100</text>')
 svg.append(f'<text x="{hx0}" y="{oy - 24}" fill="#9a98b8" font-size="13">HIGH WORK RAM 0x0600_0000'
-           f'</text><text x="{hx0}" y="{oy - 10}" fill="#5c5a78" font-size="11">fast: streets 300, '
-           f'jumps up to 140 (longer: to come)</text>')
+           f'</text><text x="{hx0}" y="{oy - 10}" fill="#5c5a78" font-size="11">fast: streets 200, '
+           f'jumps up to 225 (longer: to come)</text>')
 cx = (lx1 + hx0) / 2
 svg.append(f'<rect x="{lx1}" y="{Y(0)}" width="{hx0 - lx1}" height="{H * S}" fill="#0b0b16"/>')
 svg.append(f'<circle cx="{cx}" cy="{Y(H * 0.45)}" r="{450 * S}" fill="#0f0f1c" stroke="#5c5a78" '

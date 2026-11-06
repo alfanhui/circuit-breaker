@@ -59,3 +59,15 @@ shot dwp_l5
 hold left 0.1
 wait 2.2
 shot dwp_l6
+# On past the doorway to the roof beside it (dwp_l7 .. l9): the near roof fills the screen's
+# bottom, a VDP1-bound view (2026-11-05: 30 fps, cpu 73%, busy 100) until the boxes' tops were cut
+# at the screen's edge
+hold left 0.1
+wait 2.2
+shot dwp_l7
+hold left 0.1
+wait 2.2
+shot dwp_l8
+hold left 0.1
+wait 2.2
+shot dwp_l9

@@ -1,18 +1,18 @@
 #include "city.h"
 
 // A tower's corner on the plan: its column (east, out from the corridor's end) and row (south,
-// across), as tools/work_ram_plan.py's corner(): 500 a tower, and a street of 100 after every
-// second one. Row 5's top edge is on the corridor's middle line (city.h)
+// across), as tools/work_ram_plan.py's corner(): 500 a tower, and a street (CITY_STREET) after
+// every second one. Row 5's top edge is on the corridor's middle line (city.h)
 #define S CITY_TOWER_SIZE
-#define COL(c) (CORRIDOR_LENGTH + (c) * S + ((c) >> 1) * 100)
-#define ROW(r) ((r) * S + ((r) >> 1) * 100 - (5 * S + 2 * 100))
+#define COL(c) (CORRIDOR_LENGTH + (c) * S + ((c) >> 1) * CITY_STREET)
+#define ROW(r) ((r) * S + ((r) >> 1) * CITY_STREET - (5 * S + 2 * CITY_STREET))
 #define TOWER(c, r, h) {COL(c), COL(c) + S, ROW(r), ROW(r) + S, h}
 #define GUARD 400 // a guard page: far above everything near it
 
 // The plan's heights for these 21 towers (city.h has them as a map), row by row
 const city_tower city_towers[CITY_TOWERS] = {
 	TOWER(0, 3, GUARD), TOWER(1, 3, GUARD), TOWER(2, 3, GUARD),
-	TOWER(0, 4, 60),	TOWER(1, 4, 120),	TOWER(2, 4, GUARD), // sealed: out of reach
+	TOWER(0, 4, -60),	TOWER(1, 4, -100),	TOWER(2, 4, GUARD), // dead ends you climb back out of
 	TOWER(0, 5, 0),		TOWER(1, 5, -50),	TOWER(2, 5, GUARD), // the entry, level with the corridor
 	TOWER(0, 6, -60),	TOWER(1, 6, -110),	TOWER(2, 6, GUARD),
 	TOWER(0, 7, -100),	TOWER(1, 7, -160),	TOWER(2, 7, GUARD),

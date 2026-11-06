@@ -193,7 +193,8 @@ static void past_the_tail_the_glass_is_whole(void)
 	int on_one = 0, samples = 0;
 
 	open_round_five(&c);
-	for (int across = -497; across < 500; across += 13)
+	// The left half: the yard (corridor.h) stands on the right
+	for (int across = -497; across < -CORRIDOR_HEX_R; across += 13)
 	{
 		int last = -1, gap = 0;
 
@@ -270,8 +271,40 @@ static void the_grid_tails_off(void)
 	}
 }
 
+// The yard (corridor.h), on the right half: running out from before it, you vault over the rail
+// (landing beyond it, still running), slide under the duct, and with a run-up climb the ledge (90).
+// A quarter of the way in from the right wall, the ledge's half: its other half (140) is a wall
+static void the_yard_vaults_slides_and_climbs(void)
+{
+	corridor c;
+	walker_area area;
+	walker w;
+	world_point at;
+	walker_controls ahead = {0, 1, 0, 0, 0};
+	int frames, slid = 0;
+
+	open_round_five(&c);
+	corridor_walker_area(&c, &area);
+	at = corridor_point(&c, 1250, c.across_min + (((c.across_max - c.across_min) * 5) >> 3));
+	walker_init(&w, at, 0xC000);
+	for (frames = 0; frames < 600 && !w.falling; ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK(w.falling); // over the rail
+	CHECK_EQ(40, walker_height(&w));
+	CHECK(corridor_out(&c, walker_position(&w)) >= 1600 && corridor_out(&c, walker_position(&w)) <= 1630);
+	for (frames = 0; frames < 600 && walker_height(&w) != 90; ++frames)
+	{
+		walker_update(&w, ahead, &area);
+		slid |= walker_sliding(&w) && corridor_out(&c, walker_position(&w)) > 1900 &&
+				corridor_out(&c, walker_position(&w)) < 1960; // under the duct
+	}
+	CHECK(slid);
+	CHECK_EQ(90, walker_height(&w)); // up the ledge
+	CHECK(corridor_out(&c, walker_position(&w)) >= 2450);
+}
+
 // On foot in the grey box: from where the cycle stops, holding forward up the corridor's left half
-// builds to a run, vaults the crate (up onto it, off its end), climbs the stairs a step at a time
+// builds to a run, vaults over the crate (hands on its near edge, landing beyond), climbs the stairs a step at a time
 // onto the platform (160), and jumps off its
 // end onto the lower roof (64), a clean landing, running on to the tower (a wall). On the right
 // half, off the platform, it's a long drop to the floor: no jump, but pushing on drops you. Facing
@@ -291,9 +324,9 @@ static void the_grey_box_climbs_and_drops(void)
 	walker_init(&w, at, 0xC000);
 	for (frames = 0; frames < 1200 && !w.falling; ++frames)
 		walker_update(&w, ahead, &area);
-	CHECK(w.falling); // up the crate (40), and off its end
-	CHECK_EQ(40, walker_height(&w)); // leaving from its top (the jump starts next frame)
-	CHECK(corridor_out(&c, walker_position(&w)) >= 3054 && corridor_out(&c, walker_position(&w)) <= 3060);
+	CHECK(w.falling); // over the crate (40)
+	CHECK_EQ(40, walker_height(&w)); // from its near edge's top (the hop starts next frame)
+	CHECK(corridor_out(&c, walker_position(&w)) >= 3000 && corridor_out(&c, walker_position(&w)) <= 3010);
 	for (frames = 0; frames < 300 && w.falling; ++frames)
 		walker_update(&w, ahead, &area);
 	CHECK_EQ(0, walker_height(&w)); // down on the floor, running on
@@ -311,7 +344,7 @@ static void the_grey_box_climbs_and_drops(void)
 	CHECK_EQ(0, w.stagger);
 	for (frames = 0; frames < 300 && w.push == 0; ++frames)
 		walker_update(&w, ahead, &area);
-	CHECK(corridor_out(&c, walker_position(&w)) <= 4200 - WALKER_RADIUS); // the tower: a wall
+	CHECK(corridor_out(&c, walker_position(&w)) <= 4300 - WALKER_RADIUS); // the tower: a wall
 	CHECK_EQ(64, walker_height(&w));
 
 	// The right half: off the platform to the floor, 160 down
@@ -326,6 +359,7 @@ static void the_grey_box_climbs_and_drops(void)
 void run_corridor_tests(void)
 {
 	RUN(the_grey_box_climbs_and_drops);
+	RUN(the_yard_vaults_slides_and_climbs);
 	RUN(closed_until_it_opens);
 	RUN(points_run_out_through_the_wall);
 	RUN(out_is_from_the_wall);

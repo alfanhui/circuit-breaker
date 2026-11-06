@@ -232,3 +232,64 @@ What made it pay (it first cost more CPU than it saved):
 
 Next: the corridor's boxes as occluders (the tower and the stairs hide the far end), and the
 city's towers once there are many (they'd fit cells and portals, step 2, better).
+
+## The doorway from the city (2026-11-05, uncommitted)
+
+Looking in through the doorway from the city's roof was the last view short of 60 fps (54-55,
+cpu ~87%), and the roof beside it was 30 (VDP1). Each fix leaves out work the doorway already
+makes pointless; none cuts anything new:
+
+- **The floor's tiles a column at a time.** They're laid in columns along the corridor, so a
+  column is tested as one box first: wholly outside the doorway, its tiles are skipped in one
+  test; wholly in view, they aren't tested at all. ~3% of the CPU.
+- **Only the doorway's planes that can hide the floor.** The sill is the floor's own far edge, so
+  the whole floor (and all that stands on it) is inside it while the eye's above the floor. The
+  side at the corridor's side wall hides nothing unless you stand beyond that wall. Tested
+  anyway, the last column of tiles crossed the sill and was sent to the clipper for nothing
+  (`test_frustum.c`, `a_doorway_s_sill_and_far_jamb_hide_no_floor`).
+- **The side walls behind the far end's wall.** From the city, a side wall you're not beyond is
+  seen only through the doorway, so a piece wholly outside the doorway's planes is left out
+  (only left out, never cut: the far end's wall is drawn over what's behind it, as before). Little
+  here (from the doorway most of both walls really is seen), more from further off to one side.
+- **Tiles only as far as they're outlined.** Past `GLASS_OUTLINED` (1000) the tiles are a few
+  pixels each in the fog through the doorway; from the city the far glass takes their place. This
+  was the big one: half the tiles, ~5% of the CPU.
+
+What didn't help, so isn't in: dropping the outlines (35 polygons, no CPU: SGL's cost is per
+point, and the outlines share the tiles'), and cutting the boxes' tops exactly at the screen's
+edge for the VDP1-bound roof (60 with or without, once the rest was in).
+
+The part timings (`ar co sd tp fl ...`) were a poor guide here: each is a second's worst frame,
+timed by the FRC, so an interrupt that lands in a part (SGL's vblank work) counts in it. One-off
+builds and the `cpu` and `late` figures settled it.
+
+## Looking down the corridor from the yard (2026-11-06, uncommitted)
+
+The yard (corridor.h: the run's moves to try) is on the corridor's right half, and from there you
+see the whole corridor: 45-58 fps, cpu 80-87%. Without the yard's boxes it was no better (55-58):
+the view, not the yard. One-thing-off builds, each worth 10-15% of the CPU there: the stairs, the
+corridor's walls, the floor's tiles. What went in:
+
+- **The stairs far off as a ramp** (`grey_stairs_ramp`, past 1000): twenty steps, ~40 faces, each
+  about a pixel high from there. Two faces now: the slope through the steps' front edges, and the
+  open side's profile. Only the drawing: you still walk the steps.
+- **Their open side as one profile, nearer** (past 400, seen from beside): each step's side was a
+  whole rectangle from the floor up, twenty overlapping faces for one wall. The profile cuts the
+  steps' corners (8 x 12), under 3 pixels from there.
+- **Tiles only as far as they're outlined, everywhere** (1000 either way, was 1750 ahead): as the
+  doorway's fix, the far glass in their place.
+- **The corridor's wall pieces 500 near you where there's no fog to follow** (both ends fog level
+  0): half the near pieces, the ones always cut at the screen's edges.
+
+Now 59-60 down the yard (cpu 65-67%), but for the second you climb the ledge (VDP1 at 96%: its
+face, then its top, fill the screen with everything behind still drawn).
+
+What didn't, and isn't in:
+
+- **The nearest tall box as an occluder** (`game/occluder.h`, the corridor's boxes hiding what's
+  behind them). VDP1's busy fell (96 to 0-73%), but the tests cost more CPU than they saved (cpu up
+  ~7%, 47 fps by the stairs), and limited to near faces and whole columns it made no difference.
+- **Box tops cut exactly at the screen's edge** (for the ledge's top at your feet): worse, a second
+  time. The run up the left half fell to 48 at the crate.
+- Mednafen's cpu figure moves ±4% between builds that change nothing in the view (code moving in
+  the cache): compare within one film, and trust a change only if it moves more than that.

@@ -41,6 +41,9 @@
  */
 #define WALKER_EYE 68
 #define WALKER_EYE_RIDING 35
+#define WALKER_HEAD 76		 // the top of your head above your feet: what you need under a bar to walk
+#define WALKER_EYE_SLIDE 26	 // sliding: the eye low, near the floor
+#define WALKER_SLIDE_HEAD 34 // and your head: you slide under a bar higher than this
 #define WALKER_RADIUS 40 // how near a wall you can stand (world units)
 #define WALKER_FOOT 16	 // your footprint, round your middle: you step up as it reaches a step
 #define WALKER_WAIST 48	 // a roof up to this above your feet stops your feet (WALKER_FOOT off it);
@@ -63,18 +66,33 @@
  * full speed: about 15 degrees) or running into a wall or a lip head on drops you back to a walk.
  * A tap of forward never gets past a creep, so the ramp's the stealth control, and the run's loud.
  *
- * Only at a full run do edges carry you on, with no button (Mirror's Edge's flow):
- *   - a lip: you jump off it, WALKER_VAULT_HOP up, and fly on at your speed. Only if where you'd
- *     come down is a clean landing: the whole flight's worked out as you leave (vault_off), so
- *     it's predictable: if it took you once, it always will. Otherwise you stop at the lip, as
- *     walking (and pushing on steps you off, as walking)
- *   - a low wall, no higher than your waist: you vault up onto it. Your feet go up at once, and
- *     the eye follows (the step's lag, below)
+ * Only at a full run, head on, do edges and obstacles carry you on, with no button (Mirror's
+ * Edge's flow). Each is worked out whole before it starts (flown or slid on a copy of you), so
+ * it's predictable: if it took you once, it always will. Otherwise you stop, as walking:
+ *   - a lip: you jump off it, WALKER_VAULT_HOP up, and fly on at your speed, if where you'd come
+ *     down is a clean landing (vault_off). Pushing on at a lip you stopped at steps you off
+ *   - a bar you'd hit your head on, with room under it to slide (its bottom higher than
+ *     WALKER_SLIDE_HEAD): you slide under it, low, for WALKER_SLIDE_FRAMES, slowing to a walk.
+ *     Only if you'll come out the far side with room to stand (slide_under)
+ *   - something no higher than your waist, thin enough to clear: you vault over it (hands on its
+ *     top, a small hop: WALKER_VAULT_OVER_HOP) and land beyond, running on (vault_over)
+ *   - something no higher than your waist, too deep to clear: you vault up onto it in a stride
+ *   - a ledge up to WALKER_CLIMB: you climb up onto it. Slower: the eye follows at half the pace,
+ *     and you're down to a walk at the top (climb). Higher is a wall
+ * Your feet go up at once in all of them; the eye follows (the step's lag, below). Later, hands
+ * and arms will show which move it is
  */
 #define WALKER_RUN_SPEED 1536		// 6 a frame: twice walking
 #define WALKER_RUN_SPEED_UP 20		// a frame, past walking speed: a run 38 frames after walking
-#define WALKER_VAULT_HOP 768		// x256 a frame upwards, leaving a lip: 18 up at the top of the
-									// jump, 24 frames in the air on the level, a gap of ~140 (3.2 m)
+#define WALKER_VAULT_HOP 1216		// x256 a frame upwards, leaving a lip: 45 up at the top of the
+									// jump (a little under your waist: plainly a jump, not a step),
+									// 38 frames in the air on the level, a gap of ~225 (5.2 m). It
+									// was 18 up and ~140: from the eye it hardly read as a jump
+#define WALKER_VAULT_OVER_HOP 384	// the hop off the top of what you vault over: 1 up, clearing it
+#define WALKER_CLIMB 100			// the highest you climb up onto at a run: 2.3 m, a ledge your
+									// hands reach (your head's at 76: 1.75 m)
+#define WALKER_SLIDE_FRAMES 36		// a slide: 0.6 s, ~155 along, slowing from a run to a walk
+#define WALKER_SLIDE_FRICTION 24	// x256 a frame off your speed, sliding
 #define WALKER_FLIGHT_FRAMES_MAX 64 // how far ahead a jump's worked out: a longer flight isn't taken
 
 /*
@@ -83,7 +101,7 @@
  * glide, not jolt 8 at a time, and a vault up onto a low wall is a climb. walker_step_lag is how
  * far the eye's still below where it's going (negative: above it, stepping down)
  */
-#define WALKER_LAG_MAX 64
+#define WALKER_LAG_MAX 112 // a climb's 100, and a little
 
 // Turning (ANGLE a frame)
 #define WALKER_TURN_FIRST 96	  // 0.5 degrees: the first frame of a tap, for fine aiming
@@ -127,7 +145,10 @@
 // up: any higher, and it's a wall). Two that touch you walk between, if they're a kerb apart,
 // and you can stand right at a roof's edge, to look over it. Walls are roofs too: too tall to
 // step onto, they keep you WALKER_RADIUS off their sides (a room is a floor, and four tall roofs
-// round it). Where there's nothing at all is a lip over nothing: it never lets you go
+// round it). Where there's nothing at all is a lip over nothing: it never lets you go.
+// Most roofs go all the way down (a tower, a crate). A bar has a bottom too: it floats, and you
+// pass under it if your head clears its bottom (a duct, a pipe: walking, WALKER_HEAD; sliding,
+// WALKER_SLIDE_HEAD). Its top is a roof like any other
 #define WALKER_AREA_RECTS_MAX 64 // the corridor (5), its grey box (25) and the city's first towers (21)
 
 typedef struct
@@ -135,6 +156,7 @@ typedef struct
 	unsigned char count;
 	world_rect rects[WALKER_AREA_RECTS_MAX];
 	short heights[WALKER_AREA_RECTS_MAX];
+	short bottoms[WALKER_AREA_RECTS_MAX]; // WALKER_NO_FLOOR: all the way down
 } walker_area;
 
 // One frame's pad, each -1, 0 or 1
@@ -158,6 +180,8 @@ typedef struct
 	int z;			  // how high your feet are, x256
 	int fall_speed;	  // falling: downwards, x256 a frame (0 standing)
 	int fall_from;	  // where the fall began, or the jump's top (whole units): how far it was, on landing
+	int take_off;	  // where you left the roof from (whole units): a landing's drop is from here, so
+					  // a jump's hop doesn't make a clean drop a long one
 	int air_dx;		  // the way you're going in the air, x256 a frame: as you left the roof
 	int air_dy;
 	unsigned char falling;
@@ -166,6 +190,7 @@ typedef struct
 	unsigned char dip;	   // the eye's dip from a landing, dying away (whole units)
 	unsigned char eye;	   // how high the eye is above your feet: straightening up to WALKER_EYE
 	signed char lag;	   // the eye's lag behind a step up (or down): walker_step_lag
+	unsigned char slide;   // frames left of a slide under a bar (0: not sliding)
 } walker;
 
 void walker_area_clear(walker_area *a);
@@ -174,6 +199,8 @@ void walker_area_clear(walker_area *a);
 int walker_area_add(walker_area *a, int x0, int y0, int x1, int y1);
 // The same, as a roof at a height
 int walker_area_add_roof(walker_area *a, int x0, int y0, int x1, int y1, int height);
+// A bar: from `bottom` up to its top at `height` (a roof you can also pass under)
+int walker_area_add_bar(walker_area *a, int x0, int y0, int x1, int y1, int bottom, int height);
 // Whether a point's somewhere you can stand (at any height)
 int walker_area_holds(const walker_area *a, int x, int y);
 // The highest roof at a point (whole units), WALKER_NO_FLOOR if there's none
@@ -210,6 +237,9 @@ int walker_eye(const walker *w);
 // How far the eye's still below your feet's height plus its own, after a step up (whole units,
 // easing to 0); negative after a step down
 int walker_step_lag(const walker *w);
+
+// Whether you're sliding (under a bar): the eye's low, and the pad doesn't steer
+int walker_sliding(const walker *w);
 
 // sin(angle) x1024, for an ANGLE: a table of a quarter turn, the rest by symmetry, in between by a
 // straight line. cos is sin a quarter turn on. No division, no floats
