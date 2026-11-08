@@ -15,7 +15,7 @@
  *     command is 32 bytes, so / 4 again is its place in the list. In a frame it finished, that's
  *     the end command: how many commands the frame had.
  *
- * jo's loop is: our callbacks, then slSynch (waits for the vblank, where VDP1 starts drawing the
+ * jo's loop is: our callbacks, then jo sends the commands (waits for the vblank, where VDP1 starts drawing the
  * list we just built). So while our callbacks run, VDP1 is drawing the frame before. Read at the
  * frame's start, BEF says whether VDP1 finished that frame. Read at the frame's end, when the CPU
  * is done, CEF says whether VDP1 had finished too. If it hadn't, VDP1 is the slower of the two.
@@ -29,7 +29,7 @@
  *           - busy near 100 with the fps down: VDP1 is what limits the frame rate. Cut pixels
  *             (overdraw, big faces, diagonal fill lines), not CPU;
  *           - busy near 0 with the fps down: the CPU is the limit;
- *   cmd:  the most commands in a finished frame (SGL's own few included): the list's length.
+ *   cmd:  the most commands in a finished frame (jo's own few included: clipping, the screen clear): the list's length.
  *
  * First readings, in Mednafen (2026-11-04):
  *   - the corridor's start: busy 0, cmd 238, cpu 76%;
@@ -38,6 +38,8 @@
  *   - looking back at the doorway from the city: 37 fps, busy 94, cpu 82%: both chips are short
  *     there, VDP1 the more.
  * MODR (0x25D00016) read 0x1110 there: VDP1 version 1, with SGL's manual frame change (FCM).
+ * jo-engine 2026 with JO_FRAMERATE = 1 (makefile) swaps at every VBlank instead: an unfinished
+ * frame is shown as it is (its nearest commands missing), and "over" counts those.
  */
 
 #define VDP1_EDSR_BEF 0x0001 // the frame before reached its end command
@@ -58,7 +60,7 @@ typedef struct
 
 void vdp1_gauge_init(vdp1_gauge *g);
 
-// At the frame's start (after slSynch): the registers EDSR and LOPR as read now
+// At the frame's start (after jo waited for the vblank): the registers EDSR and LOPR as read now
 void vdp1_gauge_frame_start(vdp1_gauge *g, unsigned short edsr, unsigned short lopr);
 
 // At the frame's end (the CPU's work done): EDSR as read now

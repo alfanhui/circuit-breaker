@@ -3,29 +3,29 @@
 
 void trail_mesh_init(trail_mesh *m, jo_color color)
 {
-	m->mesh.data.pntbl = m->points;
-	m->mesh.data.pltbl = m->polygons;
-	m->mesh.data.nbPolygon = TRAIL_DRAW_PIECES_MAX; // for jo's index check while colouring
-	m->mesh.data.attbl = m->attributes;
+	m->mesh.data.points = m->points;
+	m->mesh.data.polygons = m->polygons;
+	m->mesh.data.polygon_count = TRAIL_DRAW_PIECES_MAX; // for jo's index check while colouring
+	m->mesh.data.attributes = m->attributes;
 
 	// Every piece looks the same, so attributes are set once; vertex indices change per frame
 	for (int i = 0; i < TRAIL_DRAW_PIECES_MAX; ++i)
 	{
-		m->polygons[i].norm[X] = JO_FIXED_0;
-		m->polygons[i].norm[Y] = JO_FIXED_1;
-		m->polygons[i].norm[Z] = JO_FIXED_0;
+		m->polygons[i].normal.x = JO_FIXED_0;
+		m->polygons[i].normal.y = JO_FIXED_1;
+		m->polygons[i].normal.z = JO_FIXED_0;
 
 		JO_ZERO(m->attributes[i].sort);
-		JO_ZERO(m->attributes[i].atrb);
-		JO_ZERO(m->attributes[i].gstb);
-		m->attributes[i].flag = Dual_Plane;
+		JO_ZERO(m->attributes[i].draw_mode);
+		JO_ZERO(m->attributes[i].gouraud_table);
+		m->attributes[i].plane = JO_3D_DUAL_PLANE;
 		jo_3d_set_mesh_polygon_color(&m->mesh, color, i);
 		// Fog: VDP1 shades each corner by its own Gouraud colour (object_fog_vdp1.h)
 		if (object_fog_enabled)
-			m->attributes[i].atrb |= CL_Gouraud;
+			m->attributes[i].draw_mode |= JO_VDP1_COLOR_CALC_GOURAUD;
 	}
-	m->mesh.data.nbPoint = 0;
-	m->mesh.data.nbPolygon = 0;
+	m->mesh.data.point_count = 0;
+	m->mesh.data.polygon_count = 0;
 }
 
 void trail_mesh_begin(trail_mesh *m)
@@ -51,15 +51,15 @@ void trail_mesh_add(trail_mesh *m, const trail *t, int height, int head_gap, wor
 
 	for (int i = first; i < first + columns; ++i)
 	{
-		FIXED x = jo_int2fixed(m->columns[i].p.x);
-		FIXED y = jo_int2fixed(m->columns[i].p.y);
+		jo_fixed x = jo_int2fixed(m->columns[i].p.x);
+		jo_fixed y = jo_int2fixed(m->columns[i].p.y);
 
-		m->points[i * 2][X] = x;
-		m->points[i * 2][Y] = y;
-		m->points[i * 2][Z] = JO_FIXED_0;
-		m->points[i * 2 + 1][X] = x;
-		m->points[i * 2 + 1][Y] = y;
-		m->points[i * 2 + 1][Z] = jo_int2fixed(height);
+		m->points[i * 2].x = x;
+		m->points[i * 2].y = y;
+		m->points[i * 2].z = JO_FIXED_0;
+		m->points[i * 2 + 1].x = x;
+		m->points[i * 2 + 1].y = y;
+		m->points[i * 2 + 1].z = jo_int2fixed(height);
 		if (object_fog_enabled)
 			fog_levels[i] = (unsigned char)object_fog_level(m->columns[i].p.x, m->columns[i].p.y);
 
@@ -69,11 +69,11 @@ void trail_mesh_add(trail_mesh *m, const trail *t, int height, int head_gap, wor
 			if (object_fog_enabled) // Gouraud corners in the same order as the vertices below
 				object_fog_set_quad(&m->attributes[pieces], fog_levels[i - 1], fog_levels[i - 1], fog_levels[i],
 									fog_levels[i]);
-			POLYGON *piece = &m->polygons[pieces++];
-			piece->Vertices[0] = (i - 1) * 2;	  // from, bottom
-			piece->Vertices[1] = (i - 1) * 2 + 1; // from, top
-			piece->Vertices[2] = i * 2 + 1;		  // to, top
-			piece->Vertices[3] = i * 2;			  // to, bottom
+			jo_3d_polygon *piece = &m->polygons[pieces++];
+			piece->vertices[0] = (i - 1) * 2;	  // from, bottom
+			piece->vertices[1] = (i - 1) * 2 + 1; // from, top
+			piece->vertices[2] = i * 2 + 1;		  // to, top
+			piece->vertices[3] = i * 2;			  // to, bottom
 		}
 	}
 	m->columns_used = first + columns;
@@ -84,8 +84,8 @@ void trail_mesh_end(trail_mesh *m)
 {
 	if (m->pieces_used == 0)
 		return;
-	m->mesh.data.nbPoint = m->columns_used * 2;
-	m->mesh.data.nbPolygon = m->pieces_used;
+	m->mesh.data.point_count = m->columns_used * 2;
+	m->mesh.data.polygon_count = m->pieces_used;
 	jo_3d_mesh_draw(&m->mesh);
 }
 

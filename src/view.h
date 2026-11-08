@@ -25,9 +25,9 @@ extern int view_x;
 extern int view_y;
 extern int view_z;
 
-// World rotation (SGL ANGLE units, 0x4000 = 90 degrees)
-extern ANGLE view_rx;
-extern ANGLE view_rz;
+// World rotation (SGL jo_angle units, 0x4000 = 90 degrees)
+extern jo_angle view_rx;
+extern jo_angle view_rz;
 
 void view_init(const cycle *c);
 void view_toggle(const cycle *c);
@@ -55,26 +55,26 @@ void view_turn_left(void);
 void view_turn_right(void);
 // 1st person: turn the head to look aside (-1 left, 1 right) or back ahead (0); it eases there
 void view_look(int direction);
-// On foot (game/walker.h), every frame: the body facing yaw (ANGLE, any way at all, at once), the
+// On foot (game/walker.h), every frame: the body facing yaw (jo_angle, any way at all, at once), the
 // head looking look_x (-1 left, 1 right) and look_y (-1 down, 1 up), easing there, and the eye bob
 // lower than standing on the floor (a step's bob, a landing's dip, less the roof's height). Off
 // again at view_init
 void view_on_foot(int yaw, int look_x, int look_y, int bob);
 // Whether you're on foot (view_on_foot since the last view_init)
 bool view_is_on_foot(void);
-// On foot, how far the head's looking down now (ANGLE; negative: up). 0 otherwise
+// On foot, how far the head's looking down now (jo_angle; negative: up). 0 otherwise
 int view_look_pitch(void);
 // How high the floor's grid (VDP2) lies: 0 riding, the arena's floor; on foot, far below, as the
 // ground under Work RAM's city (city.h: CITY_GROUND), the towers' feet
 int view_ground_height(void);
-// Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
+// Shake the camera: a jolt of this strength (jo_angle) that dies away (game/camera_shake.h).
 // In iso it's half the size: the whole arena swinging is too much
 void view_shake(int strength);
-// Keep the camera rumbling at least this hard (ANGLE), called every frame while it should
+// Keep the camera rumbling at least this hard (jo_angle), called every frame while it should
 // (camera_shake_hold): it dies away once the calls stop
 void view_rumble(int strength);
 // The designed crash (game/breach.h): the camera's roll and, in 1st person, its tip down towards
-// the floor (ANGLE) and how far the eye's dropped, each frame of it. Back to 0 when the game
+// the floor (jo_angle) and how far the eye's dropped, each frame of it. Back to 0 when the game
 // starts again (view_init)
 void view_breach(int roll, int dip, int drop);
 // Spectating: move the camera dx along x at once, with the cycle (the prologue's loop jumping

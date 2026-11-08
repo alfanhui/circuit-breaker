@@ -17,6 +17,27 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 | Stutter that the FPS counter doesn't show | `late` counter added (debug line 11). Long trails did drop to 32 fps; now 60. If you see stutter and `late` doesn't move, it's the emulator's pacing on the PC: **retest** | M |
 | Docker E2E still waits ~15 s for the BIOS | Mednafen has no emulated BIOS and fast-forward can't go faster in the container | S |
 
+## Next: after the move to jo-engine 2026 (2026-11-08)
+
+jo-engine 2026 talks to the hardware itself, with no SGL. The game was ported on branch
+`feature/jo-engine-2026` (SKILLS.md, "jo-engine 2026 has no SGL"): it runs, the unit tests pass, and
+the films look as before, but on foot it costs more CPU. The fork is on v2026.2 (2026-11-08).
+Newest at the top.
+
+| Item | Why | Effort |
+|---|---|---|
+| **Win back the CPU on foot** | **Done, uncommitted** (2026-11-08). The slave SH-2 now sorts jo's VDP1 commands and draws the corridor's floor and boxes (`src/slave_draw.c`); `JO_FRAMERATE = 1` lets VDP1 erase the frame for free. Yard: 60 fps throughout at cpu 40-72% (was 47-58 at 93-106%; SGL 66-81%). Doorway and `stairs_perf`'s platform lip: 60 (were 30-45, and 30). SKILLS.md has the measurements | L |
+| Frames VDP1 can't finish, now shown unfinished | With `JO_FRAMERATE = 1` a frame VDP1 runs over is shown with its nearest commands missing (the HUD among them), where SGL slowed down. 0 in every film of play; the debug camera in the corridor (521 polygons) runs over every other frame. The better fix is in jo: in its manual frame change mode (`JO_FRAMERATE_DYNAMIC`), use VDP1's own erase (the manual erase of FBCR, as SGL did) instead of the whole-screen clear polygon (~4 ms of VDP1). Then switch back to dynamic. A change to the jo fork, worth offering upstream | M |
+| Balance the two CPUs | On `stairs_perf`'s platform lip the master waits ~9 ms for the slave (it has the boxes and jo's sort and copy); in the yard the slave waits instead. Hand meshes over by their size each frame, or move the boxes back to the master when the floor's big (`jo_core_master_wait_time`, `jo_core_slave_idle_time`) | M |
+| More meshes on the slave | The arena's wall strips and the trails still draw on the master. The strips share one polygon array and their attributes, refilled between draws (the wall fog changes them as it goes): each needs arrays of its own first | M |
+| VDP1 overdraw on foot: try `jo_3d_set_depth_limit()` (v2026.2) | Sets how deep the current window draws: nothing beyond it. Where a near wall or ledge face fills the screen (the yard's ledge climb, VDP1 96%; `stairs_perf`'s platform lip, 100%), the polygons behind needn't be sent at all. jo's FPS sample does it per cell. Cheaper than the box occluder tried before (CPU per box) | M |
+| Give back the 256 Gouraud tables kept for jo at 0x70000 | jo v2026.2 moved its sprite shading tables up to 0x7E4F8: `TABLES_FOR_JO` in `object_fog_vdp1.c` is 2 KB of VDP1 RAM nobody uses. Moving ours down changes every `gouraud_table` number: film the fog after | S |
+| Floor fog's DMA beside jo's | The fog is on SCU DMA level 1; jo copies the VDP1 command table on level 0 every frame, and level 0 goes first. An HBlank during that copy waits: on the console the fog could slip some rows for a frame. Mednafen shows it right. HARDWARE_TESTS 1 | S |
+| SGL in comments | ~100 comments still say SGL (sorting, near clip, "SGL units"): true of jo 2026 in spirit, but read as the old library. Sweep them when the files are next touched | S |
+| Game title in the disc's header | jo 2026 writes the IP.BIN from the makefile: `JO_GAME_TITLE`, `JO_GAME_VERSION`, `JO_GAME_PRODUCT_NUMBER`, `JO_GAME_PERIPHERALS` (now "JO ENGINE", pad only) | S |
+| New in jo 2026 worth a look | Split screen: `jo_3d_set_windows_apart` (2 players, CLAUDE.md). Audio: WAV loader, per-channel rate, SCSP DSP reverb and a 68000 sound driver (the glass sounds). VDP2 glows and colour filters (Rez-like light). Profiler. Mipmaps and texture subdivision (the floor pixelation section) | M |
+| `floor_fade.steps` (and other arena films) start from the arena | With `BOOT_ON_FOOT` on, `skip_prologue` lands on foot and the film's presses go to the debug camera (26 fps, cpu 217% there: the whole corridor uncut). Not a jo problem: boot into the arena to run them | S |
+
 ## From SEGA's manuals: where they challenge what we do (read 2026-11-04)
 
 The official VDP1 and VDP2 manuals (`Manuals/` in the jo-engine root) were read in full; the SCU manual, its final "Precautions" and the dual CPU guide were added on the same day. The facts are in SKILLS.md ("SEGA's own VDP1 and VDP2 manuals"). These rows are where they contradict an assumption here, or show a cheaper way than the one we took.
@@ -141,10 +162,8 @@ The floor is VDP2's rotating background (RBG0): a 64x64, 8-bit FLOOR.TGA tiled e
 
 | Item | Why | Effort |
 |---|---|---|
-| jo bug: `JO_VDP2_LINE_COLOR_TABLE` is allocated at the start of VRAM B1, on top of SGL's text font (`jo_printf`) | Overwrote the glyphs (screen of stripes). Worked round by allocating in A0; report upstream | S |
-| Send the BSS clear fix upstream to jo-engine | `jo_engine/core.c` clears a quarter of BSS. Fixed locally (outer repo, uncommitted) | S |
-| `JO_WORK_RAM_SYSTEM_WORK` looks like a typo (0x06FFC00) | Probably harmless; low confidence | S |
-| Slave SH-2 cache coherency | The dual CPU guide: the cache doesn't watch the bus, so read shared data at +0x20000000 or invalidate its 16-byte line by writing 0 at +0x40000000. Only if SGL hands work to the slave: stale data, visual glitches | M |
+| jo bug (SGL days): `JO_VDP2_LINE_COLOR_TABLE` was allocated at the start of VRAM B1, on top of SGL's text font (`jo_printf`) | Worked round by allocating with the floor's cells. jo 2026 has its own font: check whether it still clashes before reporting upstream | S |
+| Slave SH-2 cache coherency | The dual CPU guide: the cache doesn't watch the bus, so read shared data at +0x20000000 or invalidate its 16-byte line by writing 0 at +0x40000000. Matters once jo 2026's slave CPU rendering is used (see the jo-engine 2026 section): stale data, visual glitches | M |
 | Close board issue #5 (trails), card the optional arc | Trails done except the arc from the cycle | S |
 | E2E: wait for the game instead of fixed delays | Fixed waits break on a slow machine (seen once) | M |
 | Push over SSH from this machine | No SSH agent here; pushes go from your terminal | S |

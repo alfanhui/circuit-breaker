@@ -40,7 +40,7 @@
  * units ahead, TRAIL_MIN_FORWARD) are 2.5 of SGL's, but collision keeps the cycle 25 from a
  * trail's side, so those are always off the screen's edges. SGL drops anything nearer than its
  * screen distance / 128 (slZdspLevel 7): 2.2 in iso (60 degree view), so 2 vanished there.
- * Depths are SGL's FIXED (16.16): whole numbers apart, but the markers need 2.5
+ * Depths are SGL's jo_fixed (16.16): whole numbers apart, but the markers need 2.5
  */
 #define MAP_FILL_DEPTH (5 * JO_FIXED_1)
 #define MAP_LINE_DEPTH (4 * JO_FIXED_1)
@@ -190,8 +190,8 @@ void hud_init(void)
 	prepare_map_disc();
 }
 
-// Any 4 corners, in pixels from the screen centre (+y down), at an SGL depth (FIXED; nearer drawn later)
-static void draw_corners(int part, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, FIXED depth)
+// Any 4 corners, in pixels from the screen centre (+y down), at an SGL depth (jo_fixed; nearer drawn later)
+static void draw_corners(int part, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, jo_fixed depth)
 {
 	jo_pos2D_fixed corners[4] = {
 		{jo_int2fixed(x0), jo_int2fixed(y0)},
@@ -305,8 +305,8 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 {
 	// The camera's facing now (eased mid-turn, so the map swings round with the view), as a unit
 	// vector x1024. Heading 0 faces north (-y), turning right goes east (-x): (-sin, -cos)
-	const int forward_x = -(slSin(view_rz) >> 6);
-	const int forward_y = -(slCos(view_rz) >> 6);
+	const int forward_x = -(jo_sin_angle(view_rz) >> 6);
+	const int forward_y = -(jo_cos_angle(view_rz) >> 6);
 	int n;
 	int walls;
 	int block_count;

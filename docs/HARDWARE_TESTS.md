@@ -57,6 +57,8 @@ a restart every frame from VDP2's row counter. Code: `src/floor_fade_vdp2.c`.
 **Why it's risky.** Three of its details came from reading Mednafen's source, not from a
 Saturn: how the row counter is read, how it counts during vertical sync, and that the DMA
 reads memory 4 bytes at a time. If any of them differs on the real console, it shows here.
+Since jo-engine 2026 (no SGL) it runs on SCU DMA level 1, beside jo's own copy of the VDP1
+commands on level 0.
 
 ### 1a. Does it look right?
 
@@ -85,7 +87,8 @@ Result: ________
 | Fog in the right shape but shifted up or down a fixed amount | The row counter counts differently during vertical sync, so the restart lands a few rows early or late (`hblanks_before_picture`) | Photo; roughly how many rows off (the debug text rows are 8 pixels tall: use them as a ruler) |
 | Fog jumps up and down from frame to frame | The row counter isn't latching when EXTEN is read (`current_row`), so the restart reads a stale value | Video |
 | Horizontal stripes, or the fade repeats down the screen | The DMA's read address drifts: hardware reads memory differently from Mednafen (the 4-byte entry rule) | Photo |
-| No fog at all, floor at full brightness everywhere | DMA not starting on HBlank, or SGL resets the colour calculation | Photo |
+| No fog at all, floor at full brightness everywhere | DMA not starting on HBlank, or jo rewrites the colour calculation registers | Photo |
+| The fog's top rows jump for a frame now and then | Since jo-engine 2026 the fog is on SCU DMA level 1 and jo copies the VDP1 commands on level 0, which goes first: an HBlank during the copy waits | Video |
 | Whole floor black, or one flat shade | DMA writing the wrong value, or once per frame instead of per row | Photo |
 | Fine normally, but the top of the screen flickers or goes wrong when the game slows down (X trail, test 3) | The once-per-frame restart ran late, after the picture had started, and was skipped (`floor_fade_vblank` returns early), so the DMA ran past the table | Video while holding X trail |
 | Hang, or corrupted graphics, sound or loading | SGL or jo also uses the fog's SCU DMA level and the two clash. It was level 2, which SGL streams PCM sound on (in Mednafen every sound stopped the fog); it's level 0 now, which SGL uses only for CD reads | When it happens, and whether the NO FOG disc does it too |
@@ -199,6 +202,18 @@ the real chip; Mednafen's VDP1 timing is only an estimate.
       lacks the speed bits the backlog's Pclp and HSS rows want.
 
 ---
+
+## 3b-2. Both CPUs drawing (since 2026-11-08)
+
+The slave SH-2 draws the corridor's glass floor and boxes while the master draws the rest
+(`src/slave_draw.c`), and the game runs at 60 with VDP1 erasing the frame itself
+(`JO_FRAMERATE = 1`). Emulators are kinder than the console about two CPUs sharing memory.
+
+| Check | How | What's wrong looks like |
+|---|---|---|
+| The floor and boxes are whole and steady | On foot, walk the corridor and the yard, turn | Tiles or box faces from the frame before, flickering or missing for a frame: the slave read stale data (its cache) |
+| No crash after a few minutes on foot | Walk about for 5 minutes | A freeze: the two CPUs waiting on each other |
+| The debug line's "vdp1 over" stays 0 | On foot, the busiest views (the ledge, the platform lip) | Over 0: frames shown unfinished (the HUD flickers) |
 
 ## 4. Walls, trails and the 3D (VDP1)
 

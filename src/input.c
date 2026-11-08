@@ -690,9 +690,9 @@ static void debug_camera_input(unsigned short struck)
 
 	// Pitch
 	if (jo_is_pad1_key_pressed(JO_KEY_B))
-		view_rx += DEGtoANG(0.5);
+		view_rx += JO_DEG_TO_ANGLE(0.5);
 	else if (jo_is_pad1_key_pressed(JO_KEY_C))
-		view_rx -= DEGtoANG(0.5);
+		view_rx -= JO_DEG_TO_ANGLE(0.5);
 }
 
 // Z steps through the ways to compare turn cameras: ease-out, ease-out slowed down,

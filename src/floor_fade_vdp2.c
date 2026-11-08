@@ -17,7 +17,7 @@
  * at a time, and a transfer that stops part-way through those 4 leaves the read address
  * part-way too, so the rows drift: each row's entry is 4 bytes (the ratio twice) and each
  * transfer moves all 4, to CCRR and the register after it.
- * (An HBlank *interrupt* doing the same hung at start-up and was masked again by SGL: see SKILLS.md.)
+ * (An HBlank *interrupt* doing the same hung at start-up under SGL: see SKILLS.md.)
  *
  * The catch: HBlank happens on the blank rows between frames too, and the DMA keeps moving
  * through the table on those. So the table starts with padding (row 0's ratio), and every frame
@@ -38,19 +38,21 @@
 #define VDP2_VCNT ((volatile unsigned short *)0x25F8000A)	 // the row counter, as latched
 #define VDP2_CCRR_PHYSICAL 0x05F8010C						 // RBG0's colour calculation ratio
 
-// SCU DMA level 0 registers (SCU manual). SGL uses all three levels (found by searching
-// LIBSGL.A for their addresses): level 2 to stream PCM sound to the sound CPU while a sample
-// plays (sglI00.o: PCM_Trans), level 1 for its own transfers (DMA_Trans), level 0 only for CD
-// reads (GFS) and DMA_ScuMemCopy, and nothing here reads the CD once the game is running.
-// The fog was on level 2 until 2026-10-31: every sound took the channel over and the fog
-// stopped, flickered or came out shifted until the sound ended
-#define SCU_D0R ((volatile unsigned int *)0x25FE0000)  // read address
-#define SCU_D0W ((volatile unsigned int *)0x25FE0004)  // write address
-#define SCU_D0C ((volatile unsigned int *)0x25FE0008)  // bytes per transfer
-#define SCU_D0AD ((volatile unsigned int *)0x25FE000C) // address steps
-#define SCU_D0EN ((volatile unsigned int *)0x25FE0010) // enable
-#define SCU_D0MD ((volatile unsigned int *)0x25FE0014) // mode and start factor
+/*
+ * Which of the SCU's three DMA levels the fog has to itself. jo-engine 2026 (no SGL) uses level
+ * 0, every frame, to copy the VDP1 command table (jo's vdp1_command_pipeline.c,
+ * JO_VDP1_SCU_DMA_LEVEL), and nothing else: CD reads go through the SH-2's own DMA, and the sound
+ * isn't streamed by DMA. So level 1. (Under SGL it was level 0: SGL streamed sound on level 2
+ * and used level 1 for its own copies; on level 2, every sound stopped the fog till it ended.)
+ * Level 0 goes first when two levels want the bus at once: an HBlank falling while jo copies
+ * the command table waits for it (docs/HARDWARE_TESTS.md)
+ */
+#define FOG_DMA_LEVEL 1
 #define PHYSICAL(address) ((unsigned int)(address) & 0x07FFFFFF)
+// The level's registers (SCU manual): jo's JO_SCU_DMA_xxx(level), each level 0x20 bytes on
+#define DMA_ENABLE_ON (1 << 8)						 // D1EN: DXEN, starts on its start factor (bit 0, DXGO, starts it now)
+#define DMA_MODE_HBLANK ((1 << 16) | (0 << 8) | 2) // D1MD: direct; the read address moves on (DXRUP), the write one
+													 // goes back (DXWUP 0); started by each HBlank-in (factor 2)
 
 // NTSC: 263 rows a frame. The picture is 224 or 240 of them, so at most 39 are blank
 #define FRAME_ROWS 263
@@ -141,7 +143,7 @@ static void stop_dma(void)
 	unsigned int row;
 	int moves = 0;
 
-	*SCU_D0EN = 0;
+	JO_SCU_DMA_ENABLE(FOG_DMA_LEVEL) = 0;
 	row = current_row();
 	for (int reads = 0; moves < 2 && reads < ROW_WAIT_READS; ++reads)
 	{
@@ -165,12 +167,12 @@ static void stop_dma(void)
  */
 static void arm_dma(const unsigned int *from)
 {
-	*SCU_D0R = PHYSICAL(from);
-	*SCU_D0W = VDP2_CCRR_PHYSICAL;
-	*SCU_D0C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
-	*SCU_D0AD = DMA_SCU_R4 | DMA_SCU_W2;
-	*SCU_D0MD = DMA_SCU_DIR | (DMA_SCU_REN << DMA_DXMD_DXRUP) | (DMA_SCU_KEEP << DMA_DXMD_DXWUP) | DMA_SCU_F_HBLK_IN;
-	*SCU_D0EN = 1 << DMA_DXEN_DXEN; // armed: starts on every HBlank from now on
+	JO_SCU_DMA_READ(FOG_DMA_LEVEL) = PHYSICAL(from);
+	JO_SCU_DMA_WRITE(FOG_DMA_LEVEL) = VDP2_CCRR_PHYSICAL;
+	JO_SCU_DMA_COUNT(FOG_DMA_LEVEL) = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
+	JO_SCU_DMA_ADD(FOG_DMA_LEVEL) = JO_SCU_DMA_ADD_READ4_WRITE2; // reads 4 bytes at a time, writes 2
+	JO_SCU_DMA_MODE(FOG_DMA_LEVEL) = DMA_MODE_HBLANK;
+	JO_SCU_DMA_ENABLE(FOG_DMA_LEVEL) = DMA_ENABLE_ON; // armed: starts on every HBlank from now on
 }
 
 void floor_fade_init(void)
@@ -181,27 +183,36 @@ void floor_fade_init(void)
 	// Line colour entries are colour RAM numbers: the palette's offset from the start of CRAM
 	unsigned short fog_colour = (unsigned short)(((unsigned int)fog_palette.data - JO_VDP2_CRAM) / sizeof(jo_color));
 
-	// Not JO_VDP2_LINE_COLOR_TABLE: jo hands that out from the start of VRAM bank B1, where
-	// SGL's text layer (jo_printf) keeps its font, so the table overwrote the glyphs.
-	// Bank A0 holds the floor's texture with ~60 KB spare, and jo's allocator tracks it.
+	// Not JO_VDP2_LINE_COLOR_TABLE: under SGL jo handed that out from the start of VRAM bank B1,
+	// where the text layer (jo_printf) kept its font, and the table overwrote the glyphs. In the
+	// floor's own bank, which jo's allocator tracks
 	line_table = (unsigned short *)jo_vdp2_malloc(JO_VDP2_RAM_CELL_RBG0, JO_TV_HEIGHT * sizeof(unsigned short));
+	if (line_table == JO_NULL)
+		return; // no room: no fog (line_table stays NULL, so the rest does nothing)
 	for (int row = 0; row < JO_TV_HEIGHT; ++row)
 		line_table[row] = fog_colour; // the same colour on every row: only the ratio varies
 	floor_fade_set_view(FLOOR_VIEW_ISO);
 
-	// jo sets up the floor's rotation coefficient table with K_LINECOL, which makes VDP2 take
-	// the floor's line colour from each coefficient (all 0 = black) instead of our per-line
-	// table. Re-register it without that flag; everything else as jo has it (see jo's vdp2.c).
-	// (jo_vdp2_malloc for the K table just returns its fixed address in bank A1.)
-	void *k_table = jo_vdp2_malloc_autosize(JO_VDP2_RAM_KTABLE);
-	slKtableRA(k_table, K_FIX | K_DOT | K_2WORD | K_ON);
-	slKtableRB(k_table, K_FIX | K_DOT | K_2WORD | K_ON);
+	// (Under SGL, jo set the floor's coefficient table up to give the line colour too, all 0 =
+	// black, and it had to be registered again without that. jo 2026 doesn't: jo's vdp2.c,
+	// JO_VDP2_KTCTL_VALUE.)
+	// jo 2026 has no calls for the line colour screen, so its two registers are written here
+	// (VDP2 manual). jo keeps a copy of the registers it sets and writes them in VBlank, but only
+	// the ones it changes, and it never changes these two:
+	//   LCTA: where the table is (a VRAM offset in 2-byte words); bit 15, one colour per row
+	{
+		const unsigned int words = ((unsigned int)line_table - JO_VDP2_VRAM) >> 1;
 
-	slLineColTable(line_table);
-	slLineColDisp(RBG0ON);					// insert the line colour under the floor...
-	slColorCalc(CC_RATE | CC_TOP | RBG0ON); // ...and blend by RBG0's ratio (CCRR), set per row below
+		JO_VDP2_LCTAU = (unsigned short)(0x8000 | (words >> 16));
+		JO_VDP2_LCTAL = (unsigned short)(words & 0xFFFF);
+	}
+	//   LNCLEN: which screens get the line colour inserted under them: RBG0 (bit 4), the floor
+	JO_VDP2_LNCLEN = 1 << 4;
+	// ...and the floor blended with it by RBG0's ratio (CCRR, set per row by the DMA below): jo's
+	// own call (ratio mode, the top screen's ratio), as SGL's slColorCalc(CC_RATE | CC_TOP | RBG0ON)
+	jo_enable_screen_transparency(JO_RBG0_SCREEN, 0);
 
-	stop_dma(); // not running yet, but a CD read (GFS) may have left this level going
+	stop_dma(); // not running yet: in case anything left this level going
 	arm_dma(dma_table);
 }
 
@@ -211,9 +222,9 @@ void floor_fade_vblank(void)
 
 	if (line_table == JO_NULL)
 		return;
-	// The whole channel, not just its read address: a CD read (GFS) sets up this same level for
-	// itself and leaves it that way. Six register writes a frame, so nothing can stop the fog for
-	// good. Stopped first, safely (stop_dma), which takes a line or two: the row's read after it.
+	// The whole channel, not just its read address: under SGL a CD read set up this same level
+	// for itself and left it that way. Six register writes a frame, so nothing can stop the fog
+	// for good. Stopped first, safely (stop_dma), which takes a line or two: the row's read after it.
 	// It returns just after the row counter moves on, so the row read here is a fresh one: an
 	// HBlank between reading it and arming the DMA (the fog a row out for that frame) is less
 	// likely than before, not ruled out (where in a line the counter moves isn't known here)

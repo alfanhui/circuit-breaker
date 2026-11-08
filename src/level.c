@@ -1,4 +1,5 @@
 #include "level.h"
+#include "utils/angles.h"
 #include "scene_memory.h"
 #include "game/arena.h"
 #include "game/surround.h"
@@ -7,6 +8,7 @@
 #include "object_fog_vdp1.h"
 #include "view.h"
 #include "utils/perf.h"
+#include "slave_draw.h"
 
 // The wall textures (tools/make_wall.py) carry the floor's 125-unit grid up the wall with a
 // glowing line where it meets the floor, so the wall reads as standing on the grid.
@@ -30,7 +32,7 @@
  * arena size, and resizing the arena needs no rebuild.
  *
  * Columns run left to right as seen from inside the arena, so every texture is upright
- * and unmirrored. SGL maps a texture's corners to Vertices[0..3] as
+ * and unmirrored. SGL maps a texture's corners to vertices[0..3] as
  * top-left, top-right, bottom-right, bottom-left.
  */
 
@@ -40,7 +42,7 @@
 typedef struct
 {
 	jo_3d_mesh mesh;
-	POINT points[STRIP_POINTS];
+	jo_pos3D_fixed points[STRIP_POINTS];
 } wall_strip;
 
 typedef struct
@@ -55,10 +57,10 @@ typedef struct
 // Piece j always uses columns j and j + 1 of whatever is in the buffer, so every strip shares
 // one polygon table, and every low (or high) strip one attribute table: same texture throughout.
 // Normals are unused: the walls are unlit.
-static POLYGON piece_polygons[STRIP_PIECES];
-static ATTR low_attributes[STRIP_PIECES];
-static ATTR high_attributes[STRIP_PIECES];
-static ATTR base_attributes[STRIP_PIECES];
+static jo_3d_polygon piece_polygons[STRIP_PIECES];
+static jo_3d_polygon_attribute low_attributes[STRIP_PIECES];
+static jo_3d_polygon_attribute high_attributes[STRIP_PIECES];
+static jo_3d_polygon_attribute base_attributes[STRIP_PIECES];
 
 // World north is -y and east is -x (see world.h). Facing a wall from inside, left to right is:
 static wall_side sides[4] = {
@@ -82,9 +84,9 @@ static wall_strip flicker_after_high;
 #define SURROUND_GLOW JO_COLOR_RGB(255, 110, 180) // the walls' top edge (tools/make_wall.py's GLOW)
 #define SURROUND_QUADS_MAX (SURROUND_PIECES * 3)
 
-static POINT surround_points[SURROUND_PIECES * SURROUND_CLIP_MAX];
-static POLYGON surround_polygons[SURROUND_QUADS_MAX];
-static ATTR surround_attributes[SURROUND_QUADS_MAX];
+static jo_pos3D_fixed surround_points[SURROUND_PIECES * SURROUND_CLIP_MAX];
+static jo_3d_polygon surround_polygons[SURROUND_QUADS_MAX];
+static jo_3d_polygon_attribute surround_attributes[SURROUND_QUADS_MAX];
 static jo_3d_mesh surround_mesh;
 
 /*
@@ -118,46 +120,46 @@ void load_arena_textures(void)
 	base_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALLBASE.TGA", JO_COLOR_Transparent);
 }
 
-static void init_attributes(ATTR *attributes, int texture_id)
+static void init_attributes(jo_3d_polygon_attribute *attributes, int texture_id)
 {
 	jo_3d_mesh setter; // jo's texture setter works on a mesh: point one at the shared table
 
-	setter.data.attbl = attributes;
-	setter.data.nbPolygon = STRIP_PIECES;
+	setter.data.attributes = attributes;
+	setter.data.polygon_count = STRIP_PIECES;
 	for (int j = 0; j < STRIP_PIECES; ++j)
 	{
 		// Same defaults as jo_3d_create_plane, so jo's texture setter behaves the same
 		JO_ZERO(attributes[j].sort);
-		JO_ZERO(attributes[j].atrb);
-		JO_ZERO(attributes[j].gstb);
-		attributes[j].flag = Dual_Plane;
+		JO_ZERO(attributes[j].draw_mode);
+		JO_ZERO(attributes[j].gouraud_table);
+		attributes[j].plane = JO_3D_DUAL_PLANE;
 		jo_3d_set_mesh_polygon_texture(&setter, texture_id, j);
 		// Fog: VDP1 shades each corner by its own Gouraud colour (object_fog_vdp1.h)
 		if (object_fog_enabled)
-			attributes[j].atrb |= CL_Gouraud;
+			attributes[j].draw_mode |= JO_VDP1_COLOR_CALC_GOURAUD;
 	}
 }
 
-static void init_strip(wall_strip *strip, ATTR *attributes)
+static void init_strip(wall_strip *strip, jo_3d_polygon_attribute *attributes)
 {
-	strip->mesh.data.pntbl = strip->points;
-	strip->mesh.data.pltbl = piece_polygons;
-	strip->mesh.data.attbl = attributes;
-	strip->mesh.data.nbPoint = 0;
-	strip->mesh.data.nbPolygon = 0;
+	strip->mesh.data.points = strip->points;
+	strip->mesh.data.polygons = piece_polygons;
+	strip->mesh.data.attributes = attributes;
+	strip->mesh.data.point_count = 0;
+	strip->mesh.data.polygon_count = 0;
 }
 
 void init_arena_walls(void)
 {
 	for (int j = 0; j < STRIP_PIECES; ++j)
 	{
-		piece_polygons[j].norm[X] = JO_FIXED_0;
-		piece_polygons[j].norm[Y] = JO_FIXED_1;
-		piece_polygons[j].norm[Z] = JO_FIXED_0;
-		piece_polygons[j].Vertices[0] = j * 2 + 1; // left, top
-		piece_polygons[j].Vertices[1] = j * 2 + 3; // right, top
-		piece_polygons[j].Vertices[2] = j * 2 + 2; // right, bottom
-		piece_polygons[j].Vertices[3] = j * 2;	   // left, bottom
+		piece_polygons[j].normal.x = JO_FIXED_0;
+		piece_polygons[j].normal.y = JO_FIXED_1;
+		piece_polygons[j].normal.z = JO_FIXED_0;
+		piece_polygons[j].vertices[0] = j * 2 + 1; // left, top
+		piece_polygons[j].vertices[1] = j * 2 + 3; // right, top
+		piece_polygons[j].vertices[2] = j * 2 + 2; // right, bottom
+		piece_polygons[j].vertices[3] = j * 2;	   // left, bottom
 	}
 	init_attributes(low_attributes, low_texture_id);
 	init_attributes(high_attributes, high_texture_id);
@@ -174,15 +176,15 @@ void init_arena_walls(void)
 	// The surround: its corners and quads are filled in each frame (draw_arena_surround)
 	for (int q = 0; q < SURROUND_QUADS_MAX; ++q)
 	{
-		surround_polygons[q].norm[X] = JO_FIXED_0; // unused: both faces are drawn, unlit
-		surround_polygons[q].norm[Y] = JO_FIXED_0;
-		surround_polygons[q].norm[Z] = JO_FIXED_1;
+		surround_polygons[q].normal.x = JO_FIXED_0; // unused: both faces are drawn, unlit
+		surround_polygons[q].normal.y = JO_FIXED_0;
+		surround_polygons[q].normal.z = JO_FIXED_1;
 	}
-	surround_mesh.data.pntbl = surround_points;
-	surround_mesh.data.pltbl = surround_polygons;
-	surround_mesh.data.attbl = surround_attributes;
-	surround_mesh.data.nbPoint = 0;
-	surround_mesh.data.nbPolygon = 0;
+	surround_mesh.data.points = surround_points;
+	surround_mesh.data.polygons = surround_polygons;
+	surround_mesh.data.attributes = surround_attributes;
+	surround_mesh.data.point_count = 0;
+	surround_mesh.data.polygon_count = 0;
 	// The corridor's floor's mesh is set up as its memory's taken (corridor_meshes_take)
 }
 
@@ -232,7 +234,7 @@ static int strip_hidden_end(const world_point *end, int count, int step, int z_b
 	return lo;
 }
 
-static int fill_strip(POINT *points, unsigned char *fog_levels, const world_point *columns, int pieces, int z_bottom,
+static int fill_strip(jo_pos3D_fixed *points, unsigned char *fog_levels, const world_point *columns, int pieces, int z_bottom,
 					  int z_top, const wall_clip_camera *camera, int min_forward)
 {
 	int first = 0;
@@ -290,12 +292,12 @@ static int fill_strip(POINT *points, unsigned char *fog_levels, const world_poin
 		else if (camera != JO_NULL && i == count)
 			p = run.end;
 
-		points[i * 2][X] = jo_int2fixed(p.x);
-		points[i * 2][Y] = jo_int2fixed(p.y);
-		points[i * 2][Z] = jo_int2fixed(z_bottom);
-		points[i * 2 + 1][X] = points[i * 2][X];
-		points[i * 2 + 1][Y] = points[i * 2][Y];
-		points[i * 2 + 1][Z] = jo_int2fixed(z_top);
+		points[i * 2].x = jo_int2fixed(p.x);
+		points[i * 2].y = jo_int2fixed(p.y);
+		points[i * 2].z = jo_int2fixed(z_bottom);
+		points[i * 2 + 1].x = points[i * 2].x;
+		points[i * 2 + 1].y = points[i * 2].y;
+		points[i * 2 + 1].z = jo_int2fixed(z_top);
 		if (object_fog_enabled)
 			fog_levels[i] = (unsigned char)object_fog_level(p.x, p.y);
 	}
@@ -311,15 +313,15 @@ static void draw_strip(wall_strip *strip, const world_point *columns, int pieces
 
 	if (count == 0)
 		return;
-	// Each piece's Gouraud table, its corners in Vertices order (init_arena_walls):
+	// Each piece's Gouraud table, its corners in vertices order (init_arena_walls):
 	// left top, right top, right bottom, left bottom. The attributes are shared by every strip of
 	// this kind, but SGL reads them during jo_3d_mesh_draw below, before the next strip changes them
 	if (object_fog_enabled)
 		for (int j = 0; j < count; ++j)
-			object_fog_set_quad(&strip->mesh.data.attbl[j], fog_levels[j], fog_levels[j + 1], fog_levels[j + 1],
+			object_fog_set_quad(&strip->mesh.data.attributes[j], fog_levels[j], fog_levels[j + 1], fog_levels[j + 1],
 								fog_levels[j]);
-	strip->mesh.data.nbPoint = (count + 1) * 2;
-	strip->mesh.data.nbPolygon = count;
+	strip->mesh.data.point_count = (count + 1) * 2;
+	strip->mesh.data.polygon_count = count;
 	jo_3d_mesh_draw(&strip->mesh);
 }
 
@@ -373,9 +375,9 @@ static int run_columns(bool along_x, int wall, int start, int dir, int pieces, c
 typedef struct
 {
 	jo_3d_mesh mesh;
-	POINT points[BLOCK_POINTS_MAX];
-	POLYGON polygons[BLOCK_PIECES_MAX];
-	ATTR attributes[BLOCK_PIECES_MAX];
+	jo_pos3D_fixed points[BLOCK_POINTS_MAX];
+	jo_3d_polygon polygons[BLOCK_PIECES_MAX];
+	jo_3d_polygon_attribute attributes[BLOCK_PIECES_MAX];
 } block_band;
 
 static block_band block_low;
@@ -384,7 +386,7 @@ static block_band block_high;
 /*
  * Set while the corridor's walls are added (draw_corridor_walls): block_band_add lists each
  * piece's corners starting from a bottom one, so VDP1 fills it with upright lines, not lying ones.
- * VDP1 fills a quad with lines from its first-to-last edge (Vertices 0 to 3) across to its second
+ * VDP1 fills a quad with lines from its first-to-last edge (vertices 0 to 3) across to its second
  * to third (1 to 2), one line for every pixel of the longer of those two edges. Listed top first
  * (as the arena's walls are, so their textures are upright), those edges are the piece's two
  * columns, and a piece beside you is very tapered: its near column 800 pixels tall, its far one
@@ -398,21 +400,21 @@ static bool upright_lines = false;
 
 static void block_band_begin(block_band *band)
 {
-	band->mesh.data.pntbl = band->points;
-	band->mesh.data.pltbl = band->polygons;
-	band->mesh.data.attbl = band->attributes;
-	band->mesh.data.nbPoint = 0;
-	band->mesh.data.nbPolygon = 0;
+	band->mesh.data.points = band->points;
+	band->mesh.data.polygons = band->polygons;
+	band->mesh.data.attributes = band->attributes;
+	band->mesh.data.point_count = 0;
+	band->mesh.data.polygon_count = 0;
 }
 
 // One face's strip, appended to the band, textured as `texture` (one of the bands' attribute
 // tables: low, high or base). Stops at a piece that wouldn't fit: a gap far off, not a crash
-static void block_band_add(block_band *band, const ATTR *texture, const world_point *columns, int pieces, int z_bottom,
+static void block_band_add(block_band *band, const jo_3d_polygon_attribute *texture, const world_point *columns, int pieces, int z_bottom,
 						   int z_top, const wall_clip_camera *camera, int min_forward)
 {
 	unsigned char fog_levels[ARENA_WALL_COLUMNS_MAX];
-	const int base = band->mesh.data.nbPoint;
-	int polygon = band->mesh.data.nbPolygon;
+	const int base = band->mesh.data.point_count;
+	int polygon = band->mesh.data.polygon_count;
 	int count;
 
 	if (polygon + pieces > BLOCK_PIECES_MAX)
@@ -422,37 +424,37 @@ static void block_band_add(block_band *band, const ATTR *texture, const world_po
 	count = fill_strip(&band->points[base], fog_levels, columns, pieces, z_bottom, z_top, camera, min_forward);
 	for (int j = 0; j < count; ++j, ++polygon)
 	{
-		POLYGON *q = &band->polygons[polygon];
+		jo_3d_polygon *q = &band->polygons[polygon];
 
-		q->norm[X] = JO_FIXED_0; // unused: the walls are unlit
-		q->norm[Y] = JO_FIXED_1;
-		q->norm[Z] = JO_FIXED_0;
+		q->normal.x = JO_FIXED_0; // unused: the walls are unlit
+		q->normal.y = JO_FIXED_1;
+		q->normal.z = JO_FIXED_0;
 		band->attributes[polygon] = *texture;
 		if (upright_lines)
 		{
 			// The same corners, the same way round, starting a corner earlier: left bottom, left
 			// top, right top, right bottom (upright_lines, above)
-			q->Vertices[0] = (Uint16)(base + j * 2);
-			q->Vertices[1] = (Uint16)(base + j * 2 + 1);
-			q->Vertices[2] = (Uint16)(base + j * 2 + 3);
-			q->Vertices[3] = (Uint16)(base + j * 2 + 2);
+			q->vertices[0] = (unsigned short)(base + j * 2);
+			q->vertices[1] = (unsigned short)(base + j * 2 + 1);
+			q->vertices[2] = (unsigned short)(base + j * 2 + 3);
+			q->vertices[3] = (unsigned short)(base + j * 2 + 2);
 			if (object_fog_enabled) // the fog's shades in the same corners' order
 				object_fog_set_quad(&band->attributes[polygon], fog_levels[j], fog_levels[j], fog_levels[j + 1],
 									fog_levels[j + 1]);
 			continue;
 		}
 		// As init_arena_walls: left top, right top, right bottom, left bottom
-		q->Vertices[0] = (Uint16)(base + j * 2 + 1);
-		q->Vertices[1] = (Uint16)(base + j * 2 + 3);
-		q->Vertices[2] = (Uint16)(base + j * 2 + 2);
-		q->Vertices[3] = (Uint16)(base + j * 2);
+		q->vertices[0] = (unsigned short)(base + j * 2 + 1);
+		q->vertices[1] = (unsigned short)(base + j * 2 + 3);
+		q->vertices[2] = (unsigned short)(base + j * 2 + 2);
+		q->vertices[3] = (unsigned short)(base + j * 2);
 		if (object_fog_enabled)
 			object_fog_set_quad(&band->attributes[polygon], fog_levels[j], fog_levels[j + 1], fog_levels[j + 1],
 								fog_levels[j]);
 	}
 	if (count > 0)
-		band->mesh.data.nbPoint = (Uint16)(base + (count + 1) * 2);
-	band->mesh.data.nbPolygon = (Uint16)polygon;
+		band->mesh.data.point_count = (unsigned short)(base + (count + 1) * 2);
+	band->mesh.data.polygon_count = (unsigned short)polygon;
 }
 
 /*
@@ -489,15 +491,15 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 
 	if (along > 512 || along < -512)
 		return;
-	for (int p = first_polygon; p < (int)band->mesh.data.nbPolygon; ++p)
+	for (int p = first_polygon; p < (int)band->mesh.data.polygon_count; ++p)
 	{
-		POLYGON *q = &band->polygons[p];
+		jo_3d_polygon *q = &band->polygons[p];
 		// Upright order (block_band_add): left bottom, left top, right top, right bottom
-		const int lb = q->Vertices[0], lt = q->Vertices[1], rt = q->Vertices[2], rb = q->Vertices[3];
-		const int dx0 = jo_fixed2int(band->points[lb][X]) - camera->eye.x;
-		const int dy0 = jo_fixed2int(band->points[lb][Y]) - camera->eye.y;
-		const int dx1 = jo_fixed2int(band->points[rb][X]) - camera->eye.x;
-		const int dy1 = jo_fixed2int(band->points[rb][Y]) - camera->eye.y;
+		const int lb = q->vertices[0], lt = q->vertices[1], rt = q->vertices[2], rb = q->vertices[3];
+		const int dx0 = jo_fixed2int(band->points[lb].x) - camera->eye.x;
+		const int dy0 = jo_fixed2int(band->points[lb].y) - camera->eye.y;
+		const int dx1 = jo_fixed2int(band->points[rb].x) - camera->eye.x;
+		const int dy1 = jo_fixed2int(band->points[rb].y) - camera->eye.y;
 		// How far in front of the camera each column is (d), and aside (s)
 		const int d0 = (dx0 * camera->forward_x + dy0 * camera->forward_y) >> 10;
 		const int d1 = (dx1 * camera->forward_x + dy1 * camera->forward_y) >> 10;
@@ -511,8 +513,8 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 			continue;
 		s0 = (dx0 * camera->forward_y - dy0 * camera->forward_x) >> 10;
 		s1 = (dx1 * camera->forward_y - dy1 * camera->forward_x) >> 10;
-		tall0 = (jo_fixed2int(band->points[lt][Z]) - jo_fixed2int(band->points[lb][Z])) * d1;
-		tall1 = (jo_fixed2int(band->points[rt][Z]) - jo_fixed2int(band->points[rb][Z])) * d0;
+		tall0 = (jo_fixed2int(band->points[lt].z) - jo_fixed2int(band->points[lb].z)) * d1;
+		tall1 = (jo_fixed2int(band->points[rt].z) - jo_fixed2int(band->points[rb].z)) * d0;
 		taller = tall0 > tall1 ? tall0 : tall1;
 		shorter = tall0 > tall1 ? tall1 : tall0;
 		wide = s1 * d0 - s0 * d1;
@@ -521,12 +523,12 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 		if (taller >= wide || wide * 2 <= d0 * d1 || taller * 4 > shorter * 5)
 			continue; // taller than wide, too small to gain, or tapered: upright
 		// Lying: left top, right top, right bottom, left bottom (the same way round)
-		q->Vertices[0] = (Uint16)lt;
-		q->Vertices[1] = (Uint16)rt;
-		q->Vertices[2] = (Uint16)rb;
-		q->Vertices[3] = (Uint16)lb;
+		q->vertices[0] = (unsigned short)lt;
+		q->vertices[1] = (unsigned short)rt;
+		q->vertices[2] = (unsigned short)rb;
+		q->vertices[3] = (unsigned short)lb;
 		// The fog's shades follow the corners round (a piece with no fog has no Gouraud to follow)
-		if (object_fog_enabled && (band->attributes[p].atrb & CL_Gouraud))
+		if (object_fog_enabled && (band->attributes[p].draw_mode & JO_VDP1_COLOR_CALC_GOURAUD))
 		{
 			const int left = object_fog_level(dx0 + camera->eye.x, dy0 + camera->eye.y);
 			const int right = object_fog_level(dx1 + camera->eye.x, dy1 + camera->eye.y);
@@ -538,7 +540,7 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 
 static void block_band_draw(block_band *band)
 {
-	if (band->mesh.data.nbPolygon > 0)
+	if (band->mesh.data.polygon_count > 0)
 		jo_3d_mesh_draw(&band->mesh);
 }
 
@@ -573,9 +575,9 @@ static void draw_side_run(const wall_side *side, wall_strip *low, wall_strip *hi
 	if (cutaway)
 	{
 		// Just the glowing base, using the low strip's buffers with the base texture
-		low->mesh.data.attbl = base_attributes;
+		low->mesh.data.attributes = base_attributes;
 		draw_strip(low, columns, count, WALL_BOTTOM_Z, WALL_BASE_TOP_Z, camera, LOW_MIN_FORWARD);
-		low->mesh.data.attbl = low_attributes;
+		low->mesh.data.attributes = low_attributes;
 		return;
 	}
 	// Rising: both strips squashed to the same share of their height, so the whole wall grows up
@@ -840,7 +842,7 @@ static int corridor_cone_below(int top)
 
 	if (pitch <= 0 || below <= 0)
 		return 0;
-	return (below * (slSin((ANGLE)pitch) >> 6)) >> 6;
+	return (below * (jo_sin_angle((jo_angle)pitch) >> 6)) >> 6;
 }
 
 /*
@@ -862,8 +864,8 @@ static int corridor_near_below(int top, int bottom)
 
 	if (pitch <= 0 || below <= 0)
 		return CORRIDOR_MIN_FORWARD;
-	cos_p = slCos((ANGLE)pitch) >> 6;
-	near = ((((deepest * 164) >> 10) + 8) * 1024 - below * (slSin((ANGLE)pitch) >> 6)) / (cos_p > 64 ? cos_p : 64);
+	cos_p = jo_cos_angle((jo_angle)pitch) >> 6;
+	near = ((((deepest * 164) >> 10) + 8) * 1024 - below * (jo_sin_angle((jo_angle)pitch) >> 6)) / (cos_p > 64 ? cos_p : 64);
 	return near < 1 ? 1 : near > CORRIDOR_MIN_FORWARD ? CORRIDOR_MIN_FORWARD : near;
 }
 
@@ -898,15 +900,15 @@ static const wall_clip_camera *corridor_strip_camera(const wall_clip_camera *cam
 }
 
 // A flat coloured wall quad's attribute, sorted by its centre as the walls are
-static void set_corridor_wall_attribute(ATTR *a, jo_color colour)
+static void set_corridor_wall_attribute(jo_3d_polygon_attribute *a, jo_color colour)
 {
-	a->flag = Dual_Plane;
-	a->sort = SORT_CEN | ((sprPolygon >> 16) & 0x1c) | No_Option;
-	a->texno = No_Texture;
-	a->atrb = (CL32KRGB | No_Gouraud) | ((sprPolygon >> 24) & 0xc0);
-	a->colno = colour;
-	a->gstb = 0;
-	a->dir = sprPolygon & 0x3f;
+	a->plane = JO_3D_DUAL_PLANE;
+	a->sort = JO_3D_SORT_CENTER | ((JO_VDP1_POLYGON >> 16) & 0x1c) | JO_3D_NO_OPTION;
+	a->texture_id = JO_3D_NO_TEXTURE;
+	a->draw_mode = (JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((JO_VDP1_POLYGON >> 24) & 0xc0);
+	a->color = colour;
+	a->gouraud_table = 0;
+	a->direction = JO_VDP1_POLYGON & 0x3f;
 }
 
 // The base's glow this frame: from a deep blood red up to crimson and back, a triangle wave over
@@ -925,26 +927,26 @@ static jo_color corridor_pulse(unsigned int frame)
 // middle): then only tan(35 - pitch) x the distance, and at least 4 over the eye. Left at the
 // level reach looking down from up high, the wall beside you was drawn far above the screen's
 // top, and VDP1 walked every pixel of it (30 fps). Never below the column's bottom
-#define CAP_TOP_EDGE DEGtoANG(35.0)
+#define CAP_TOP_EDGE JO_DEG_TO_ANGLE(35.0)
 static void cap_band_tops(block_band *band, int first, const wall_clip_camera *camera)
 {
 	const int eye_height = -view_z; // view_z moves the world: the eye's height is -view_z
 	const int pitch = view_look_pitch(); // + down
 	// The reach above the eye, per unit in front, x16
-	const int reach16 = pitch < 0 ? 32 : pitch == 0 ? 16 : pitch >= CAP_TOP_EDGE ? 0 : (slTan((ANGLE)(CAP_TOP_EDGE - pitch)) >> 12) + 1;
+	const int reach16 = pitch < 0 ? 32 : pitch == 0 ? 16 : pitch >= CAP_TOP_EDGE ? 0 : (angle_tan((jo_angle)(CAP_TOP_EDGE - pitch)) >> 12) + 1;
 
-	for (int i = first + 1; i < band->mesh.data.nbPoint; i += 2)
+	for (int i = first + 1; i < band->mesh.data.point_count; i += 2)
 	{
-		const int dx = jo_fixed2int(band->points[i][X]) - camera->eye.x;
-		const int dy = jo_fixed2int(band->points[i][Y]) - camera->eye.y;
+		const int dx = jo_fixed2int(band->points[i].x) - camera->eye.x;
+		const int dy = jo_fixed2int(band->points[i].y) - camera->eye.y;
 		const int forward = (dx * camera->forward_x + dy * camera->forward_y) >> 10;
-		const int bottom = jo_fixed2int(band->points[i - 1][Z]);
+		const int bottom = jo_fixed2int(band->points[i - 1].z);
 		int highest = eye_height + 4 + ((reach16 * (forward > 0 ? forward : 0)) >> 4);
 
 		if (highest <= bottom)
 			highest = bottom + 1;
-		if (jo_fixed2int(band->points[i][Z]) > highest)
-			band->points[i][Z] = jo_int2fixed(highest);
+		if (jo_fixed2int(band->points[i].z) > highest)
+			band->points[i].z = jo_int2fixed(highest);
 	}
 }
 
@@ -965,7 +967,7 @@ static void cap_band_tops(block_band *band, int first, const wall_clip_camera *c
  * missing, the floor showing through. (The arena's walls, riding, and the corridor's then. On foot
  * everything's cut to the view in 3D instead: level_face_add, which has no such edges to mind)
  */
-#define CAP_BOTTOM_EDGE DEGtoANG(37.0)
+#define CAP_BOTTOM_EDGE JO_DEG_TO_ANGLE(37.0)
 
 // The plane's slope below the eye, per unit in front, x16 (CAP_BOTTOM_EDGE + the pitch); -1 when
 // it's too steep to cut anything. Looking up far enough, the edge is above level: nothing under
@@ -974,9 +976,9 @@ static int bottom_cap_reach16(void)
 {
 	const int edge = CAP_BOTTOM_EDGE + view_look_pitch(); // + down
 
-	if (edge >= DEGtoANG(70.0))
+	if (edge >= JO_DEG_TO_ANGLE(70.0))
 		return -1;
-	return edge <= 0 ? 0 : (slTan((ANGLE)edge) >> 12) + 1;
+	return edge <= 0 ? 0 : (angle_tan((jo_angle)edge) >> 12) + 1;
 }
 
 // The plane's height `forward` in front of the camera
@@ -989,10 +991,10 @@ static int bottom_cap_at(int forward, int reach16)
 // top: a column wholly below the plane keeps a sliver (VDP1 still has a quad to draw)
 static int band_bottom_cap(const block_band *band, int point, const wall_clip_camera *camera, int reach16)
 {
-	const int dx = jo_fixed2int(band->points[point][X]) - camera->eye.x;
-	const int dy = jo_fixed2int(band->points[point][Y]) - camera->eye.y;
+	const int dx = jo_fixed2int(band->points[point].x) - camera->eye.x;
+	const int dy = jo_fixed2int(band->points[point].y) - camera->eye.y;
 	const int lowest = bottom_cap_at((dx * camera->forward_x + dy * camera->forward_y) >> 10, reach16);
-	const int top = jo_fixed2int(band->points[point + 1][Z]);
+	const int top = jo_fixed2int(band->points[point + 1].z);
 
 	return lowest >= top ? top - 1 : lowest;
 }
@@ -1000,7 +1002,7 @@ static int band_bottom_cap(const block_band *band, int point, const wall_clip_ca
 static void cap_band_bottoms(block_band *band, int first, const wall_clip_camera *camera)
 {
 	const int reach16 = bottom_cap_reach16();
-	const int end = band->mesh.data.nbPoint;
+	const int end = band->mesh.data.point_count;
 	// Whether a column's bottom is at the plane or under it: then an edge to it from a column
 	// raised to the plane stays on or below the plane. Past the strip's ends: nothing to keep to
 	int lowest, next = 0, before_ok = 1;
@@ -1010,17 +1012,17 @@ static void cap_band_bottoms(block_band *band, int first, const wall_clip_camera
 	lowest = band_bottom_cap(band, first, camera, reach16);
 	for (int i = first; i + 1 < end; i += 2)
 	{
-		const int bottom = jo_fixed2int(band->points[i][Z]);
+		const int bottom = jo_fixed2int(band->points[i].z);
 		const int ok = lowest >= bottom;
 		int after_ok = 1;
 
 		if (i + 3 < end)
 		{
 			next = band_bottom_cap(band, i + 2, camera, reach16);
-			after_ok = next >= jo_fixed2int(band->points[i + 2][Z]);
+			after_ok = next >= jo_fixed2int(band->points[i + 2].z);
 		}
 		if (lowest > bottom && before_ok && after_ok)
-			band->points[i][Z] = jo_int2fixed(lowest);
+			band->points[i].z = jo_int2fixed(lowest);
 		before_ok = ok; // as it was built, not as it's now
 		lowest = next;
 	}
@@ -1089,12 +1091,12 @@ static int grey_boxes_for = -1; // the corridor they're for: its wall and side (
 #define GREY_QUADS_MAX 288
 typedef struct
 {
-	POINT points[CORRIDOR_POINTS_MAX]; // the glass floor's
-	POLYGON polygons[CORRIDOR_QUADS_MAX];
-	ATTR attributes[CORRIDOR_QUADS_MAX];
-	POINT grey_points[GREY_POINTS_MAX]; // the boxes' faces (draw_corridor_boxes)
-	POLYGON grey_polygons[GREY_QUADS_MAX];
-	ATTR grey_attributes[GREY_QUADS_MAX];
+	jo_pos3D_fixed points[CORRIDOR_POINTS_MAX]; // the glass floor's
+	jo_3d_polygon polygons[CORRIDOR_QUADS_MAX];
+	jo_3d_polygon_attribute attributes[CORRIDOR_QUADS_MAX];
+	jo_pos3D_fixed grey_points[GREY_POINTS_MAX]; // the boxes' faces (draw_corridor_boxes)
+	jo_3d_polygon grey_polygons[GREY_QUADS_MAX];
+	jo_3d_polygon_attribute grey_attributes[GREY_QUADS_MAX];
 	grey_box boxes[GREY_BOXES];
 	grey_group groups[GREY_GROUPS];
 	frustum_point stairs_ramp[4], stairs_side[4]; // the stairs far off: grey_stairs_ramp
@@ -1132,15 +1134,15 @@ void corridor_meshes_take(void)
 	// The corridor's floor, as the surround's (init_arena_walls)
 	for (int q = 0; q < CORRIDOR_QUADS_MAX; ++q)
 	{
-		corridor_polygons[q].norm[X] = JO_FIXED_0;
-		corridor_polygons[q].norm[Y] = JO_FIXED_0;
-		corridor_polygons[q].norm[Z] = JO_FIXED_1;
+		corridor_polygons[q].normal.x = JO_FIXED_0;
+		corridor_polygons[q].normal.y = JO_FIXED_0;
+		corridor_polygons[q].normal.z = JO_FIXED_1;
 	}
-	corridor_mesh.data.pntbl = corridor_points;
-	corridor_mesh.data.pltbl = corridor_polygons;
-	corridor_mesh.data.attbl = corridor_attributes;
-	corridor_mesh.data.nbPoint = 0;
-	corridor_mesh.data.nbPolygon = 0;
+	corridor_mesh.data.points = corridor_points;
+	corridor_mesh.data.polygons = corridor_polygons;
+	corridor_mesh.data.attributes = corridor_attributes;
+	corridor_mesh.data.point_count = 0;
+	corridor_mesh.data.polygon_count = 0;
 }
 
 void corridor_meshes_release(void)
@@ -1394,7 +1396,7 @@ void level_view_begin(const corridor *passage, bool free_camera)
  * pieces) uses the middle ones. Drawn as a wall: the same cuts near you
  */
 #define GLASS_PIECES 4
-static ATTR glass_attributes[GLASS_PIECES];
+static jo_3d_polygon_attribute glass_attributes[GLASS_PIECES];
 static bool glass_loaded = false;
 
 void load_corridor_glass(void)
@@ -1404,17 +1406,17 @@ void load_corridor_glass(void)
 
 	if (glass_loaded)
 		return;
-	setter.data.nbPolygon = 1;
+	setter.data.polygon_count = 1;
 	for (int k = 0; k < GLASS_PIECES; ++k)
 	{
 		const int id = jo_sprite_add_tga(JO_ROOT_DIR, names[k], JO_COLOR_Transparent);
 
-		setter.data.attbl = &glass_attributes[k];
+		setter.data.attributes = &glass_attributes[k];
 		// As init_attributes: jo_3d_create_plane's defaults, so jo's setter behaves the same
 		JO_ZERO(glass_attributes[k].sort);
-		JO_ZERO(glass_attributes[k].atrb);
-		JO_ZERO(glass_attributes[k].gstb);
-		glass_attributes[k].flag = Dual_Plane;
+		JO_ZERO(glass_attributes[k].draw_mode);
+		JO_ZERO(glass_attributes[k].gouraud_table);
+		glass_attributes[k].plane = JO_3D_DUAL_PLANE;
 		jo_3d_set_mesh_polygon_texture(&setter, id, 0);
 	}
 	glass_loaded = true;
@@ -1436,7 +1438,7 @@ static void add_corridor_glass(const corridor *passage, const world_point *eye, 
 		columns[k] = corridor_point(passage, 1, passage->across_min + 250 * k);
 	for (int k = 0; k < pieces; ++k)
 	{
-		const int first = block_high.mesh.data.nbPoint;
+		const int first = block_high.mesh.data.point_count;
 
 		block_band_add(&block_high, &glass_attributes[first_texture + k], &columns[k], 1, WALL_BOTTOM_Z, top, camera,
 					   CORRIDOR_MIN_FORWARD);
@@ -1451,8 +1453,8 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 	static unsigned int frame = 0; // counts the frames it's drawn: the pulse's clock
 	world_point from[CORRIDOR_FACES];
 	world_point to[CORRIDOR_FACES];
-	ATTR base;
-	ATTR body;
+	jo_3d_polygon_attribute base;
+	jo_3d_polygon_attribute body;
 	const int top = (WALL_TOP_Z * ((rise * CORRIDOR_WALL_RISE) >> 8)) >> 8;
 
 	const int corridor_frc = jo_time_get_frc(); // the debug line's "co" (utils/perf.h)
@@ -1476,8 +1478,8 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 	// inside they're behind everything in it. By the middle, a wall piece (250 long) beside the
 	// stairs came out nearer than the steps' fronts, and was drawn over their ends: a notch cut
 	// out of the stairs where they meet the wall. (SGL's sort is the low 2 bits: SKILLS.md)
-	base.sort = (Uint8)((base.sort & ~3) | SORT_MAX);
-	body.sort = (Uint8)((body.sort & ~3) | SORT_MAX);
+	base.sort = (unsigned char)((base.sort & ~3) | JO_3D_SORT_MAX);
+	body.sort = (unsigned char)((body.sort & ~3) | JO_3D_SORT_MAX);
 	corridor_faces(passage, from, to);
 	for (int i = 0; i < CORRIDOR_FACES; ++i)
 	{
@@ -1492,9 +1494,9 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 									  length / (2 * ARENA_PIECE_HALF), view, eye, columns);
 		wall_clip_camera low;
 		// The pieces this face adds, for cap_band_bottoms and lay_wide_pieces_flat
-		const int low_point = block_low.mesh.data.nbPoint;
-		const int low_polygon = block_low.mesh.data.nbPolygon;
-		const int high_polygon = block_high.mesh.data.nbPolygon;
+		const int low_point = block_low.mesh.data.point_count;
+		const int low_polygon = block_low.mesh.data.polygon_count;
+		const int high_polygon = block_high.mesh.data.polygon_count;
 
 		if (count == 0)
 			continue;
@@ -1529,7 +1531,7 @@ static void draw_corridor_walls(const corridor *passage, const world_rect *view,
 			cuts[n++] = top;
 			for (int k = 0; k < n - 1; ++k)
 			{
-				first = block_high.mesh.data.nbPoint; // the last band's are the ones capped
+				first = block_high.mesh.data.point_count; // the last band's are the ones capped
 				block_band_add(&block_high, &body, columns, count, cuts[k], cuts[k + 1],
 							   corridor_strip_camera(camera, cuts[k + 1], cuts[k], &low),
 							   corridor_near_below(cuts[k + 1], cuts[k]));
@@ -1686,15 +1688,15 @@ void draw_arena_walls(const world_rect *view, const world_point *eye, const wall
 
 // A flat coloured quad's attribute, as jo_3d_set_mesh_polygon_color sets one, but sorted by its
 // nearest corner (in front of everything round it) or its furthest (behind everything)
-static void set_surround_attribute(ATTR *a, jo_color colour, bool in_front)
+static void set_surround_attribute(jo_3d_polygon_attribute *a, jo_color colour, bool in_front)
 {
-	a->flag = Dual_Plane;
-	a->sort = (in_front ? SORT_MIN : SORT_MAX) | ((sprPolygon >> 16) & 0x1c) | No_Option;
-	a->texno = No_Texture;
-	a->atrb = (CL32KRGB | No_Gouraud) | ((sprPolygon >> 24) & 0xc0);
-	a->colno = colour;
-	a->gstb = 0;
-	a->dir = sprPolygon & 0x3f;
+	a->plane = JO_3D_DUAL_PLANE;
+	a->sort = (in_front ? JO_3D_SORT_MIN : JO_3D_SORT_MAX) | ((JO_VDP1_POLYGON >> 16) & 0x1c) | JO_3D_NO_OPTION;
+	a->texture_id = JO_3D_NO_TEXTURE;
+	a->draw_mode = (JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((JO_VDP1_POLYGON >> 24) & 0xc0);
+	a->color = colour;
+	a->gouraud_table = 0;
+	a->direction = JO_VDP1_POLYGON & 0x3f;
 }
 
 void draw_arena_surround(int rise, bool cutaway)
@@ -1723,7 +1725,7 @@ void draw_arena_surround(int rise, bool cutaway)
 		const bool low = cutaway && (pieces[p].side == SURROUND_SOUTH || pieces[p].side == SURROUND_WEST);
 		const bool in_front = surround_in_front(pieces[p].side, eye, half);
 		const jo_color colour = pieces[p].rim ? SURROUND_GLOW : SURROUND_GROUND;
-		const FIXED z = jo_int2fixed(low ? WALL_BASE_TOP_Z : top);
+		const jo_fixed z = jo_int2fixed(low ? WALL_BASE_TOP_Z : top);
 		world_point corners[SURROUND_CLIP_MAX];
 		unsigned char fog_levels[SURROUND_CLIP_MAX];
 		int n;
@@ -1735,23 +1737,23 @@ void draw_arena_surround(int rise, bool cutaway)
 			continue; // not on the screen
 		for (int i = 0; i < n; ++i)
 		{
-			surround_points[points + i][X] = jo_int2fixed(corners[i].x);
-			surround_points[points + i][Y] = jo_int2fixed(corners[i].y);
-			surround_points[points + i][Z] = z;
+			surround_points[points + i].x = jo_int2fixed(corners[i].x);
+			surround_points[points + i].y = jo_int2fixed(corners[i].y);
+			surround_points[points + i].z = z;
 			fog_levels[i] = object_fog_enabled ? (unsigned char)object_fog_level(corners[i].x, corners[i].y) : 0;
 		}
 		// The fan: (0 1 2 3), (0 3 4 5), (0 5 6 7); past the last corner, the last again
 		for (int k = 1; k < n - 1; k += 2)
 		{
-			POLYGON *q = &surround_polygons[quads];
-			ATTR *a = &surround_attributes[quads];
+			jo_3d_polygon *q = &surround_polygons[quads];
+			jo_3d_polygon_attribute *a = &surround_attributes[quads];
 			int c2 = k + 1;
 			int c3 = k + 2 < n ? k + 2 : n - 1;
 
-			q->Vertices[0] = (Uint16)points;
-			q->Vertices[1] = (Uint16)(points + k);
-			q->Vertices[2] = (Uint16)(points + c2);
-			q->Vertices[3] = (Uint16)(points + c3);
+			q->vertices[0] = (unsigned short)points;
+			q->vertices[1] = (unsigned short)(points + k);
+			q->vertices[2] = (unsigned short)(points + c2);
+			q->vertices[3] = (unsigned short)(points + c3);
 			set_surround_attribute(a, colour, in_front);
 			if (object_fog_enabled)
 				object_fog_set_quad(a, fog_levels[0], fog_levels[k], fog_levels[c2], fog_levels[c3]);
@@ -1761,8 +1763,8 @@ void draw_arena_surround(int rise, bool cutaway)
 	}
 	if (quads == 0)
 		return;
-	surround_mesh.data.nbPoint = (Uint16)points;
-	surround_mesh.data.nbPolygon = (Uint16)quads;
+	surround_mesh.data.point_count = (unsigned short)points;
+	surround_mesh.data.polygon_count = (unsigned short)quads;
 	jo_3d_mesh_draw(&surround_mesh);
 }
 
@@ -1800,7 +1802,7 @@ static int glass_tile_place(const wall_clip_camera *camera, world_point centre, 
 // A convex polygon of glass on the floor, added to the mesh as a fan, as the surround's: (0 1 2 3),
 // (0 3 4 5) ...; past the last corner, the last again. The first (the far glass, or the first tile)
 // is sorted by its furthest corner: the floor, behind everything stood on it. Every one after
-// (on_top) is SORT_BFR: drawn straight after the one before, so the tiles always lie over it
+// (on_top) is JO_3D_SORT_PREVIOUS: drawn straight after the one before, so the tiles always lie over it
 // (by their own depths, a tile and the floor under it could sort either way). Returns false when
 // there's no room left
 // fog: GLASS_FOG_CORNERS for a fog level worked out at each corner (Gouraud: the far glass, a
@@ -1818,26 +1820,26 @@ static bool add_glass(const world_point *corners, int n, jo_color colour, int fo
 		colour = object_fog_flat_colour(colour, fog);
 	for (int i = 0; i < n; ++i)
 	{
-		corridor_points[*points + i][X] = jo_int2fixed(corners[i].x);
-		corridor_points[*points + i][Y] = jo_int2fixed(corners[i].y);
-		corridor_points[*points + i][Z] = JO_FIXED_0; // on the floor
+		corridor_points[*points + i].x = jo_int2fixed(corners[i].x);
+		corridor_points[*points + i].y = jo_int2fixed(corners[i].y);
+		corridor_points[*points + i].z = JO_FIXED_0; // on the floor
 		if (fog == GLASS_FOG_CORNERS)
 			fog_levels[i] = object_fog_enabled ? (unsigned char)object_fog_level(corners[i].x, corners[i].y) : 0;
 	}
 	for (int k = 1; k < n - 1; k += 2)
 	{
-		POLYGON *q = &corridor_polygons[*quads];
-		ATTR *a = &corridor_attributes[*quads];
+		jo_3d_polygon *q = &corridor_polygons[*quads];
+		jo_3d_polygon_attribute *a = &corridor_attributes[*quads];
 		const int c2 = k + 1;
 		const int c3 = k + 2 < n ? k + 2 : n - 1;
 
-		q->Vertices[0] = (Uint16)*points;
-		q->Vertices[1] = (Uint16)(*points + k);
-		q->Vertices[2] = (Uint16)(*points + c2);
-		q->Vertices[3] = (Uint16)(*points + c3);
+		q->vertices[0] = (unsigned short)*points;
+		q->vertices[1] = (unsigned short)(*points + k);
+		q->vertices[2] = (unsigned short)(*points + c2);
+		q->vertices[3] = (unsigned short)(*points + c3);
 		set_surround_attribute(a, colour, false);
 		if (on_top || k > 1)
-			a->sort = (Uint8)((a->sort & ~3) | SORT_BFR); // the sort is the low 2 bits (as main.c's cube)
+			a->sort = (unsigned char)((a->sort & ~3) | JO_3D_SORT_PREVIOUS); // the sort is the low 2 bits (as main.c's cube)
 		if (object_fog_enabled && fog == GLASS_FOG_CORNERS)
 			object_fog_set_quad(a, fog_levels[0], fog_levels[k], fog_levels[c2], fog_levels[c3]);
 		++*quads;
@@ -1856,16 +1858,16 @@ static bool add_glass(const world_point *corners, int n, jo_color colour, int fo
  */
 typedef struct
 {
-	POINT *points;
-	POLYGON *polygons;
-	ATTR *attributes;
+	jo_pos3D_fixed *points;
+	jo_3d_polygon *polygons;
+	jo_3d_polygon_attribute *attributes;
 	int point_count, quad_count;
 	int points_max, quads_max;
 } level_mesh;
 static level_mesh grey_out, glass_out;
 static jo_3d_mesh grey_mesh;
 
-static void level_mesh_begin(level_mesh *m, POINT *points, POLYGON *polygons, ATTR *attributes, int points_max,
+static void level_mesh_begin(level_mesh *m, jo_pos3D_fixed *points, jo_3d_polygon *polygons, jo_3d_polygon_attribute *attributes, int points_max,
 							 int quads_max)
 {
 	m->points = points;
@@ -1886,7 +1888,7 @@ static void level_mesh_begin(level_mesh *m, POINT *points, POLYGON *polygons, AT
 /*
  * One face (n corners in order round it) into mesh m, cut by the planes in `planes` (0: none, as
  * it is: level_planes_box or level_planes_rect worked them out), flat colour, sorted by `sort`
- * (SORT_CEN, SORT_MAX, SORT_BFR). lie: a side (LB, LT, RT, RB) to be filled with lying lines (level_side_lies): listed from its top left instead, the same way
+ * (JO_3D_SORT_CENTER, JO_3D_SORT_MAX, JO_3D_SORT_PREVIOUS). lie: a side (LB, LT, RT, RB) to be filled with lying lines (level_side_lies): listed from its top left instead, the same way
  * round, before it's cut. The cut keeps the order round, starting where it started, so a wide front
  * cut at the screen's edge still lies. Returns false if nothing of it was added
  */
@@ -1934,25 +1936,25 @@ static bool level_face_add(level_mesh *m, const frustum_point *corners, int n, u
 		fog = LEVEL_FOG_NONE;
 	for (int k = 0; k < n; ++k)
 	{
-		m->points[first + k][X] = jo_int2fixed(p[k].x);
-		m->points[first + k][Y] = jo_int2fixed(p[k].y);
-		m->points[first + k][Z] = jo_int2fixed(p[k].z);
+		m->points[first + k].x = jo_int2fixed(p[k].x);
+		m->points[first + k].y = jo_int2fixed(p[k].y);
+		m->points[first + k].z = jo_int2fixed(p[k].z);
 	}
 	for (int k = 1; k < n - 1; k += 2)
 	{
-		POLYGON *q = &m->polygons[m->quad_count];
-		ATTR *a = &m->attributes[m->quad_count];
+		jo_3d_polygon *q = &m->polygons[m->quad_count];
+		jo_3d_polygon_attribute *a = &m->attributes[m->quad_count];
 		const int last = k + 2 < n ? k + 2 : n - 1;
 
-		q->norm[X] = JO_FIXED_0; // unused: unlit, both faces drawn
-		q->norm[Y] = JO_FIXED_0;
-		q->norm[Z] = JO_FIXED_1;
-		q->Vertices[0] = (Uint16)first;
-		q->Vertices[1] = (Uint16)(first + k);
-		q->Vertices[2] = (Uint16)(first + k + 1);
-		q->Vertices[3] = (Uint16)(first + last);
+		q->normal.x = JO_FIXED_0; // unused: unlit, both faces drawn
+		q->normal.y = JO_FIXED_0;
+		q->normal.z = JO_FIXED_1;
+		q->vertices[0] = (unsigned short)first;
+		q->vertices[1] = (unsigned short)(first + k);
+		q->vertices[2] = (unsigned short)(first + k + 1);
+		q->vertices[3] = (unsigned short)(first + last);
 		set_corridor_wall_attribute(a, colour);
-		a->sort = (Uint8)((a->sort & ~3) | sort); // the sort is the low 2 bits (SKILLS.md)
+		a->sort = (unsigned char)((a->sort & ~3) | sort); // the sort is the low 2 bits (SKILLS.md)
 		if (fog == LEVEL_FOG_CORNERS)
 			object_fog_set_quad(a, levels[0], levels[k], levels[k + 1], levels[last]);
 		++m->quad_count;
@@ -2043,7 +2045,7 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 	else
 		colour = along_x ? GREY_SIDE_Y : GREY_SIDE_X;
 	level_face_add(&grey_out, c, 4, test != 0 ? level_planes_rect(&c[0], &c[2], test) : 0, colour, LEVEL_FOG_FLAT,
-				   SORT_CEN, level_view_on && level_side_lies(c));
+				   JO_3D_SORT_CENTER, level_view_on && level_side_lies(c));
 }
 
 /*
@@ -2153,9 +2155,9 @@ static void grey_stairs_ramp(unsigned crossed)
 	const frustum_point *ramp = grey_stairs_ramp_corners, *side = grey_stairs_side_corners;
 
 	level_face_add(&grey_out, ramp, 4, crossed != 0 ? level_planes_rect(&ramp[0], &ramp[2], crossed) : 0,
-				   GREY_STAIRS_SLOPE, LEVEL_FOG_FLAT, SORT_CEN, false);
+				   GREY_STAIRS_SLOPE, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
 	level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
-				   GREY_SIDE_Y, LEVEL_FOG_FLAT, SORT_CEN, false);
+				   GREY_SIDE_Y, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
 }
 
 static void grey_boxes_add(void)
@@ -2192,7 +2194,7 @@ static void grey_boxes_add(void)
 
 			grey_stairs_profile_on = true; // you're outside the open side: its profile, once
 			level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
-						   GREY_SIDE_Y, LEVEL_FOG_FLAT, SORT_CEN, false);
+						   GREY_SIDE_Y, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
 		}
 		for (int i = group->first; i <= group->last; ++i)
 		{
@@ -2227,7 +2229,7 @@ static void grey_boxes_add(void)
 											  {r->x_min, r->y_max, b->height}};
 
 				level_face_add(&grey_out, top, 4, test != 0 ? level_planes_rect(&top[0], &top[2], test) : 0,
-							   grey_top_colour(b->height), LEVEL_FOG_NONE, SORT_CEN, false);
+							   grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
 			}
 			// A bar (its floor above the corridor's): its underside, from below it
 			if (b->floor > 0 && -view_z < b->floor)
@@ -2238,7 +2240,7 @@ static void grey_boxes_add(void)
 												{r->x_min, r->y_max, b->floor}};
 
 				level_face_add(&grey_out, under, 4, test != 0 ? level_planes_rect(&under[0], &under[2], test) : 0,
-							   GREY_UNDERSIDE, LEVEL_FOG_NONE, SORT_CEN, false);
+							   GREY_UNDERSIDE, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
 			}
 		}
 	}
@@ -2325,7 +2327,7 @@ static void corridor_walls_add(const corridor *passage)
 					continue; // behind the far end's wall, from the city
 				planes = level_planes_rect(&c[0], &c[2], FRUSTUM_SCREEN);
 				if (planes != FRUSTUM_OUTSIDE)
-					level_face_add(&grey_out, c, 4, planes, k == 0 ? base : CORRIDOR_BODY, LEVEL_FOG_CORNERS, SORT_MAX,
+					level_face_add(&grey_out, c, 4, planes, k == 0 ? base : CORRIDOR_BODY, LEVEL_FOG_CORNERS, JO_3D_SORT_MAX,
 								   level_side_lies(c));
 			}
 			a = b;
@@ -2353,12 +2355,12 @@ void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera
 	}
 	if (grey_out.quad_count == 0)
 		return;
-	grey_mesh.data.pntbl = grey_mesh_points;
-	grey_mesh.data.pltbl = grey_mesh_polygons;
-	grey_mesh.data.attbl = grey_mesh_attributes;
-	grey_mesh.data.nbPoint = (Uint16)grey_out.point_count;
-	grey_mesh.data.nbPolygon = (Uint16)grey_out.quad_count;
-	jo_3d_mesh_draw(&grey_mesh);
+	grey_mesh.data.points = grey_mesh_points;
+	grey_mesh.data.polygons = grey_mesh_polygons;
+	grey_mesh.data.attributes = grey_mesh_attributes;
+	grey_mesh.data.point_count = (unsigned short)grey_out.point_count;
+	grey_mesh.data.polygon_count = (unsigned short)grey_out.quad_count;
+	slave_draw_mesh(&grey_mesh); // the slave draws it (slave_draw.h)
 }
 
 /*
@@ -2373,8 +2375,8 @@ void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera
  *     on the tiles' own corners (glass_outline_add): no second fill, no extra corners for SGL
  *   - further off both ways, the glass as one quad (no seams show that far into the fog)
  * The tiles must lie over the far glass, which is under everything else. So the polygons are
- * chained (SORT_BFR: each drawn straight after the one before), behind a first one that's sorted
- * by its furthest corner (SORT_MAX): a dot at the floor's deepest point (glass_anchor)
+ * chained (JO_3D_SORT_PREVIOUS: each drawn straight after the one before), behind a first one that's sorted
+ * by its furthest corner (JO_3D_SORT_MAX): a dot at the floor's deepest point (glass_anchor)
  */
 #define GLASS_SEAM JO_COLOR_RGB(255, 255, 255)
 // Only tiles this near (along the corridor) are outlined: past it the seams are a pixel or two in the
@@ -2389,9 +2391,9 @@ static int level_deepest(const level_mesh *m, int first, int last)
 
 	for (int k = first; k < last; ++k)
 	{
-		const int d = (jo_fixed2int(m->points[k][X]) - v->eye.x) * v->forward[0] +
-					  (jo_fixed2int(m->points[k][Y]) - v->eye.y) * v->forward[1] +
-					  (jo_fixed2int(m->points[k][Z]) - v->eye.z) * v->forward[2];
+		const int d = (jo_fixed2int(m->points[k].x) - v->eye.x) * v->forward[0] +
+					  (jo_fixed2int(m->points[k].y) - v->eye.y) * v->forward[1] +
+					  (jo_fixed2int(m->points[k].z) - v->eye.z) * v->forward[2];
 
 		if (d > depth)
 		{
@@ -2404,23 +2406,23 @@ static int level_deepest(const level_mesh *m, int first, int last)
 
 /*
  * The chain's first polygon (slot 0, kept for it): a quad with all four corners on one point, the
- * floor's deepest (a dot; drawn first, and the floor drawn over it), sorted SORT_MAX. Every other
- * polygon of the floor is SORT_BFR, drawn straight after it in the order they were added: so the
+ * floor's deepest (a dot; drawn first, and the floor drawn over it), sorted JO_3D_SORT_MAX. Every other
+ * polygon of the floor is JO_3D_SORT_PREVIOUS, drawn straight after it in the order they were added: so the
  * whole floor's drawn at its deepest point's depth, behind everything stood on it, the tiles on the
  * far glass and the outlines on the tiles. Chained off a tile instead (one moved to the front), its
  * outline had gone in before it, and the tile was drawn over it
  */
 static void glass_anchor(level_mesh *m, int point)
 {
-	POLYGON *q = &m->polygons[0];
+	jo_3d_polygon *q = &m->polygons[0];
 
 	for (int k = 0; k < 4; ++k)
-		q->Vertices[k] = (Uint16)point;
-	q->norm[X] = JO_FIXED_0;
-	q->norm[Y] = JO_FIXED_0;
-	q->norm[Z] = JO_FIXED_1;
+		q->vertices[k] = (unsigned short)point;
+	q->normal.x = JO_FIXED_0;
+	q->normal.y = JO_FIXED_0;
+	q->normal.z = JO_FIXED_1;
 	set_corridor_wall_attribute(&m->attributes[0], JO_COLOR_RGB(0, 0, 0));
-	m->attributes[0].sort = (Uint8)((m->attributes[0].sort & ~3) | SORT_MAX);
+	m->attributes[0].sort = (unsigned char)((m->attributes[0].sort & ~3) | JO_3D_SORT_MAX);
 }
 
 // The seams' white, fogged by level: twice as fast as a tile darkens (object_fog_flat_colour only
@@ -2432,38 +2434,38 @@ static jo_color glass_seam_colour(int level)
 	return (jo_color)depth_fog_darken((unsigned short)GLASS_SEAM, steps * 2);
 }
 
-// One outline polygon into mesh m: a polyline (sprPolyLine: a quad's four edges, nothing filled) or
-// a line (sprLine: from its first corner to its second), on the points given, chained (SORT_BFR)
+// One outline polygon into mesh m: a polyline (JO_VDP1_POLYLINE: a quad's four edges, nothing filled) or
+// a line (JO_VDP1_LINE: from its first corner to its second), on the points given, chained (JO_3D_SORT_PREVIOUS)
 static void glass_line_add(level_mesh *m, int p0, int p1, int p2, int p3, unsigned int kind, jo_color colour)
 {
-	POLYGON *q;
-	ATTR *a;
+	jo_3d_polygon *q;
+	jo_3d_polygon_attribute *a;
 
 	if (m->quad_count >= m->quads_max)
 		return;
 	q = &m->polygons[m->quad_count];
 	a = &m->attributes[m->quad_count];
-	q->norm[X] = JO_FIXED_0;
-	q->norm[Y] = JO_FIXED_0;
-	q->norm[Z] = JO_FIXED_1;
-	q->Vertices[0] = (Uint16)p0;
-	q->Vertices[1] = (Uint16)p1;
-	q->Vertices[2] = (Uint16)p2;
-	q->Vertices[3] = (Uint16)p3;
-	a->flag = Dual_Plane;
-	a->sort = (Uint8)(SORT_BFR | ((kind >> 16) & 0x1c) | No_Option);
-	a->texno = No_Texture;
-	a->atrb = (Uint16)((CL32KRGB | No_Gouraud) | ((kind >> 24) & 0xc0));
-	a->colno = colour;
-	a->gstb = 0;
-	a->dir = (Uint16)(kind & 0x3f);
+	q->normal.x = JO_FIXED_0;
+	q->normal.y = JO_FIXED_0;
+	q->normal.z = JO_FIXED_1;
+	q->vertices[0] = (unsigned short)p0;
+	q->vertices[1] = (unsigned short)p1;
+	q->vertices[2] = (unsigned short)p2;
+	q->vertices[3] = (unsigned short)p3;
+	a->plane = JO_3D_DUAL_PLANE;
+	a->sort = (unsigned char)(JO_3D_SORT_PREVIOUS | ((kind >> 16) & 0x1c) | JO_3D_NO_OPTION);
+	a->texture_id = JO_3D_NO_TEXTURE;
+	a->draw_mode = (unsigned short)((JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((kind >> 24) & 0xc0));
+	a->color = colour;
+	a->gouraud_table = 0;
+	a->direction = (unsigned short)(kind & 0x3f);
 	++m->quad_count;
 }
 
 /*
  * A white outline on the polygon at mesh m's points first .. first + n - 1 (a tile, just added),
  * chained after it so it's drawn on it. VDP1 lines: a polyline listed a, b, c, b draws just a-b
- * and b-c (and back: the same pixels), with no line across the tile; a line (sprLine) one edge.
+ * and b-c (and back: the same pixels), with no line across the tile; a line (JO_VDP1_LINE) one edge.
  * whole: all of it (a tile cut by the corridor's wall or the view, or one of the scattered ones by
  * the hole). Otherwise a whole hexagon, and only its three edges from corner 2 to 5 (corridor.c
  * lists them round from its point at +out): one of each pair of opposite edges, so every seam
@@ -2475,17 +2477,17 @@ static void glass_outline_add(level_mesh *m, int first, int n, bool whole, jo_co
 {
 	if (!whole)
 	{
-		glass_line_add(m, first + 2, first + 3, first + 4, first + 3, sprPolyLine, colour);
-		glass_line_add(m, first + 4, first + 5, first + 5, first + 4, sprLine, colour);
+		glass_line_add(m, first + 2, first + 3, first + 4, first + 3, JO_VDP1_POLYLINE, colour);
+		glass_line_add(m, first + 4, first + 5, first + 5, first + 4, JO_VDP1_LINE, colour);
 		return;
 	}
 	for (int k = 0; k < n; k += 2)
 	{
 		// An odd count: the last corner's edge back to the first, alone
 		if (k + 1 >= n)
-			glass_line_add(m, first + k, first, first, first, sprLine, colour);
+			glass_line_add(m, first + k, first, first, first, JO_VDP1_LINE, colour);
 		else
-			glass_line_add(m, first + k, first + k + 1, first + (k + 2 < n ? k + 2 : 0), first + k + 1, sprPolyLine,
+			glass_line_add(m, first + k, first + k + 1, first + (k + 2 < n ? k + 2 : 0), first + k + 1, JO_VDP1_POLYLINE,
 						   colour);
 	}
 }
@@ -2531,7 +2533,7 @@ static void draw_glass_floor(const corridor *passage)
 		need = level_planes_rect(&c[0], &c[2], planes);
 		level_cut_exact = false;
 		if (need != FRUSTUM_OUTSIDE)
-			level_face_add(&glass_out, c, 4, need, glass_shades[1], LEVEL_FOG_CORNERS, SORT_BFR, false);
+			level_face_add(&glass_out, c, 4, need, glass_shades[1], LEVEL_FOG_CORNERS, JO_3D_SORT_PREVIOUS, false);
 	}
 	tiles_from = glass_out.point_count;
 	// The tiles near you, each with its outline
@@ -2579,7 +2581,7 @@ static void draw_glass_floor(const corridor *passage)
 		}
 		level = object_fog_enabled ? object_fog_level(tile->centre.x, tile->centre.y) : 0;
 		if (!level_face_add(&glass_out, corners, tile->count, need, object_fog_flat_colour(glass_shades[tile->shade], level),
-							LEVEL_FOG_NONE, SORT_BFR, false))
+							LEVEL_FOG_NONE, JO_3D_SORT_PREVIOUS, false))
 			continue;
 		if (out > eye_out - GLASS_OUTLINED && out < eye_out + GLASS_OUTLINED)
 			glass_outline_add(&glass_out, first_point, glass_out.point_count - first_point,
@@ -2592,9 +2594,9 @@ static void draw_glass_floor(const corridor *passage)
 	// looking at it), of the tiles: the chain's first
 	glass_anchor(&glass_out, tiles_from > 0 ? level_deepest(&glass_out, 0, tiles_from)
 											: level_deepest(&glass_out, 0, glass_out.point_count));
-	corridor_mesh.data.nbPoint = (Uint16)glass_out.point_count;
-	corridor_mesh.data.nbPolygon = (Uint16)glass_out.quad_count;
-	jo_3d_mesh_draw(&corridor_mesh);
+	corridor_mesh.data.point_count = (unsigned short)glass_out.point_count;
+	corridor_mesh.data.polygon_count = (unsigned short)glass_out.quad_count;
+	slave_draw_mesh(&corridor_mesh); // the slave draws it (slave_draw.h)
 }
 
 void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera)
@@ -2608,7 +2610,7 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 	// Looking down from up high (a roof), the floor's seen further aside than the level view
 	// reaches (corridor_cone_below), in world units
 	const int below_reach = corridor_cone_below(0) >> 4;
-	// Whether the far glass is under the tiles: they're chained after it (SORT_BFR), all drawn
+	// Whether the far glass is under the tiles: they're chained after it (JO_3D_SORT_PREVIOUS), all drawn
 	// straight after it, far back. Without it (near the corridor's far end), the chain hung off
 	// the first tile listed, by the arena's wall behind you, and the tiles were drawn over the
 	// grey box's steps: each is sorted by its own furthest corner instead
@@ -2624,7 +2626,7 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 	if (portal.outside)
 		return; // out in the city: the corridor's floor is behind its walls (grey_portal)
 	// Past the detail, the rest of the corridor as one quad of glass, cut to the screen: from a
-	// hexagon's width short of it, under the last tiles' jagged edge (the tiles are SORT_BFR after
+	// hexagon's width short of it, under the last tiles' jagged edge (the tiles are JO_3D_SORT_PREVIOUS after
 	// it, so they lie over it). The seams between the tiles are left open: the arena's floor (VDP2)
 	// shows through them, a lighter navy than the glass, for nothing. A floor quad under them all
 	// in a seam colour cost VDP1 the whole floor twice over: 30 fps
@@ -2682,7 +2684,7 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 	}
 	if (quads == 0)
 		return;
-	corridor_mesh.data.nbPoint = (Uint16)points;
-	corridor_mesh.data.nbPolygon = (Uint16)quads;
-	jo_3d_mesh_draw(&corridor_mesh);
+	corridor_mesh.data.point_count = (unsigned short)points;
+	corridor_mesh.data.polygon_count = (unsigned short)quads;
+	slave_draw_mesh(&corridor_mesh); // the slave draws it (slave_draw.h)
 }

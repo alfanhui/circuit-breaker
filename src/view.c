@@ -1,4 +1,5 @@
 #include "view.h"
+#include "utils/angles.h"
 #include "floor_fade_vdp2.h"
 #include "object_fog_vdp1.h"
 #include "game/turn_ease.h"
@@ -10,22 +11,22 @@
 // 1st person: camera sits on the cycle and turns with it (easing round: turn_ease.h)
 #define FIRST_PERSON_FOV 90
 #define FIRST_PERSON_Z (-35)
-#define FIRST_PERSON_RX DEGtoANG(90.0)
+#define FIRST_PERSON_RX JO_DEG_TO_ANGLE(90.0)
 // Boosting widens the 1st person view: the classic sense-of-speed kick, as if the world
 // stretches past. Culling and wall_clip are told the wider view, so no wall pieces go missing at
 // the screen edges. The floor fog's rows are worked out for 90 degrees, so while widened it sits
 // a little nearer than it should (up to ~15%).
 // The FOV eases towards where the boost level says (ease_out_step), rather than following it:
-// following it, it widened 6 degrees a frame and looked like a glitch. It's kept in SGL's ANGLE
+// following it, it widened 6 degrees a frame and looked like a glitch. It's kept in SGL's jo_angle
 // units (65536 a circle), not whole degrees, so even its slowest steps are smooth
 #define FIRST_PERSON_BOOST_FOV 12				   // extra degrees at full boost
 // On foot (view_on_foot), narrower: walking, nothing comes at you at 13 a frame, and less on the
 // screen is less for VDP1 to fill (the stairs, the walls beside you). Things nearby look nearer
 // their size, too: at 90 the grey box's stairs looked far off. Eased to as you get up
 #define ON_FOOT_FOV 75
-#define ON_FOOT_FOV_ANGLE DEGtoANG(ON_FOOT_FOV)
-#define FIRST_PERSON_FOV_ANGLE DEGtoANG(FIRST_PERSON_FOV) // constants: worked out by the compiler
-#define BOOST_FOV_ANGLE DEGtoANG(FIRST_PERSON_BOOST_FOV)
+#define ON_FOOT_FOV_ANGLE JO_DEG_TO_ANGLE(ON_FOOT_FOV)
+#define FIRST_PERSON_FOV_ANGLE JO_DEG_TO_ANGLE(FIRST_PERSON_FOV) // constants: worked out by the compiler
+#define BOOST_FOV_ANGLE JO_DEG_TO_ANGLE(FIRST_PERSON_BOOST_FOV)
 #define FOV_EASE_SHARE 2	 // sixteenths of the way each frame: most of it in ~0.3 s, settled in ~0.6 s
 #define FOV_EASE_MIN_STEP 32 // 0.18 degrees: the slowest it moves before it lands
 
@@ -39,7 +40,7 @@
  * 8 degrees, which would leave a band of far floor unfogged), so it's rebuilt for the new pitch
  * when that has changed by more than LOOK_FOG_TILT_STEP: about 14 times through a look.
  */
-#define LOOK_ANGLE DEGtoANG(75.0)
+#define LOOK_ANGLE JO_DEG_TO_ANGLE(75.0)
 #define LOOK_PITCH_X256 27
 #define LOOK_EASE_SHARE 4	   // sixteenths of the way a frame: quicker than a turn, it's a glance
 #define LOOK_EASE_MIN_STEP 64 // 0.35 degrees
@@ -51,17 +52,17 @@
  * head's look (the face buttons) eases as on the cycle, and can look up and down as well: up
  * less far than down, as a neck does. The eye bobs with each step
  */
-#define LOOK_UP_ANGLE DEGtoANG(25.0)
-#define LOOK_DOWN_ANGLE DEGtoANG(35.0)
+#define LOOK_UP_ANGLE JO_DEG_TO_ANGLE(25.0)
+#define LOOK_DOWN_ANGLE JO_DEG_TO_ANGLE(35.0)
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
 // more than 1000 units behind the camera, off the screen.)
 #define ISO_FOV 60
 #define ISO_Z (-768)
-#define ISO_RX DEGtoANG(40.0)
-#define ISO_RZ DEGtoANG(45.0)
-#define ISO_FOV_ANGLE DEGtoANG(ISO_FOV) // a constant: worked out by the compiler
+#define ISO_RX JO_DEG_TO_ANGLE(40.0)
+#define ISO_RZ JO_DEG_TO_ANGLE(45.0)
+#define ISO_FOV_ANGLE JO_DEG_TO_ANGLE(ISO_FOV) // a constant: worked out by the compiler
 // How far behind the cycle the camera sits, on each axis, so the cycle is in the middle of the
 // screen. ISO_RX is measured from straight down, so the camera looks 50 degrees below level and
 // its line of sight meets the floor 768 / tan(50) = 644 ahead, along the 45 degree diagonal:
@@ -98,8 +99,8 @@
 #define SPECTATE_FOV 30
 #define SPECTATE_HEIGHT 3804		// 9000 x sin 25
 #define SPECTATE_BACK 8157			// 9000 x cos 25: how far behind the cycle along the floor
-#define SPECTATE_RX DEGtoANG(65.0)	// from straight down: 25 degrees below level
-#define SPECTATE_RZ DEGtoANG(30.0)	// 30 degrees round from north towards east (a right turn)
+#define SPECTATE_RX JO_DEG_TO_ANGLE(65.0)	// from straight down: 25 degrees below level
+#define SPECTATE_RZ JO_DEG_TO_ANGLE(30.0)	// 30 degrees round from north towards east (a right turn)
 // Where it stands from the cycle: SPECTATE_BACK behind it, the way it faces. Facing is
 // (-sin, -cos) (heading 0 is north, -y), so behind is (+sin 30, +cos 30) x 8157. Worked out
 // here, as ISO_FOLLOW_OFFSET is, so there's no trigonometry at runtime: change RZ and redo them
@@ -146,7 +147,7 @@
 // horizon in sight, the tilted floor rose out of the fog's band into the sky at one corner.
 // It leans in from INTRO_ROLL_FROM below level, fully INTRO_ROLL_SHIFT's 11 degrees further down
 #define INTRO_ROLL_FROM INTRO_DEG(20) // the top of the screen is ~16 degrees above the middle at 45 FOV
-#define INTRO_ROLL_SHIFT 3			  // (below - from) >> 3: 0..256 over 2048 ANGLE, 11.25 degrees
+#define INTRO_ROLL_SHIFT 3			  // (below - from) >> 3: 0..256 over 2048 jo_angle, 11.25 degrees
 
 bool first_person = true; // the game starts in 1st person; Down switches to iso
 bool spectating = false;  // the prologue's far-off camera (above); it wins over the other two
@@ -155,19 +156,19 @@ int view_floor_shift = 0;
 int view_x;
 int view_y;
 int view_z;
-ANGLE view_rx;
-ANGLE view_rz;
+jo_angle view_rx;
+jo_angle view_rz;
 
 // Accumulated heading angle, eased towards on every turn
 static int heading_target = 0;
 static int heading_current = 0;
 
-// The head's turn to the side (ANGLE, negative left), on top of the heading, eased to the target
+// The head's turn to the side (jo_angle, negative left), on top of the heading, eased to the target
 static int look_target = 0;
 static int look_now = 0;
 static int fog_tilt = 0; // the floor fog's tilt (tan x 1000) as last built
 
-// On foot (view_on_foot): whether, the head's look up or down (ANGLE, + down) wanted and now, and
+// On foot (view_on_foot): whether, the head's look up or down (jo_angle, + down) wanted and now, and
 // how far the eye's down for the step
 static bool on_foot = false;
 static int look_pitch_target = 0;
@@ -178,10 +179,10 @@ static int foot_bob = 0;
 // and the steady point it pans with along the line (view_spectate_pan)
 static int spectate_line_y = 0;
 static int spectate_pan_x = 0;
-// The camera's lean (ANGLE), only ever off 0 while the opening flight banks, or in the designed
+// The camera's lean (jo_angle), only ever off 0 while the opening flight banks, or in the designed
 // crash (view_breach)
-static ANGLE view_roll = 0;
-// The designed crash's tip down towards the floor (ANGLE) and how far the eye's dropped, 1st
+static jo_angle view_roll = 0;
+// The designed crash's tip down towards the floor (jo_angle) and how far the eye's dropped, 1st
 // person (view_breach)
 static int breach_dip = 0;
 static int breach_drop = 0;
@@ -231,16 +232,15 @@ static world_rect arrival_rect;				// up high: the walls round what's on the scr
 // A jolt that dies away (a bot crashed into your trail): this frame's share is added on top of
 // everything else. The floor fog isn't rebuilt for its pitch: it's small and over in ~0.2 s
 static camera_shake shake;
-static int shake_yaw = 0; // this frame's (ANGLE), for wall_clip's camera too
+static int shake_yaw = 0; // this frame's (jo_angle), for wall_clip's camera too
 
-// SGL's tangent (16.16 fixed point). jo's headers don't declare it; this is SGL's own line (sl_def.h)
-extern FIXED slTan(ANGLE);
+// tan is angle_tan (utils/angles.h): 16.16, as SGL's slTan was
 
-// The 1st person FOV now (ANGLE), and how far it reaches sideways per unit ahead (wall_clip.h)
+// The 1st person FOV now (jo_angle), and how far it reaches sideways per unit ahead (wall_clip.h)
 static int fov_now = FIRST_PERSON_FOV_ANGLE;
 static int view_width_now = WALL_CLIP_VIEW_WIDTH_90;
 
-// One frame of easing towards the target FOV (ANGLE)
+// One frame of easing towards the target FOV (jo_angle)
 static void ease_first_person_fov(int target)
 {
 	int fov = ease_out_step(fov_now, target, FOV_EASE_SHARE, FOV_EASE_MIN_STEP);
@@ -248,9 +248,9 @@ static void ease_first_person_fov(int target)
 	if (fov == fov_now)
 		return; // only while it's moving, not every frame
 	fov_now = fov;
-	slPerspective((ANGLE)fov);
+	angle_perspective((jo_angle)fov);
 	// tan(fov / 2) x 16, rounded up so the culling errs wide
-	view_width_now = (slTan((ANGLE)(fov >> 1)) * 16 + 0xFFFF) >> 16;
+	view_width_now = (angle_tan((jo_angle)(fov >> 1)) * 16 + 0xFFFF) >> 16;
 }
 
 static void apply_view(const cycle *c)
@@ -385,7 +385,7 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range)
 bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out)
 {
 	// Where the camera faces now: mid-turn, looking aside or shaking
-	ANGLE yaw = (ANGLE)(heading_current + look_now + shake_yaw);
+	jo_angle yaw = (jo_angle)(heading_current + look_now + shake_yaw);
 
 	if (arrival_frame >= 0)
 	{
@@ -394,8 +394,8 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 			return false;
 		out->eye.x = (short)view_x;
 		out->eye.y = (short)view_y;
-		out->forward_x = -(slSin(view_rz) >> 6);
-		out->forward_y = -(slCos(view_rz) >> 6);
+		out->forward_x = -(jo_sin_angle(view_rz) >> 6);
+		out->forward_y = -(jo_cos_angle(view_rz) >> 6);
 		out->view_width = arrival_view_width;
 		out->side_extra16 = 0;
 		return true;
@@ -404,9 +404,9 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 		return false;
 	out->eye = c->position;
 	// Heading 0 faces north (-y) and turning right goes east (-x): forward = (-sin, -cos).
-	// slSin/slCos give 16.16 fixed point; >> 6 makes it x1024
-	out->forward_x = -(slSin(yaw) >> 6);
-	out->forward_y = -(slCos(yaw) >> 6);
+	// jo_sin_angle/jo_cos_angle give 16.16 fixed point; >> 6 makes it x1024
+	out->forward_x = -(jo_sin_angle(yaw) >> 6);
+	out->forward_y = -(jo_cos_angle(yaw) >> 6);
 	out->view_width = view_width_now;
 	out->side_extra16 = 0;
 	return true;
@@ -429,8 +429,8 @@ bool view_frustum(bool free_camera, frustum *out)
 		// heading view_rz, then the pitch: view_rx under FIRST_PERSON_RX looks down by the
 		// difference). Heading 0 faces north (-y); right is east (-x)
 		const int below = FIRST_PERSON_RX - view_rx; // + looking down
-		const int sin_b = slSin((ANGLE)below) >> 6, cos_b = slCos((ANGLE)below) >> 6;
-		const int ahead_x = -(slSin(view_rz) >> 6), ahead_y = -(slCos(view_rz) >> 6);
+		const int sin_b = jo_sin_angle((jo_angle)below) >> 6, cos_b = jo_cos_angle((jo_angle)below) >> 6;
+		const int ahead_x = -(jo_sin_angle(view_rz) >> 6), ahead_y = -(jo_cos_angle(view_rz) >> 6);
 
 		// Forward: ahead on the floor, tipped down by the pitch; up: tipped forward by it
 		forward[0] = (ahead_x * cos_b) >> 10;
@@ -439,13 +439,13 @@ bool view_frustum(bool free_camera, frustum *out)
 		up[0] = (ahead_x * sin_b) >> 10;
 		up[1] = (ahead_y * sin_b) >> 10;
 		up[2] = cos_b;
-		right[0] = -(slCos(view_rz) >> 6);
-		right[1] = slSin(view_rz) >> 6;
+		right[0] = -(jo_cos_angle(view_rz) >> 6);
+		right[1] = jo_sin_angle(view_rz) >> 6;
 		right[2] = 0;
 	}
 	// The screen's edges, a sixteenth wider: tan(half the FOV), and 240 / 320 of it up and down
 	// (jo_3d_window: the projection's 320 x 240, its middle at 160, 120)
-	tan_side = ((slTan((ANGLE)(fov_now >> 1)) >> 6) * 17) >> 4;
+	tan_side = ((angle_tan((jo_angle)(fov_now >> 1)) >> 6) * 17) >> 4;
 	tan_up = (tan_side * 3) >> 2;
 	// Leant (the designed crash rolls the camera up to 11 degrees), the screen's corners turn out
 	// past the level edges: both reach as far as a corner does (its diagonal: 1.25 x the side's)
@@ -466,8 +466,8 @@ bool view_fog_camera(bool free_camera, world_point *eye, int *forward_x, int *fo
 	eye->x = (short)view_x;
 	eye->y = (short)view_y;
 	// Heading 0 faces north (-y), turning right goes east (-x): forward = (-sin, -cos), x1024
-	*forward_x = -(slSin(view_rz) >> 6);
-	*forward_y = -(slCos(view_rz) >> 6);
+	*forward_x = -(jo_sin_angle(view_rz) >> 6);
+	*forward_y = -(jo_cos_angle(view_rz) >> 6);
 	// No fog for the debug camera: it looks anywhere, so the fog's distances don't fit it.
 	// None spectating either: the prologue's message stands about where the floor's fog only
 	// begins, and with the fog's Gouraud shading on, its strokes going off the left of the screen
@@ -529,7 +529,7 @@ void view_rumble(int strength)
 
 void view_breach(int roll, int dip, int drop)
 {
-	view_roll = (ANGLE)roll;
+	view_roll = (jo_angle)roll;
 	breach_dip = dip;
 	breach_drop = drop;
 }
@@ -592,7 +592,7 @@ int view_intro_frame(void)
 static void intro_view_rect(const intro_shot *s)
 {
 	int pitch = s->rx > INTRO_DEG(88) ? INTRO_DEG(88) : s->rx; // tan 90 is endless
-	int reach = (s->height * (slTan((ANGLE)pitch) >> 4)) >> 12; // tan is 16.16: >> 4 then >> 12
+	int reach = (s->height * (angle_tan((jo_angle)pitch) >> 4)) >> 12; // tan is 16.16: >> 4 then >> 12
 	int half;
 	int look_x;
 	int look_y;
@@ -600,9 +600,9 @@ static void intro_view_rect(const intro_shot *s)
 	if (reach > INTRO_VIEW_REACH_MAX)
 		reach = INTRO_VIEW_REACH_MAX;
 	half = INTRO_VIEW_HALF_MIN + ((reach * 85) >> 8); // 85 / 256: a third, with no division
-	// Ahead is (-sin, -cos) (heading 0 is north, -y); slSin is 16.16, >> 6 makes it x1024
-	look_x = view_x + ((-(slSin((ANGLE)s->rz) >> 6) * reach) >> 10);
-	look_y = view_y + ((-(slCos((ANGLE)s->rz) >> 6) * reach) >> 10);
+	// Ahead is (-sin, -cos) (heading 0 is north, -y); jo_sin_angle is 16.16, >> 6 makes it x1024
+	look_x = view_x + ((-(jo_sin_angle((jo_angle)s->rz) >> 6) * reach) >> 10);
+	look_y = view_y + ((-(jo_cos_angle((jo_angle)s->rz) >> 6) * reach) >> 10);
 	intro_rect.x_min = (short)(JO_MIN(look_x, view_x) - half);
 	intro_rect.x_max = (short)(JO_MAX(look_x, view_x) + half);
 	intro_rect.y_min = (short)(JO_MIN(look_y, view_y) - half);
@@ -628,8 +628,8 @@ static void intro_floor_fog(const intro_shot *s)
 
 	if (below > INTRO_DEG(60))
 		below = INTRO_DEG(60); // steeper, the fog's far off the screen anyway (and the sums overflow)
-	tilt = (slTan((ANGLE)below) * 1000) >> 16;
-	focal = (JO_TV_WIDTH_2 << 16) / slTan((ANGLE)(s->fov >> 1)); // once a rebuild: a division
+	tilt = (angle_tan((jo_angle)below) * 1000) >> 16;
+	focal = (JO_TV_WIDTH_2 << 16) / angle_tan((jo_angle)(s->fov >> 1)); // once a rebuild: a division
 	floor_fade_set_camera(tilt, s->height, focal, s->fade_start, s->fade_end);
 }
 
@@ -658,19 +658,19 @@ static void intro_follow(const cycle *c, int yaw, int pitch)
 	view_x = base_x + s.ox;
 	view_y = base_y + s.oy;
 	view_z = -s.height;
-	view_rx = (ANGLE)(s.rx + pitch);
-	view_rz = (ANGLE)(s.rz + yaw);
+	view_rx = (jo_angle)(s.rx + pitch);
+	view_rz = (jo_angle)(s.rz + yaw);
 	{
 		int below = INTRO_DEG(90) - s.rx; // how far below level it looks
 		int lean = (below - INTRO_ROLL_FROM) >> INTRO_ROLL_SHIFT; // 0..256: how much of the bank shows
 
 		lean = lean < 0 ? 0 : lean > 256 ? 256 : lean;
-		view_roll = (ANGLE)((s.roll * lean) >> 8);
+		view_roll = (jo_angle)((s.roll * lean) >> 8);
 	}
 	if (s.fov != intro_fov)
 	{
 		intro_fov = s.fov;
-		slPerspective((ANGLE)s.fov);
+		angle_perspective((jo_angle)s.fov);
 	}
 	view_floor_shift = floor_shift_for(s.height);
 	intro_view_rect(&s);
@@ -701,7 +701,7 @@ void view_arrival_start(const cycle *c)
 	arrival_from.rx = SPECTATE_RX;
 	arrival_from.rz = SPECTATE_RZ;
 	arrival_from.roll = 0;
-	arrival_from.fov = DEGtoANG(SPECTATE_FOV);
+	arrival_from.fov = JO_DEG_TO_ANGLE(SPECTATE_FOV);
 	arrival_from.lead = 0;
 	arrival_from.follow = 0;
 	arrival_from.fade_start = fade_start;
@@ -747,15 +747,15 @@ int view_wall_rise(void)
 static void corner_rays_meet(const intro_shot *s, int plane, int widen8, world_point *quad)
 {
 	int below = INTRO_DEG(90) - s->rx;
-	int sin_d = slSin((ANGLE)below) >> 6; // x1024
-	int cos_d = slCos((ANGLE)below) >> 6;
-	int side = ((slTan((ANGLE)(s->fov >> 1)) >> 6) * widen8) >> 3; // sideways reach per unit ahead
+	int sin_d = jo_sin_angle((jo_angle)below) >> 6; // x1024
+	int cos_d = jo_cos_angle((jo_angle)below) >> 6;
+	int side = ((angle_tan((jo_angle)(s->fov >> 1)) >> 6) * widen8) >> 3; // sideways reach per unit ahead
 	int up = (side * 179) >> 8;										// the screen is 224 / 320 = 0.7 as tall as wide
 	// Ahead on the floor (-sin, -cos), and right: heading 0 faces north (-y), right is east (-x)
-	int ahead_x = -(slSin((ANGLE)s->rz) >> 6);
-	int ahead_y = -(slCos((ANGLE)s->rz) >> 6);
-	int right_x = -(slCos((ANGLE)s->rz) >> 6);
-	int right_y = slSin((ANGLE)s->rz) >> 6;
+	int ahead_x = -(jo_sin_angle((jo_angle)s->rz) >> 6);
+	int ahead_y = -(jo_cos_angle((jo_angle)s->rz) >> 6);
+	int right_x = -(jo_cos_angle((jo_angle)s->rz) >> 6);
+	int right_y = jo_sin_angle((jo_angle)s->rz) >> 6;
 	int eye = s->height - plane;
 
 	for (int v = -1; v <= 1; v += 2) // the bottom row, then the top
@@ -846,7 +846,7 @@ int view_sky_rise(void)
 
 	if (!first_person || spectating || arrival_frame >= 0)
 		return 0;
-	return -((slTan((ANGLE)tilt) * 100) >> 16);
+	return -((angle_tan((jo_angle)tilt) * 100) >> 16);
 }
 
 bool view_roof_quad(int height, world_point *quad)
@@ -892,13 +892,13 @@ static void arrival_follow(const cycle *c, int yaw, int pitch)
 	view_x = s.ox;
 	view_y = s.oy;
 	view_z = -s.height;
-	view_rx = (ANGLE)(s.rx + pitch);
-	view_rz = (ANGLE)(s.rz + yaw);
+	view_rx = (jo_angle)(s.rx + pitch);
+	view_rz = (jo_angle)(s.rz + yaw);
 	if (s.fov != arrival_fov)
 	{
 		arrival_fov = s.fov;
-		slPerspective((ANGLE)s.fov);
-		arrival_view_width = (slTan((ANGLE)(s.fov >> 1)) * 16 + 0xFFFF) >> 16; // rounded up: errs wide
+		angle_perspective((jo_angle)s.fov);
+		arrival_view_width = (angle_tan((jo_angle)(s.fov >> 1)) * 16 + 0xFFFF) >> 16; // rounded up: errs wide
 	}
 	view_floor_shift = floor_shift_for(s.height);
 	arrival_low = s.height < ARRIVAL_LOW_HEIGHT;
@@ -947,8 +947,8 @@ void view_follow(const cycle *c)
 		view_y = spectate_line_y + SPECTATE_BACK_Y;
 		// The jolt of a press breaking at the loop (input.c), at full size: through the narrow FOV
 		// it swings the picture a tenth of the screen, a hit
-		view_rz = (ANGLE)(SPECTATE_RZ + shake_yaw);
-		view_rx = (ANGLE)(SPECTATE_RX + shake_pitch);
+		view_rz = (jo_angle)(SPECTATE_RZ + shake_yaw);
+		view_rx = (jo_angle)(SPECTATE_RX + shake_pitch);
 	}
 	else if (first_person)
 	{
@@ -963,15 +963,15 @@ void view_follow(const cycle *c)
 		// The head's turn to the side, and its dip towards the floor
 		look_now = ease_out_step(look_now, look_target, LOOK_EASE_SHARE, LOOK_EASE_MIN_STEP);
 		look_pitch_now = ease_out_step(look_pitch_now, look_pitch_target, LOOK_EASE_SHARE, LOOK_EASE_MIN_STEP);
-		view_rz = (ANGLE)(heading_current + look_now + shake_yaw);
+		view_rz = (jo_angle)(heading_current + look_now + shake_yaw);
 		{
 			// The designed crash's tip forward is a dip of the head like any other, and so is
 			// looking up or down on foot (negative: up). The fog follows them
 			int pitch = (((look_now < 0 ? -look_now : look_now) * LOOK_PITCH_X256) >> 8) + breach_dip + look_pitch_now;
-			int tilt = (slTan((ANGLE)pitch) * 1000) >> 16; // tan x 1000, as the floor fog keeps it
+			int tilt = (angle_tan((jo_angle)pitch) * 1000) >> 16; // tan x 1000, as the floor fog keeps it
 
 			// Less than level (90 degrees) looks down. The shake's pitch isn't in the fog's tilt
-			view_rx = (ANGLE)(FIRST_PERSON_RX - pitch + shake_pitch);
+			view_rx = (jo_angle)(FIRST_PERSON_RX - pitch + shake_pitch);
 			view_z = FIRST_PERSON_Z + breach_drop + foot_bob; // view_z moves the world: + lowers the eye
 			int change = tilt > fog_tilt ? tilt - fog_tilt : fog_tilt - tilt;
 
@@ -992,8 +992,8 @@ void view_follow(const cycle *c)
 		view_x = c->position.x + ISO_FOLLOW_OFFSET;
 		view_y = c->position.y + ISO_FOLLOW_OFFSET;
 		// Half the jolt: from up here a degree swings the whole arena
-		view_rz = (ANGLE)(ISO_RZ + (shake_yaw >> 1));
-		view_rx = (ANGLE)(ISO_RX + (shake_pitch >> 1));
+		view_rz = (jo_angle)(ISO_RZ + (shake_yaw >> 1));
+		view_rx = (jo_angle)(ISO_RX + (shake_pitch >> 1));
 	}
 }
 
@@ -1002,14 +1002,14 @@ void view_push_world_matrix(void)
 	jo_3d_push_matrix();
 	// The lean first: a turn about the line of sight (the opening flight's bank)
 	if (view_roll != 0)
-		slRotZ(view_roll);
-	slRotX(view_rx);
-	slRotZ(view_rz);
+		angle_rotate_z(view_roll);
+	angle_rotate_x(view_rx);
+	angle_rotate_z(view_rz);
 	// Hand SGL the world at 1/VIEW_WORLD_SCALE size. SGL stops drawing polygons a little under
 	// 8192 units deep (likely a 16.16 overflow inside it: 8192 << 16 = 0x20000000), but the arena
 	// is up to 28000 across. Shrinking everything round the camera doesn't change the picture
 	// (screen position is x / depth, and both shrink together); only SGL's depths get smaller.
 	// Game logic and culling stay in world units.
-	slScale(JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE);
+	matrix_scale(JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE);
 	jo_3d_translate_matrix(-view_x, -view_y, view_z);
 }

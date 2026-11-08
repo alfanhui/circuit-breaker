@@ -6,6 +6,10 @@
 #define VDP1_EDSR (*(volatile unsigned short *)0x25D00010) // transfer end status
 #define VDP1_LOPR (*(volatile unsigned short *)0x25D00012) // last command read, the frame before
 #define VDP1_MODR (*(volatile unsigned short *)0x25D00016) // mode status: the version in bits 15-12
+// jo-engine 2026 builds each frame's commands in one of two tables, at 0x20 and 0x8000 in VDP1 RAM,
+// turn about. LOPR is an address / 8, so a command in the second table reads 0x1000 more: the low
+// 12 bits are its place from its own table's start (one more in the first table, from 0x20)
+#define LOPR_IN_TABLE(lopr) ((unsigned short)((lopr) & 0x0FFF))
 
 // The FRC runs at the master clock / 32 (jo_core_init sets JO_TIME_CKS_32_MODE)
 #ifdef JO_PAL_VERSION
@@ -53,8 +57,7 @@ void perf_frame_start(void)
 	int period = jo_time_get_frc(); // since the last frame's start: the whole of the last frame
 
 	jo_time_set_frc(0);
-	perf_displayed_polygons = jo_3d_get_displayed_polygon_count();
-	vdp1_gauge_frame_start(&perf_vdp1, VDP1_EDSR, VDP1_LOPR); // did VDP1 finish the frame before?
+	vdp1_gauge_frame_start(&perf_vdp1, VDP1_EDSR, LOPR_IN_TABLE(VDP1_LOPR)); // did VDP1 finish the frame before?
 	if (!timing)
 	{
 		timing = 1;
@@ -77,6 +80,10 @@ void perf_frame_end(void)
 {
 	int cpu = jo_time_get_frc() * 100 / FRC_COUNTS_PER_VBLANK;
 
+	// The polygons jo passed on to VDP1 this frame (the debug line shows it a frame late). Read
+	// here: jo-engine 2026 zeroes its counts once the frame's commands are sent, before the next
+	// frame starts (under SGL they lasted till then)
+	perf_displayed_polygons = jo_3d_get_displayed_polygon_count();
 	frames++;
 	vdp1_gauge_frame_end(&perf_vdp1, VDP1_EDSR); // the CPU's done: is VDP1?
 	cpu_total += cpu;

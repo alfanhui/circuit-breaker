@@ -1,13 +1,13 @@
 #include "static_mesh.h"
 
-void static_mesh_init(static_mesh *m, POINT *points, unsigned short max_points,
-					  POLYGON *polygons, ATTR *attributes, unsigned short max_polygons)
+void static_mesh_init(static_mesh *m, jo_pos3D_fixed *points, unsigned short max_points,
+					  jo_3d_polygon *polygons, jo_3d_polygon_attribute *attributes, unsigned short max_polygons)
 {
-	m->mesh.data.pntbl = points;
-	m->mesh.data.nbPoint = 0;
-	m->mesh.data.pltbl = polygons;
-	m->mesh.data.nbPolygon = 0;
-	m->mesh.data.attbl = attributes;
+	m->mesh.data.points = points;
+	m->mesh.data.point_count = 0;
+	m->mesh.data.polygons = polygons;
+	m->mesh.data.polygon_count = 0;
+	m->mesh.data.attributes = attributes;
 	m->max_points = max_points;
 	m->max_polygons = max_polygons;
 }
@@ -15,29 +15,29 @@ void static_mesh_init(static_mesh *m, POINT *points, unsigned short max_points,
 // Load time only, so a linear search is fine
 static int find_or_add_point(static_mesh *m, const jo_pos3D *p)
 {
-	POINT *points = m->mesh.data.pntbl;
-	FIXED x = jo_int2fixed(p->x);
-	FIXED y = jo_int2fixed(p->y);
-	FIXED z = jo_int2fixed(p->z);
+	jo_pos3D_fixed *points = m->mesh.data.points;
+	jo_fixed x = jo_int2fixed(p->x);
+	jo_fixed y = jo_int2fixed(p->y);
+	jo_fixed z = jo_int2fixed(p->z);
 	unsigned int i;
 
-	for (i = 0; i < m->mesh.data.nbPoint; ++i)
-		if (points[i][X] == x && points[i][Y] == y && points[i][Z] == z)
+	for (i = 0; i < m->mesh.data.point_count; ++i)
+		if (points[i].x == x && points[i].y == y && points[i].z == z)
 			return i;
 	if (i >= m->max_points)
 		return -1;
-	points[i][X] = x;
-	points[i][Y] = y;
-	points[i][Z] = z;
-	m->mesh.data.nbPoint++;
+	points[i].x = x;
+	points[i].y = y;
+	points[i].z = z;
+	m->mesh.data.point_count++;
 	return i;
 }
 
 int static_mesh_add_quad(static_mesh *m, const jo_pos3D corners[4])
 {
-	int index = m->mesh.data.nbPolygon;
-	POLYGON *polygon = m->mesh.data.pltbl + index;
-	ATTR *attribute = m->mesh.data.attbl + index;
+	int index = m->mesh.data.polygon_count;
+	jo_3d_polygon *polygon = m->mesh.data.polygons + index;
+	jo_3d_polygon_attribute *attribute = m->mesh.data.attributes + index;
 
 	if (index >= m->max_polygons)
 		return -1;
@@ -46,18 +46,18 @@ int static_mesh_add_quad(static_mesh *m, const jo_pos3D corners[4])
 		int point = find_or_add_point(m, &corners[i]);
 		if (point < 0)
 			return -1;
-		polygon->Vertices[i] = point;
+		polygon->vertices[i] = point;
 	}
-	polygon->norm[X] = JO_FIXED_0;
-	polygon->norm[Y] = JO_FIXED_1;
-	polygon->norm[Z] = JO_FIXED_0;
+	polygon->normal.x = JO_FIXED_0;
+	polygon->normal.y = JO_FIXED_1;
+	polygon->normal.z = JO_FIXED_0;
 
 	// Same defaults as jo_3d_create_plane, so jo's texture/colour setters behave the same
 	JO_ZERO(attribute->sort);
-	JO_ZERO(attribute->atrb);
-	JO_ZERO(attribute->gstb);
-	attribute->flag = Dual_Plane;
+	JO_ZERO(attribute->draw_mode);
+	JO_ZERO(attribute->gouraud_table);
+	attribute->plane = JO_3D_DUAL_PLANE;
 
-	m->mesh.data.nbPolygon++;
+	m->mesh.data.polygon_count++;
 	return index;
 }

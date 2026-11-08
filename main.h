@@ -38,7 +38,7 @@
 #include "src/utils/static_mesh.h"
 
 extern jo_palette image_pal;
-extern Sint16 draw_distance;
+extern short draw_distance;
 
 void initCamera(jo_camera *curCam);
 void debug_3d(bool show);

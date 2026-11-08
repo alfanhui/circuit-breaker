@@ -27,11 +27,13 @@
  */
 
 #include "main.h"
+#include "src/utils/angles.h"
 #include "src/floor_fade_vdp2.h"
 #include "src/object_fog_vdp1.h"
 #include "src/hud.h"
 #include "src/scene_memory.h"
 #include "src/sound.h"
+#include "src/slave_draw.h"
 #include "src/game/intro_flight.h"
 #include "src/game/arrival_flight.h"
 
@@ -59,7 +61,7 @@
 // meet the walls cleanly.
 #define FLOOR_TEXELS 256
 #define FLOOR_TILE_UNITS 125
-#define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // FIXED 16.16: world units per texel
+#define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // jo_fixed 16.16: world units per texel
 // (Spectating, it's drawn larger: view_floor_shift, view.c)
 #define PLAYER_HALF 25
 #define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
@@ -74,7 +76,7 @@ static jo_palette floor_pal;
 static jo_color floor_colours[FLOOR_COLOURS];
 // Far clip, in SGL's units: the world reaches SGL at 1/VIEW_WORLD_SCALE size (view.c), so this is
 // 30000 world units: the far walls of the largest arena (28000 across) stay visible
-Sint16 draw_distance = 30000 / VIEW_WORLD_SCALE;
+short draw_distance = 30000 / VIEW_WORLD_SCALE;
 
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
@@ -134,31 +136,32 @@ static trail_occluders occluders;
 //Third person
 // Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
 // the 6 faces (load_player_model)
-static POINT cube_points[12];
-static POLYGON cube_polygons[7];
-static ATTR cube_attributes[7];
+static jo_pos3D_fixed cube_points[12];
+static jo_3d_polygon cube_polygons[7];
+static jo_3d_polygon_attribute cube_attributes[7];
 static static_mesh cube;
 
 void initCamera(jo_camera *curCam)
 {
-	(*curCam).viewpoint[X] = toFIXED(0.0);
-	(*curCam).viewpoint[Y] = toFIXED(0.0);
+	// (viewpoint_pos and target_pos: jo_camera's points as x, y, z, 16.16)
+	curCam->viewpoint_pos.x = JO_FIXED_0;
+	curCam->viewpoint_pos.y = JO_FIXED_0;
 	// The eye sits exactly where view.c puts the world's origin (the cycle, in 1st person), looking
 	// along -z; view.c's rotations then turn the world in front of it. It was at z 5 looking at
 	// the origin: the same direction, but 5 SGL units (20 world units, at 1/4 scale) behind the
 	// cycle, while clipping, culling and fog all measure from the cycle. Running beside a trail,
 	// its clipped near end then showed as a hole at the screen's edge
-	(*curCam).viewpoint[Z] = toFIXED(0.0);
-	(*curCam).z_angle = DEGtoANG(0.0);	   // orientation
-	(*curCam).target[X] = toFIXED(0.0);
-	(*curCam).target[Y] = toFIXED(0.0);
-	(*curCam).target[Z] = toFIXED(-5.0); // only the direction matters
+	curCam->viewpoint_pos.z = JO_FIXED_0;
+	curCam->z_angle = 0; // orientation
+	curCam->target_pos.x = JO_FIXED_0;
+	curCam->target_pos.y = JO_FIXED_0;
+	curCam->target_pos.z = jo_int2fixed(-5); // only the direction matters
 	jo_3d_window(0, 0, JO_TV_WIDTH - 1, JO_TV_HEIGHT - 1, draw_distance, JO_TV_WIDTH_2, JO_TV_HEIGHT_2);
-	// How close polygons may be drawn: SGL drops anything nearer than its screen distance / 2^level.
-	// The world reaches SGL at 1/4 size (view.c), so the 20-40 unit safety distances that
-	// wall_clip and trail_clip_columns keep are only 5-10 SGL units: level 7 (the closest, 1/128)
-	// allows them. (It was 0, outside the valid 1-7.)
-	slZdspLevel(7);
+	// How close polygons may be drawn: jo (as SGL did) drops anything nearer than its screen
+	// distance / 2^level. The world reaches jo's 3D at 1/4 size (view.c), so the 20-40 unit safety
+	// distances that wall_clip and trail_clip_columns keep are only 5-10 units: level 7 (the
+	// closest, 1/128) allows them
+	jo_3d_display_level(7);
 }
 
 // The text layer keeps its contents, and jo_printf formatting is costly, so refresh 5 times a second
@@ -505,8 +508,24 @@ static void draw_status(bool hidden)
 }
 
 
-// SGL's world-to-screen projection (sl_def.h); jo's headers don't declare it
-extern FIXED slConvert3Dto2D(FIXED pos[XYZ], Sint32 ans[XY]);
+/*
+ * Where a point is on screen, in pixels from the middle (+y down), as SGL's slConvert3Dto2D
+ * did: the point through the current matrix (the camera's and the world's) into the view, then
+ * the perspective, x * distance / z. Two divisions, by the SH-2's divider (jo_fixed_div): once
+ * a frame. A point behind the camera (or at it) gives the middle
+ */
+static void screen_point(const jo_pos3D_fixed *world, int *x, int *y)
+{
+	jo_pos3D_fixed view;
+
+	jo_3d_transform_point(world, &view);
+	*x = 0;
+	*y = 0;
+	if (view.z <= 0)
+		return;
+	*x = jo_fixed2int(jo_fixed_mult(view.x, jo_fixed_div(jo_3d_get_projection_distance(), view.z)));
+	*y = jo_fixed2int(jo_fixed_mult(view.y, jo_fixed_div(jo_3d_get_projection_distance(), view.z)));
+}
 
 /*
  * The presses breaking the prologue's loop (game/loop_break.h): the burst of light round the
@@ -559,7 +578,7 @@ void draw_3d(void)
 	{
 		jo_3d_push_matrix();
 		{
-			// ANGLE / 104 ~= radians * 100. Up and down with the camera's pitch (view_sky_rise):
+			// jo_angle / 104 ~= radians * 100. Up and down with the camera's pitch (view_sky_rise):
 			// looking up on foot, the sky stayed put while the world went down the screen, and a
 			// band opened between the sky's horizon and the floor's
 			jo_3d_translate_matrix(view_rz / 104, -2 - view_sky_rise(), 100);
@@ -587,18 +606,21 @@ void draw_3d(void)
 	}
 
 	view_push_world_matrix();
+	// The slave SH-2 draws the corridor's floor and boxes from the world's matrix while this CPU
+	// goes on (src/slave_draw.h): handed over as they're built, waited for before the pop below
+	slave_draw_begin();
 	{
 		int floor_frc;
 
 		//  FLOOR
 		jo_3d_push_matrix();
 		{
-			const FIXED floor_scale = FLOOR_SCALE << view_floor_shift;
+			const jo_fixed floor_scale = FLOOR_SCALE << view_floor_shift;
 
 			floor_frc = jo_time_get_frc(); // the debug line's "gr" (utils/perf.h): the grid
 			// On foot, far down: the ground under Work RAM's city (view.h)
-			slTranslate(JO_FIXED_0, JO_FIXED_0, jo_int2fixed(view_ground_height()));
-			slScale(floor_scale, floor_scale, JO_FIXED_1); // only x and y: the plane is flat
+			jo_3d_translate_matrix_fixed(JO_FIXED_0, JO_FIXED_0, jo_int2fixed(view_ground_height()));
+			matrix_scale(floor_scale, floor_scale, JO_FIXED_1); // only x and y: the plane is flat
 			jo_background_3d_plane_a_draw(true);
 			perf_part_add(PERF_GRID, floor_frc);
 		}
@@ -699,14 +721,15 @@ void draw_3d(void)
 		{
 			// Coming down, the last burst stays where the cycle was when the loop broke
 			world_point at = spectating ? player1.bike.position : loop_break_at;
-			FIXED middle[XYZ] = {jo_int2fixed(at.x), jo_int2fixed(at.y), jo_int2fixed(PLAYER_HALF)};
-			Sint32 on_screen[XY];
+			const jo_pos3D_fixed middle = {jo_int2fixed(at.x), jo_int2fixed(at.y), jo_int2fixed(PLAYER_HALF)};
+			int on_screen_x;
+			int on_screen_y;
 
-			slConvert3Dto2D(middle, on_screen);
+			screen_point(&middle, &on_screen_x, &on_screen_y);
 			// Kept on the screen: in the opening flight the cycle can be off it (or behind the
 			// camera), and a burst drawn round a point far outside it would wrap into spikes
-			burst_x = JO_MAX(-JO_TV_WIDTH_2, JO_MIN(JO_TV_WIDTH_2, on_screen[X]));
-			burst_y = JO_MAX(-JO_TV_HEIGHT_2, JO_MIN(JO_TV_HEIGHT_2, on_screen[Y]));
+			burst_x = JO_MAX(-JO_TV_WIDTH_2, JO_MIN(JO_TV_WIDTH_2, on_screen_x));
+			burst_y = JO_MAX(-JO_TV_HEIGHT_2, JO_MIN(JO_TV_HEIGHT_2, on_screen_y));
 		}
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
@@ -715,6 +738,7 @@ void draw_3d(void)
 				(!clip || wall_clip_object_visible(clip, bots[i].bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
 				draw_cycle(bots[i].bike.position);
 	}
+	slave_draw_end(); // everything handed to the slave is drawn
 	jo_3d_pop_matrix();
 
 	draw_loop_break();
@@ -752,27 +776,27 @@ void draw_3d(void)
 }
 
 // A face of the cube points out along the one axis on which its 4 corners all agree: that
-// value's sign is which way. SGL needs it to tell front faces from back (Single_Plane)
-static void set_outward_normal(POLYGON *polygon, const jo_vertice corners[4])
+// value's sign is which way. SGL needs it to tell front faces from back (JO_3D_SINGLE_PLANE)
+static void set_outward_normal(jo_3d_polygon *polygon, const jo_vertice corners[4])
 {
-	polygon->norm[X] = JO_FIXED_0;
-	polygon->norm[Y] = JO_FIXED_0;
-	polygon->norm[Z] = JO_FIXED_0;
+	polygon->normal.x = JO_FIXED_0;
+	polygon->normal.y = JO_FIXED_0;
+	polygon->normal.z = JO_FIXED_0;
 	if (corners[0].x == corners[1].x && corners[0].x == corners[2].x)
-		polygon->norm[X] = corners[0].x > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+		polygon->normal.x = corners[0].x > 0 ? JO_FIXED_1 : -JO_FIXED_1;
 	else if (corners[0].y == corners[1].y && corners[0].y == corners[2].y)
-		polygon->norm[Y] = corners[0].y > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+		polygon->normal.y = corners[0].y > 0 ? JO_FIXED_1 : -JO_FIXED_1;
 	else
-		polygon->norm[Z] = corners[0].z > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+		polygon->normal.z = corners[0].z > 0 ? JO_FIXED_1 : -JO_FIXED_1;
 }
 
 /*
  * The cycle is drawn as one object at one depth: its centre's.
  * VDP1 has no depth buffer, so SGL draws polygons back to front, each judged by its own centre
- * (SORT_CEN). Judged face by face, the cube's top (50 up) counted as nearer than a trail right
+ * (JO_3D_SORT_CENTER). Judged face by face, the cube's top (50 up) counted as nearer than a trail right
  * beside it on the camera's side, and was drawn over the trail that should hide it.
  * So: first an anchor, a square across the middle of the cube whose centre is the cube's
- * centre, sorted as usual. Then the 6 faces with SORT_BFR, "where the last polygon was": all
+ * centre, sorted as usual. Then the 6 faces with JO_3D_SORT_PREVIOUS, "where the last polygon was": all
  * drawn just after the anchor, at its depth. The anchor is inside the cube, so its own faces
  * always cover it. With every face at the same depth their order no longer sorts itself out, so
  * the faces are single-sided: back faces are skipped, and the 3 front ones never overlap.
@@ -791,7 +815,7 @@ void load_player_model(void)
 	static_mesh_init(&cube, cube_points, 12, cube_polygons, cube_attributes, 7);
 	polygon = static_mesh_add_quad(&cube, anchor);
 	if (polygon >= 0)
-		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon); // sorted by its centre (SORT_CEN)
+		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon); // sorted by its centre (JO_3D_SORT_CENTER)
 	for (int i = 0; i < 6; ++i)
 	{
 		polygon = static_mesh_add_quad(&cube, &faces[i * 4]);
@@ -799,9 +823,9 @@ void load_player_model(void)
 			continue;
 		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
 		set_outward_normal(&cube_polygons[polygon], &faces[i * 4]);
-		cube_attributes[polygon].flag = Single_Plane;
-		// The texture setter wrote SORT_CEN into the low 2 bits: swap it for SORT_BFR
-		cube_attributes[polygon].sort = (cube_attributes[polygon].sort & ~3) | SORT_BFR;
+		cube_attributes[polygon].plane = JO_3D_SINGLE_PLANE;
+		// The texture setter wrote JO_3D_SORT_CENTER into the low 2 bits: swap it for JO_3D_SORT_PREVIOUS
+		cube_attributes[polygon].sort = (cube_attributes[polygon].sort & ~3) | JO_3D_SORT_PREVIOUS;
 	}
 }
 
@@ -864,30 +888,10 @@ void load_textures(void)
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
 }
 
-#ifdef SIMULATE_DIRTY_RAM
-// Emulators power on with zeroed RAM; real hardware (and SAROO's menu) leaves old data behind.
-// Fill the part of BSS that jo's startup fails to clear with junk, to reproduce that here.
-extern unsigned char _bstart;
-extern unsigned char _bend;
-
-static void simulate_dirty_ram(void)
-{
-	unsigned char *p = &_bstart + (&_bend - &_bstart) / 4; // jo's main() only clears up to here
-	while (p < &_bend)
-		*p++ = 0xA5;
-#ifdef SIMULATE_FIXED_CLEAR
-	jo_memset(&_bstart, 0, &_bend - &_bstart); // byte count: what main() should have done
-#endif
-}
-#endif
-
 void jo_main(void)
 {
-#ifdef SIMULATE_DIRTY_RAM
-	simulate_dirty_ram();
-#endif
 	jo_core_init(JO_COLOR_Black);
-	// Low Work RAM (1 MB at 0x00200000, the "slow" bank): neither jo nor SGL use it. As a second
+	// Low Work RAM (1 MB at 0x00200000, the "slow" bank): jo-engine 2026 doesn't use it. As a second
 	// zone for jo_malloc it's only used once the first (in high Work RAM, makefile) is full, so the
 	// heap can't run short now that zone's smaller. (SCU DMA can't reach it, so data DMA'd to the
 	// VDPs is better kept in high RAM: it is, while the first zone has room)

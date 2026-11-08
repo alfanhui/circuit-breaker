@@ -17,8 +17,8 @@ typedef struct
 	unsigned short max_polygons;
 } static_mesh;
 
-void static_mesh_init(static_mesh *m, POINT *points, unsigned short max_points,
-					  POLYGON *polygons, ATTR *attributes, unsigned short max_polygons);
+void static_mesh_init(static_mesh *m, jo_pos3D_fixed *points, unsigned short max_points,
+					  jo_3d_polygon *polygons, jo_3d_polygon_attribute *attributes, unsigned short max_polygons);
 
 // Corners are in the mesh's own space, in the same order as jo's plane vertex macros
 // (the order sets the texture orientation). Returns the polygon index, or -1 when full.

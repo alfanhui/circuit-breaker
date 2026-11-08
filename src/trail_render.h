@@ -17,9 +17,9 @@ typedef struct
 {
 	jo_3d_mesh mesh;
 	trail_column columns[TRAIL_DRAW_COLUMNS_MAX];
-	POINT points[TRAIL_DRAW_COLUMNS_MAX * 2]; // bottom and top of every column
-	POLYGON polygons[TRAIL_DRAW_PIECES_MAX];
-	ATTR attributes[TRAIL_DRAW_PIECES_MAX];
+	jo_pos3D_fixed points[TRAIL_DRAW_COLUMNS_MAX * 2]; // bottom and top of every column
+	jo_3d_polygon polygons[TRAIL_DRAW_PIECES_MAX];
+	jo_3d_polygon_attribute attributes[TRAIL_DRAW_PIECES_MAX];
 	int columns_used; // between trail_mesh_begin and _end: what's filled so far this frame
 	int pieces_used;
 } trail_mesh;
