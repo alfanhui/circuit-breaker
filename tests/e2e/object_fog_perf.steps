@@ -1,6 +1,8 @@
 # CPU with the worst-case trail (X), to compare WALL_TRAIL_FOG on and off. The cpu figure is a
 # one-second average, so each shot waits 3 s after the scene changes.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # Starts in 1st person
 press x
 wait 3

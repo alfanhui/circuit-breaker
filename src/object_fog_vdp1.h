@@ -10,13 +10,13 @@
  * Gouraud shading gives each corner of a quad a colour, and VDP1 blends between them across
  * the quad, adding the result to the quad's own colour or texture. The four colours sit in a
  * small table in VDP1's RAM (8 bytes), and each quad's attribute (ATTR.gstb) says which table.
- * Corners are fogged by distance (game/depth_fog.h), so every visible quad needs its own table,
- * rewritten every frame. Quads with no fog at any corner share one table that changes nothing.
+ * Corners are fogged by distance (game/depth_fog.h). A wall or trail piece's corners are two
+ * levels in one of two orders: those share 512 tables written once at start-up. Any other quad
+ * gets its own, rewritten every frame. Quads with no fog at any corner share one that changes nothing.
  *
  * Usage, when object_fog_enabled:
- *   - quads that may be fogged: ATTR.atrb |= CL_Gouraud, once, at start-up
  *   - every frame, before drawing: object_fog_begin_frame
- *   - for each corner: object_fog_level; for each quad: ATTR.gstb = object_fog_quad(...)
+ *   - for each corner: object_fog_level; for each quad: object_fog_set_quad(&its ATTR, ...)
  */
 
 extern bool object_fog_enabled; // set by object_fog_init: false and nothing here does anything
@@ -37,5 +37,13 @@ int object_fog_level(int x, int y);
 // A Gouraud table for one quad, its corners' levels in the quad's vertex order (Vertices[0..3]).
 // Returns the value for that quad's ATTR.gstb.
 unsigned short object_fog_quad(int level0, int level1, int level2, int level3);
+
+// The same, put in the quad's attribute: its table, and Gouraud shading on only if a corner is
+// fogged. (Off, VDP1 draws the quad far quicker: it matters for the big ones close to the camera)
+void object_fog_set_quad(ATTR *attribute, int level0, int level1, int level2, int level3);
+
+// A flat colour as fogged at a level, for a small untextured polygon drawn without Gouraud
+// (depth_fog_darken): the colour itself, darkened as a Gouraud table at that level would
+jo_color object_fog_flat_colour(jo_color colour, int level);
 
 #endif

@@ -1,0 +1,18 @@
+# The loop broken 40 s later than arrival.steps, the message further on (the seat ~4500 east):
+# the flight still lands on the cycle at the arena's centre facing north, the same picture
+wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
+# Hurry it to x3: it lands in about 3 s
+press b
+wait 3.5
+wait 40
+press left
+wait 0.6
+press left
+wait 0.6
+press left
+shot late_00
+wait 0.6
+shot late_overview
+wait 2.6
+shot late_landed

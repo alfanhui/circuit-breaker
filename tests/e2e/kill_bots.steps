@@ -1,0 +1,15 @@
+# B in play (debug): every bot terminated at once, as if it had crashed. The status line says so
+# and the round's won: the walls sink, you ride on, and the next round rises round you (5 s). B
+# again skips that one too.
+wait_boot # the game is up
+skip_prologue # play, fresh at the start
+wait 1.5
+shot kill_0_before
+press b
+wait 0.6
+shot kill_1_eliminated
+wait 5.5
+shot kill_2_round_2
+press b
+wait 6
+shot kill_3_round_3

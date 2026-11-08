@@ -10,9 +10,11 @@
  * its rider is then driven exactly like a player's (rider.h). So it plays by the same rules.
  *
  * It only knows what it could see: it asks the same collision code the cycles use
- * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT. Beyond
- * that it knows only which way they are, as the player's radar shows the bots. Nothing else:
- * not the player's buttons, not the whole map.
+ * (collision.h) how far it could go each way, and it sees other riders within BOT_SIGHT in the
+ * half in front of it. Behind it, it believes they carried on the way it last saw them going
+ * (so a turn behind its back changes nothing until it sees them again). Further off it knows
+ * only which way they are, as the player's radar shows the bots. Nothing else: not the
+ * player's buttons, not the whole map.
  *
  * How it chooses: utility scoring. Every few frames it scores its three options, straight on,
  * left and right, and picks the best:
@@ -20,8 +22,11 @@
  *   score = room x BOT_WEIGHT_ROOM        how far it could go that way (up to its side look)
  *         + approach x BOT_WEIGHT_CHASE   how much that way closes on where it aims to cut off
  *                                         the nearest rival it can see (below)
- *         - danger x BOT_WEIGHT_DANGER    how far short of its look-ahead it would hit something
  *         - a turn cost                   turning has to be worth it: no twitching
+ *
+ * But safety comes first: a way that would hit something within its look-ahead (BOT_LOOK_FRAMES)
+ * isn't scored at all while there's a safe one. Only when every way is dangerous does it pick
+ * the one with the most room.
  *
  * Each part is a distance in world units, so weights are plain whole numbers and the sums are
  * a few multiplies and adds: no division. Changing the weights changes its character (step 5:
@@ -48,6 +53,14 @@
 // About what's drawn round a player; a person sees as far, if only ahead. Beyond it, it only
 // knows which way they are, and heads that way (as the player's radar shows the bots)
 #define BOT_SIGHT 4096
+
+// Out of sight behind it, it believes a rival carried on straight at cruise speed for up to this
+// many frames (2 s); after that it believes they're about there. An unsigned char, so at most 255
+#define BOT_MEMORY_FRAMES 120
+
+// A way that's blocked within its side look needs a way out near the end, at least this many
+// frames of travel to one side, or it's a dead end: as bad as a wall right ahead
+#define BOT_WAY_OUT_FRAMES 60
 /*
  * Cutting a rival off. Aiming at a point just ahead of them was pursuit: the bot drew level and
  * rode alongside, or zigzagged towards them, but never got across. A cut-off is two moves:
@@ -64,11 +77,13 @@
  */
 #define BOT_RACE_FRAMES 120	   // racing, it aims 2 s of travel ahead of them
 #define BOT_CUT_MARGIN_FRAMES 20 // cuts when this much further ahead than across
+// Racing, it rides a lane this far to its side of their line, not on it: close beside their trail,
+// a turn of theirs lays a new trail across its nose before it can react
+#define BOT_LANE 400
 
 // The weights: what it cares about, and how much
 #define BOT_WEIGHT_ROOM 2
 #define BOT_WEIGHT_CHASE 1
-#define BOT_WEIGHT_DANGER 8
 // A turn costs this many frames of travel's worth of score
 #define BOT_TURN_COST_FRAMES 20
 
@@ -85,6 +100,43 @@
 #define BOT_REACTION_SPREAD_MASK 7
 #define BOT_REACTION_MAX (BOT_REACTION_MIN + BOT_REACTION_SPREAD_MASK)
 
+/*
+ * Difficulty. The numbers above are Easy's. Harder bots are the same brain with a quicker hand
+ * and more nerve, not new rules: they still only press buttons a player can, and still play
+ * safety first. Picked by measuring in the PC simulation (300 one-minute rounds against a
+ * scripted player that weaves and takes 10-16 frames to react, as a person does): against
+ * Easy, Medium and Hard survive longer (252 and 264 of 300, from 238) and kill that player
+ * more often (80 and 77, from 63; more against one weaving close by). What changes:
+ *   - reaction: quicker to press a turn once it has chosen one (Hard: 3-10 frames, 50-167 ms,
+ *     a sharp human; Easy's 9-16 is an average one). The biggest single gain, in both
+ *   - boost from: the gauge it needs before it starts a boost. From half: more bursts to get
+ *     ahead and cut across
+ *   - calm: how long it holds its line after a turn before choosing another. Shorter: it
+ *     answers your turns sooner (much shorter, or cheaper turns, made it twitchy: it boxed
+ *     itself in)
+ *   - cut margin: how much further ahead than across it must be before it cuts across your
+ *     path (kept above its slowest reaction, so it's still in time)
+ *   - chase: how much closing on where it aims to cut you off counts against room
+ * Tried and left alone, as no help: seeing all round (it kept answering your every move and
+ * committed to fewer cuts: half the kills), thinking more often, judging room further out.
+ */
+#define BOT_EASY 0
+#define BOT_MEDIUM 1
+#define BOT_HARD 2
+#define BOT_SKILL_COUNT 3
+
+typedef struct
+{
+	const char *name;				 // what the status line says when it's picked
+	unsigned char reaction_min;		 // frames; plus 0 to BOT_REACTION_SPREAD_MASK more
+	unsigned char calm_frames;		 // BOT_CALM_FRAMES on Easy
+	unsigned char cut_margin_frames; // BOT_CUT_MARGIN_FRAMES on Easy; above its slowest reaction
+	unsigned char boost_from;		 // gauge needed to start a boost (CYCLE_GAUGE_MAX: full)
+	unsigned char chase_weight;		 // BOT_WEIGHT_CHASE on Easy
+} bot_skill;
+
+extern const bot_skill bot_skills[BOT_SKILL_COUNT];
+
 // What a bot remembers between frames
 typedef struct
 {
@@ -94,11 +146,28 @@ typedef struct
 	unsigned char thinking; // frames until it next scores its options
 	unsigned char calm;		// frames until it may choose a turn again (danger aside)
 	unsigned char boosting; // 1 while it holds boost
+	// 1 if it may look round and decide this frame (bot_init sets it). The game takes turns
+	// between its bots, one a frame (input.c): thinking is the costly part, ~12 questions about
+	// every trail, and 3 bots at once among long trails took 45% of a frame. Off its turn it rides
+	// on as it was, and still presses a turn it's reacting to. Up to 2 frames late noticing
+	// something, beside its 9-16 frame reaction: the PC simulation's survival barely moved
+	unsigned char may_think;
+	unsigned char in_danger; // 1 if something was in its way last frame (danger seen afresh: think now)
+	unsigned char skill;	 // BOT_EASY, BOT_MEDIUM or BOT_HARD: its row of bot_skills
+	// What it believes of the nearest rival while they're behind it (find_target): where it last
+	// saw them and which way they were going. One rival's worth: there are two riders so far
+	unsigned char believes;		 // 0 until it has a belief (the round's start gives it one)
+	unsigned char unseen;		 // frames since it last saw them, up to BOT_MEMORY_FRAMES
+	unsigned char rival_heading;
+	world_point rival_seen;
 } bot_mind;
 
 // A fresh mind. seed: any number, picking its sequence of reaction times. The same seed always
 // gives the same bot, so a run can be repeated exactly (tests, and the attract mode later)
 void bot_init(bot_mind *mind, unsigned int seed);
+
+// How hard it plays: BOT_EASY (bot_init's), BOT_MEDIUM or BOT_HARD. Can change mid-round
+void bot_set_skill(bot_mind *mind, int skill);
 
 // This frame's buttons for the bot riding me.
 // rivals: the other riders on the field (it only uses those it can see). trails: every trail on

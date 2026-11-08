@@ -26,13 +26,23 @@ void floor_fade_rows(const floor_fade_view *view, unsigned char *levels, int row
 	for (int row = 0; row < rows; ++row)
 	{
 		int dy = row - view->centre_row; // pixels below the centre (negative: above)
-		// distance = eye * (focal - tilt * dy) / (tilt * focal + dy), everything x1000 for tilt
-		int num = view->eye_height * (view->focal * 1000 - view->tilt * dy);
+		// distance = eye * (focal - tilt * dy) / (tilt * focal + dy), everything x1000 for tilt.
+		// The ratio first (x256), then the eye's height: eye x num in one go is past 32 bits
+		// for a high camera (3804 x 597000 for the spectator's), and wrapped negative. num stays
+		// under ~800000 for focal <= 600 and tilt <= 1732 (60 degrees down), so x256 fits
+		int num = view->focal * 1000 - view->tilt * dy;
 		int den = view->tilt * view->focal + 1000 * dy; // = 1000 * (rows below the horizon)
 		int level;
 
-		if (den > 0)
-			level = num > 0 ? level_for_distance(view, num / den) : 0; // num <= 0: under the camera
+		if (den > 0 && num > 0)
+		{
+			int ratio = (num << 8) / den; // floor distance per unit of eye height, x256
+			// Just under the horizon den is tiny and the ratio huge: over 1024 eye heights away is
+			// full fog in any view (and eye x ratio would pass 32 bits)
+			level = ratio >= (1 << 18) ? MAX_LEVEL : level_for_distance(view, (view->eye_height * ratio) >> 8);
+		}
+		else if (den > 0)
+			level = 0; // num <= 0: under the camera
 		else
 		{
 			int above = -den / 1000; // rows above the horizon

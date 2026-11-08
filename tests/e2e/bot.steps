@@ -1,7 +1,13 @@
 # The first bot (game/bot.h): it starts 2000 to the player's right, riding north alongside.
 # The player turns right towards it, sees its orange trail, and crashes into it (other riders'
 # trails stop you too). Then iso, to see both cycles and both trails.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 shot bot_start
 press right
 wait 0.5

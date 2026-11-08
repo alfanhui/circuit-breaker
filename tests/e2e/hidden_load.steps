@@ -1,0 +1,60 @@
+# The hidden load (input.c): round 5's designed crash, shot every ~0.15 s through the crash and the tear's end.
+# Frozen shots repeat the same picture; the debug line's 'late' jumps by the vblanks held.
+# Film it with tests\e2eilm_round.ps1 -Round 5 -Steps hidden_load.steps
+wait_boot
+skip_prologue
+press start
+press z
+press start
+wait 0.5
+press left
+press c 6
+wait 6.6
+shot hl_00
+wait 0.1
+shot hl_01
+wait 0.1
+shot hl_02
+wait 0.1
+shot hl_03
+wait 0.1
+shot hl_04
+wait 0.1
+shot hl_05
+wait 0.1
+shot hl_06
+wait 0.1
+shot hl_07
+wait 0.1
+shot hl_08
+wait 0.1
+shot hl_09
+wait 0.1
+shot hl_10
+wait 0.1
+shot hl_11
+wait 0.1
+shot hl_12
+wait 0.1
+shot hl_13
+wait 0.1
+shot hl_14
+wait 0.1
+shot hl_15
+wait 0.1
+shot hl_16
+wait 0.1
+shot hl_17
+wait 0.1
+shot hl_18
+wait 0.1
+shot hl_19
+wait 0.1
+shot hl_20
+wait 0.1
+shot hl_21
+wait 0.1
+shot hl_22
+wait 0.1
+shot hl_23
+wait 0.1

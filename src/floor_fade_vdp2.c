@@ -38,13 +38,18 @@
 #define VDP2_VCNT ((volatile unsigned short *)0x25F8000A)	 // the row counter, as latched
 #define VDP2_CCRR_PHYSICAL 0x05F8010C						 // RBG0's colour calculation ratio
 
-// SCU DMA level 2 registers (SCU manual): the level SGL is least likely to use
-#define SCU_D2R ((volatile unsigned int *)0x25FE0040)  // read address
-#define SCU_D2W ((volatile unsigned int *)0x25FE0044)  // write address
-#define SCU_D2C ((volatile unsigned int *)0x25FE0048)  // bytes per transfer
-#define SCU_D2AD ((volatile unsigned int *)0x25FE004C) // address steps
-#define SCU_D2EN ((volatile unsigned int *)0x25FE0050) // enable
-#define SCU_D2MD ((volatile unsigned int *)0x25FE0054) // mode and start factor
+// SCU DMA level 0 registers (SCU manual). SGL uses all three levels (found by searching
+// LIBSGL.A for their addresses): level 2 to stream PCM sound to the sound CPU while a sample
+// plays (sglI00.o: PCM_Trans), level 1 for its own transfers (DMA_Trans), level 0 only for CD
+// reads (GFS) and DMA_ScuMemCopy, and nothing here reads the CD once the game is running.
+// The fog was on level 2 until 2026-10-31: every sound took the channel over and the fog
+// stopped, flickered or came out shifted until the sound ended
+#define SCU_D0R ((volatile unsigned int *)0x25FE0000)  // read address
+#define SCU_D0W ((volatile unsigned int *)0x25FE0004)  // write address
+#define SCU_D0C ((volatile unsigned int *)0x25FE0008)  // bytes per transfer
+#define SCU_D0AD ((volatile unsigned int *)0x25FE000C) // address steps
+#define SCU_D0EN ((volatile unsigned int *)0x25FE0010) // enable
+#define SCU_D0MD ((volatile unsigned int *)0x25FE0014) // mode and start factor
 #define PHYSICAL(address) ((unsigned int)(address) & 0x07FFFFFF)
 
 // NTSC: 263 rows a frame. The picture is 224 or 240 of them, so at most 39 are blank
@@ -74,6 +79,22 @@ static const floor_fade_view iso_view = {
 	.glow_rows = 0,
 };
 
+// Must match view.c's spectator camera: 25 degrees below level, 9000 from the cycle along its
+// line of sight (3804 up, 8157 back), through a 30 degree telephoto FOV. The top of the screen
+// sees the floor ~14800 away; the fog starts past the cycle, so the play stays clear and the far
+// floor dims into the dark, as if the arena went on for ever
+static const floor_fade_view spectator_view = {
+	.centre_row = JO_TV_HEIGHT_2,
+	.tilt = 466,		 // 25 degrees below level: tan 25 = 0.466
+	.eye_height = 3804,	 // 9000 x sin 25
+	.focal = 597,		 // 30 degree FOV: 160 / tan(15)
+	.fade_start = 9700,	 // 1500 past the cycle (8157 away along the floor)
+	.fade_end = 20000,	 // past the top of the screen: about half strength there
+	.glow_rows = 0,
+};
+
+static const floor_fade_view *const views[] = {&first_person_view, &iso_view, &spectator_view};
+
 static jo_palette fog_palette;
 static unsigned short *line_table; // one colour RAM number per screen line, in VDP2 VRAM
 
@@ -101,6 +122,57 @@ static unsigned int hblanks_before_picture(unsigned int row)
 	return row >= 0x100 ? 0x200 - row : FRAME_ROWS - row; // in vertical sync, or before it
 }
 
+/*
+ * Stopping the DMA safely, before its registers are written (SEGA's SCU final precautions):
+ *   - 23: a level's mode (D0MD) and address steps (D0AD) mustn't be written while it's
+ *     transferring: the Saturn hangs. Clearing the enable stops new transfers starting, not one
+ *     already running, and that was all arm_dma did before writing them
+ *   - 13: the DMA status register that would say whether one's running was deleted
+ *   - 22: a transfer started by an HBlank must end within its line (4 bytes take far less)
+ * So: clear the enable, then wait for the row counter to move on twice. The first move may come
+ * straight after, but the second is a whole line later: nothing can still be running by then.
+ * ~1.5 lines on average (~95 us, ~0.6% of a frame), once a frame in VBlank. Bounded, in case the
+ * counter ever stands still: a line is ~1700 CPU cycles, a few dozen of these reads
+ */
+#define ROW_WAIT_READS 2000
+
+static void stop_dma(void)
+{
+	unsigned int row;
+	int moves = 0;
+
+	*SCU_D0EN = 0;
+	row = current_row();
+	for (int reads = 0; moves < 2 && reads < ROW_WAIT_READS; ++reads)
+	{
+		const unsigned int now = current_row();
+
+		if (now != row)
+		{
+			row = now;
+			++moves;
+		}
+	}
+}
+
+/*
+ * The DMA: one 4-byte entry per HBlank, from the table (the read address moves on, ready for
+ * the next row) to CCRR and CCRLB, 2 bytes apart (CCRLB holds the line colour and back
+ * screen ratios, which this blend doesn't use). The write address goes back each time.
+ * from: the entry the next HBlank copies. Six register writes. Only after stop_dma: never while
+ * it might be transferring. The table's in Work RAM-H (the game's static data), which the SCU's
+ * DMA can read; it can't read Work RAM-L (precaution 4)
+ */
+static void arm_dma(const unsigned int *from)
+{
+	*SCU_D0R = PHYSICAL(from);
+	*SCU_D0W = VDP2_CCRR_PHYSICAL;
+	*SCU_D0C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
+	*SCU_D0AD = DMA_SCU_R4 | DMA_SCU_W2;
+	*SCU_D0MD = DMA_SCU_DIR | (DMA_SCU_REN << DMA_DXMD_DXRUP) | (DMA_SCU_KEEP << DMA_DXMD_DXWUP) | DMA_SCU_F_HBLK_IN;
+	*SCU_D0EN = 1 << DMA_DXEN_DXEN; // armed: starts on every HBlank from now on
+}
+
 void floor_fade_init(void)
 {
 	// One colour RAM entry: the colour every line blends towards
@@ -115,7 +187,7 @@ void floor_fade_init(void)
 	line_table = (unsigned short *)jo_vdp2_malloc(JO_VDP2_RAM_CELL_RBG0, JO_TV_HEIGHT * sizeof(unsigned short));
 	for (int row = 0; row < JO_TV_HEIGHT; ++row)
 		line_table[row] = fog_colour; // the same colour on every row: only the ratio varies
-	floor_fade_set_first_person(false);
+	floor_fade_set_view(FLOOR_VIEW_ISO);
 
 	// jo sets up the floor's rotation coefficient table with K_LINECOL, which makes VDP2 take
 	// the floor's line colour from each coefficient (all 0 = black) instead of our per-line
@@ -129,35 +201,38 @@ void floor_fade_init(void)
 	slLineColDisp(RBG0ON);					// insert the line colour under the floor...
 	slColorCalc(CC_RATE | CC_TOP | RBG0ON); // ...and blend by RBG0's ratio (CCRR), set per row below
 
-	// The DMA: one 4-byte entry per HBlank, from the table (the read address moves on, ready for
-	// the next row) to CCRR and CCRLB, 2 bytes apart (CCRLB holds the line colour and back
-	// screen ratios, which this blend doesn't use). The write address goes back each time
-	*SCU_D2EN = 0;
-	*SCU_D2R = PHYSICAL(dma_table);
-	*SCU_D2W = VDP2_CCRR_PHYSICAL;
-	*SCU_D2C = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
-	*SCU_D2AD = DMA_SCU_R4 | DMA_SCU_W2;
-	*SCU_D2MD = DMA_SCU_DIR | (DMA_SCU_REN << DMA_DXMD_DXRUP) | (DMA_SCU_KEEP << DMA_DXMD_DXWUP) | DMA_SCU_F_HBLK_IN;
-	*SCU_D2EN = 1 << DMA_DXEN_DXEN; // armed: starts on every HBlank from now on
+	stop_dma(); // not running yet, but a CD read (GFS) may have left this level going
+	arm_dma(dma_table);
 }
 
 void floor_fade_vblank(void)
 {
-	unsigned int left;
+	unsigned int left, row;
 
 	if (line_table == JO_NULL)
 		return;
-	// The HBlanks still to come before row 0 (at the end of this row and every one after it)
-	// use the last that many padding entries
-	left = hblanks_before_picture(current_row());
-	if (left > MAX_BLANK_ROWS)
-		return; // still in the picture (shouldn't happen in a VBlank callback): leave it running
-	*SCU_D2R = PHYSICAL(&dma_table[MAX_BLANK_ROWS - left]);
+	// The whole channel, not just its read address: a CD read (GFS) sets up this same level for
+	// itself and leaves it that way. Six register writes a frame, so nothing can stop the fog for
+	// good. Stopped first, safely (stop_dma), which takes a line or two: the row's read after it.
+	// It returns just after the row counter moves on, so the row read here is a fresh one: an
+	// HBlank between reading it and arming the DMA (the fog a row out for that frame) is less
+	// likely than before, not ruled out (where in a line the counter moves isn't known here)
+	stop_dma();
+	row = current_row();
+	left = hblanks_before_picture(row);
+	if (left <= MAX_BLANK_ROWS)
+		// The HBlanks still to come before row 0 (at the end of this row and every one after it)
+		// use the last that many padding entries
+		arm_dma(&dma_table[MAX_BLANK_ROWS - left]);
+	else
+		// Still in the picture (shouldn't happen in a VBlank callback): row r's HBlank sets up
+		// row r + 1, from entry MAX_BLANK_ROWS + r. Stopped, it has to be started again here
+		arm_dma(&dma_table[MAX_BLANK_ROWS + (row < JO_TV_HEIGHT ? row : 0)]);
 }
 
-void floor_fade_distances(bool first_person, int *fade_start, int *fade_end)
+void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
 {
-	const floor_fade_view *view = first_person ? &first_person_view : &iso_view;
+	const floor_fade_view *view = views[view_index];
 
 	*fade_start = view->fade_start;
 	*fade_end = view->fade_end;
@@ -180,9 +255,9 @@ static void rebuild(const floor_fade_view *view)
 	}
 }
 
-void floor_fade_set_first_person(bool first_person)
+void floor_fade_set_view(int view)
 {
-	rebuild(first_person ? &first_person_view : &iso_view);
+	rebuild(views[view]);
 }
 
 void floor_fade_set_first_person_tilt(int tilt)
@@ -190,5 +265,19 @@ void floor_fade_set_first_person_tilt(int tilt)
 	floor_fade_view view = first_person_view;
 
 	view.tilt = tilt;
+	rebuild(&view);
+}
+
+void floor_fade_set_camera(int tilt, int eye_height, int focal, int fade_start, int fade_end)
+{
+	floor_fade_view view;
+
+	view.centre_row = JO_TV_HEIGHT_2;
+	view.tilt = tilt;
+	view.eye_height = eye_height;
+	view.focal = focal;
+	view.fade_start = fade_start;
+	view.fade_end = fade_end;
+	view.glow_rows = 0;
 	rebuild(&view);
 }

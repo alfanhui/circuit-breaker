@@ -277,9 +277,10 @@ static void fast_trail_check_matches_segment_by_segment(void)
 
 	for (int round = 0; round < 3000; ++round)
 	{
-		// A random N/S/E/W walk of up to 40 corners in a 1000 square, some steps short
+		// A random N/S/E/W walk of up to 100 corners in a 1000 square, some steps short. Past 64
+		// the oldest drop off, and the trail's box (the whole-trail skip) is built again
 		world_point p = pt((short)(random_below(1000) - 500), (short)(random_below(1000) - 500));
-		int corners = 1 + random_below(40);
+		int corners = 1 + random_below(100);
 
 		trail_reset(&t, p);
 		for (int c = 0; c < corners; ++c)
@@ -294,18 +295,55 @@ static void fast_trail_check_matches_segment_by_segment(void)
 			if (c + 1 < corners)
 				trail_add_corner(&t);
 		}
-		// Asked from anywhere nearby, any heading, any distance, the head included (a cycle on it)
+		// Asked from anywhere nearby or further off (where the box skips the trail), any heading,
+		// any distance up to a bot's look round, the head included (a cycle on it)
 		for (int q = 0; q < 8; ++q)
 		{
-			world_point from = q == 0 ? t.head : pt((short)(random_below(1400) - 700), (short)(random_below(1400) - 700));
+			world_point from = q == 0 ? t.head : pt((short)(random_below(3000) - 1500), (short)(random_below(3000) - 1500));
 			int heading = random_below(4);
-			int distance = random_below(300);
+			int distance = random_below(q & 1 ? 300 : 2000);
 
 			if (collision_trail(from, heading, distance, &t) != reference_trail(from, heading, distance, &t))
 				differ++;
 		}
 	}
 	CHECK_EQ(0, differ);
+}
+
+
+// A block stops a cycle its clearance short, as a wall does; beside it, it rides past
+static void block_stops_the_cycle_short(void)
+{
+	world_rect block = {-500, -2000, 500, -1000}; // x -500..500, y -2000..-1000: north of the origin
+	world_point from = {0, 0};
+
+	CHECK_EQ(1000 - ARENA_WALL_CLEARANCE, collision_blocks(from, HEADING_NORTH, 5000, &block, 1));
+	CHECK_EQ(5000, collision_blocks(from, HEADING_SOUTH, 5000, &block, 1)); // behind it
+	from.x = 500 + ARENA_WALL_CLEARANCE; // just clear of its west side (+x)
+	CHECK_EQ(5000, collision_blocks(from, HEADING_NORTH, 5000, &block, 1));
+	from.x = 500 + ARENA_WALL_CLEARANCE - 1; // just inside the clearance
+	CHECK(collision_blocks(from, HEADING_NORTH, 5000, &block, 1) < 5000);
+}
+
+// A bounded cycle runs into the layout's blocks; a ghost (unbounded) rides through them
+static void cycles_hit_blocks_unless_ghosts(void)
+{
+	cycle c;
+	int crashed = 0;
+
+	arena_set_layout(ARENA_DONUT); // the block's south side is at y = 3000
+	cycle_init(&c, 0, 5000, HEADING_NORTH);
+	for (int i = 0; i < 2000 && !crashed; ++i)
+		crashed = cycle_update(&c, 0, 0, 0);
+	CHECK(crashed);
+	CHECK_EQ(3000 + ARENA_WALL_CLEARANCE, c.position.y);
+
+	cycle_init(&c, 0, 5000, HEADING_NORTH);
+	c.bounded = 0;
+	for (int i = 0; i < 500; ++i)
+		cycle_update(&c, 0, 0, 0);
+	CHECK(c.position.y < 3000 + ARENA_WALL_CLEARANCE);
+	arena_set_layout(ARENA_OPEN);
 }
 
 void run_collision_tests(void)
@@ -329,4 +367,6 @@ void run_collision_tests(void)
 	RUN(crashed_cycle_builds_back_up_after_turning);
 	RUN(ghost_cycle_passes_through_trails);
 	RUN(arena_edge_is_a_crash_too);
+	RUN(block_stops_the_cycle_short);
+	RUN(cycles_hit_blocks_unless_ghosts);
 }

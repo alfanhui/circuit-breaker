@@ -41,7 +41,7 @@ extern jo_palette image_pal;
 extern Sint16 draw_distance;
 
 void initCamera(jo_camera *curCam);
-void debug_3d(void);
+void debug_3d(bool show);
 void draw_cycle(world_point position);
 void draw_hud(void);
 void draw_3d(void);

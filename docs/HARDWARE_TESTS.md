@@ -29,14 +29,17 @@ Commit on the disc: `________`
 
 ## The debug text, for reference
 
+Lines counted from the top (the layout as of 2026-11-04):
+
 | Line | Shows |
 |---|---|
-| 4 | view: `1ST`, `ISO` or `DEBUG CAM` |
-| 5 | `bounds` (Y), `turn` camera mode (Z) |
-| 6 | cruise `speed` (B/C), `arena` size (L/R) |
-| 7-9 | polygons, displayed, vertices |
-| 10 | `fps`, `cpu` (one-second average) and `peak` |
-| 11 | `late`: frames that missed the 60 fps deadline |
+| 1 | `fps`, `cpu` (one-second average), `pk` (worst frame), `late` (frames that missed 60 fps) |
+| 2 | `poly` given / displayed, `vert`, and the bots' and trails' worst frame (`bots`, `trl`) |
+| 3 | view (`1ST`, `ISO` or `CAM`), position, heading, boost |
+| 4 | cruise `spd`, `arena` size, debug switches |
+| 5 | the first bot, the round |
+| 6 | the level's parts, worst frame each (`ar co sd tp fl gr bd wk`: utils/perf.h) |
+| 7 | VDP1's own gauge: `over` (frames it didn't finish), `busy` (% of frames it was still drawing when the CPU was done), `cmd` (its list's length), `v` (its chip version). See `game/vdp1_gauge.h` |
 
 Pad: Up boost (the cycle always drives) · Left/Right turn · Down 1st person / iso · A new trail · X worst-case trail ·
 Y arena boundary · Z turn camera compare · B/C speed · L/R arena size · Start debug camera.
@@ -85,7 +88,10 @@ Result: ________
 | No fog at all, floor at full brightness everywhere | DMA not starting on HBlank, or SGL resets the colour calculation | Photo |
 | Whole floor black, or one flat shade | DMA writing the wrong value, or once per frame instead of per row | Photo |
 | Fine normally, but the top of the screen flickers or goes wrong when the game slows down (X trail, test 3) | The once-per-frame restart ran late, after the picture had started, and was skipped (`floor_fade_vblank` returns early), so the DMA ran past the table | Video while holding X trail |
-| Hang, or corrupted graphics, sound or loading | SGL or jo also uses SCU DMA level 2 and the two clash | When it happens, and whether the NO FOG disc does it too |
+| Hang, or corrupted graphics, sound or loading | SGL or jo also uses the fog's SCU DMA level and the two clash. It was level 2, which SGL streams PCM sound on (in Mednafen every sound stopped the fog); it's level 0 now, which SGL uses only for CD reads | When it happens, and whether the NO FOG disc does it too |
+| Fog fine until the first sound (the loop's break, a crash), then gone or flickering | Something else still shares level 0 | Which sound, and whether it comes back |
+| Single fog rows a line out (a step in the fade) that come and go, worst when the scene is busy | SCU precaution 12: CPU writes to the VDPs (SGL's command list, the wall fog's tables) come before SCU DMA, so that row's transfer started late. Or precaution 20: three DMA levels running at once (ours, SGL's level 1, sound on level 2) lose their priority order | Video; does it follow busy scenes, or sounds? |
+| A hang that the NO FOG disc doesn't have | SCU precaution 23: a DMA level's mode or address steps rewritten while it runs hangs the SCU. Since 2026-11-05 `stop_dma` clears the enable and waits a whole line before `arm_dma` writes them, so it shouldn't happen. If it still does, it isn't precaution 23 | When it happens (often or rare) |
 
 ### 1c. If it's broken
 
@@ -109,7 +115,10 @@ Result: 1st ____ % · iso ____ %
 ## 1e. Wall and trail fog (Gouraud)
 
 **What it is.** Walls and trails dim with distance, matching the floor: VDP1 Gouraud shading,
-a small colour table per quad written into VDP1's RAM every frame (`src/object_fog_vdp1.c`).
+a small colour table per quad in VDP1's RAM (`src/object_fog_vdp1.c`). Since 2026-11-04 a wall or
+trail piece uses one of 512 tables written once at start-up (its corners are two levels: `game/
+depth_fog.h`); only faces cut by the view on foot get one written per frame (0-1 a frame in
+Mednafen, was one per fogged quad). Each write stops VDP1 drawing (SEGA's VDP1 manual).
 Switch: `WALL_TRAIL_FOG` in `main.c`. Emulator check only so far.
 
 - [ ] Look back along a long trail (lay one, then U-turn): it fades from bright cyan to dim teal.
@@ -124,6 +133,10 @@ Switch: `WALL_TRAIL_FOG` in `main.c`. Emulator check only so far.
       The game checks at start-up; it would show an error instead.
 - [ ] CPU with the X trail, fog on vs off (`object_fog_perf.steps` in Mednafen: 1st person
       36% off, 42% on; iso 20% off, 27% on).
+- [ ] VDP1's `busy` (debug line 7) riding beside a wall and along a long trail, fog on vs off.
+      Mednafen showed no difference from the shared tables (it may not stop VDP1 for CPU
+      writes); on the Saturn the old per-quad writes would have. If fog on still costs VDP1 much
+      more than off, it's Gouraud itself (the backlog's "Gouraud fog's cost: re-check the cause").
 - [ ] Does it look good? Does dimming the far walls lose the arena's sense of size?
 
 Result: ________
@@ -166,6 +179,25 @@ the Saturn. The emulator figures below are the ones to compare against.
 - [ ] Do you see stutter that `late` *doesn't* count? On the PC that was blamed on the emulator's
       pacing; on the Saturn it would be a real problem worth chasing.
 
+### 3b. VDP1's own gauge (debug line 7)
+
+It reads VDP1's status registers (SEGA's VDP1 manual, chapter 4), so on the Saturn it measures
+the real chip; Mednafen's VDP1 timing is only an estimate.
+
+| Scene | Mednafen (2026-11-04) | Saturn |
+|---|---|---|
+| On foot, the corridor's start | `over 0 busy 0% cmd 238`, cpu 76% | ____ |
+| On foot, the city's roof | `over 0 busy 100% cmd ~95`, 60 fps, cpu 48% | ____ |
+| On foot, looking back at the doorway from the city | `over 0 busy 94% cmd 282`, 37 fps, cpu 82% | ____ |
+| The same, after the doorway culls (2026-11-05, film `doorway_perf.steps`) | `over 0 busy 90-100% cmd ~190`, 60 fps, cpu 77-81% | ____ |
+| On foot, the roof beside the doorway (`dwp_l9`) | `over 0 busy 100% cmd ~100`, 60 fps, cpu 65-70% (was 30 fps) | ____ |
+
+- [ ] Does `over` ever go above 0? That's a frame shown half-drawn: note the scene.
+- [ ] If `busy` is much higher on the Saturn than in Mednafen, Mednafen is kinder to VDP1 than
+      the chip is, and every Mednafen frame rate is optimistic.
+- [ ] VDP1's version, the line's last figure (`v1`): Mednafen reports 1. A version 0 chip
+      lacks the speed bits the backlog's Pclp and HSS rows want.
+
 ---
 
 ## 4. Walls, trails and the 3D (VDP1)
@@ -183,6 +215,35 @@ the Saturn. The emulator figures below are the ones to compare against.
       (the scene goes close to SGL's ~8192 depth limit).
 - [ ] **Glitches that move around randomly** (garbage polygons for a frame): could be the second
       CPU reading stale data (backlog: slave SH-2 cache coherency). Note when it happens.
+- [ ] **The grey box's stairs** (on foot, `BOOT_ON_FOOT 1`): walk up to the first step and stop,
+      looking straight up the stairs; then the platform's end, facing the tower. In Mednafen
+      both read 60 fps (the stairs' foot was 30 before the box fronts were laid flat:
+      `lay_wide_pieces_flat`, level.c). Note `fps` and `cpu` at each. 30 at the stairs' foot on
+      the Saturn would mean VDP1's line cost isn't what Mednafen models.
+- [ ] **The tower's front up close**: run to the tower on the low roof, stop, turn a little each
+      way. Mednafen: 60 fps (30 before its bottom was cut to the screen: `cap_band_bottoms`).
+      Look for the floor showing through the tower's or a wall's foot, mostly looking down from
+      the platform: the cut's worked out for a 240-row picture; a gap means the Saturn shows more.
+- [ ] **Down the corridor, from where you stand up**: `cpu` read 78-81% in Mednafen. Laying far,
+      small fronts flat made it slower there (60 to 54 fps) for no reason worked out: if the
+      Saturn's quicker with them flat, `LAY_FLAT_LINES` (level.c) can come down.
+- [ ] **On foot, everything's cut to the view in 3D** (`game/frustum.h`, 2026-11-03): turn slowly
+      on the spot at the start, by the tower, and out on the city's entry roof, looking up and
+      down too. Look for a crack or a one-pixel gap along the screen's edges (a cut there is a
+      sixteenth past the edge), a box side or tile popping in or out at the edge, and spikes (a
+      corner VDP1 wrapped). The cut leaves things up to twice the screen's width uncut: if the
+      Saturn's slower than Mednafen at the stairs' foot or facing the tower, that guard band
+      (`FRUSTUM_GUARD_X16`) is the first thing to narrow.
+- [ ] **The seams are VDP1 lines** (`glass_outline_add`): a thin white line round each tile, near
+      you, fading out with the fog. Look for lines that flicker, break up, or show through things
+      standing on the floor (they're chained right after their tile). Mednafen: 60 fps at the
+      start and the stairs' foot.
+- [ ] **The ground under the city is black** on foot (the VDP2 floor's palette): no shimmer of
+      navy and white while turning out on the roofs. Looking back from the city through the
+      doorway you see the corridor's floor and stairs; Mednafen shows 38-44 fps there (60 since
+      2026-11-05: from the city the tiles stop where their outlines do, the far glass beyond).
+      Through the doorway, look for the floor's far glass meeting the tiles about 1000 in: a
+      seam or a step in shade there would be new.
 
 Result: ________
 

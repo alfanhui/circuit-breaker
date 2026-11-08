@@ -1,0 +1,16 @@
+# Where the frame goes (docs/CULLING.md, step 1): stood still 2.5 s at each view (the parts are a
+# second's worst frame), the debug line's 6th row read in each: where you stand up looking down
+# the corridor (30 fps once the city was in), turned to a side wall, and at the stairs' foot.
+# Film it: tests\e2e\run_e2e.ps1 -Steps parts.steps (BOOT_ON_FOOT 1)
+wait_up
+wait 2.5
+shot pa_00_start
+hold right 0.6
+wait 2.5
+shot pa_01_side_wall
+hold left 0.6
+keydown up
+wait 5.8
+keyup up
+wait 2.5
+shot pa_02_stairs_foot

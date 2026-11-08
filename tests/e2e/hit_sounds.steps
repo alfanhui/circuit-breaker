@@ -1,0 +1,19 @@
+# The loop-break hit sounds (src/sound.c): records the game's sound (/out/sound.wav) while three
+# direction presses hit the loop, 3 s apart, to check each sound plays at the right speed and
+# straight away. The press times show in the log (shots).
+record_sound
+wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
+# Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
+press b
+wait 3.5
+wait 2
+shot press1
+press left
+wait 3
+shot press2
+press up
+wait 3
+shot press3
+press right
+wait 3

@@ -4,8 +4,9 @@
 #include "trail.h"
 
 /*
- * Which parts of a trail are completely hidden behind a nearer trail, in the 1st person view,
- * so they're not drawn at all. Pure C, unit-tested on the PC.
+ * Which parts of a trail are completely hidden behind a nearer trail, or a block standing in the
+ * arena (as tall as its walls), in the 1st person view, so they're not drawn at all. Pure C,
+ * unit-tested on the PC.
  *
  * Why: VDP1 has no depth buffer. SGL draws polygons back to front, judging each by its centre's
  * depth: its distance straight ahead of the camera. Riding alongside two parallel trails, a
@@ -21,8 +22,14 @@
  * and along (the way the trails run, from the eye). The near trail is d1 across, the far one d2.
  * A line from the eye to a point t along the far trail crosses the near trail's line at
  * t * d1 / d2 along. So the far trail is hidden for t from A * d2 / d1 to B * d2 / d1, where
- * the near trail runs from A to B along. That's two divisions per pair of trails that line up
- * like this (a few a frame): not per piece.
+ * the near trail runs from A to B along.
+ *
+ * Without dividing per pair: A / d1 and B / d1 belong to the near segment alone (they're the
+ * slopes of the lines from the eye past its ends), so they're worked out once, as it's added,
+ * and each pair only multiplies them by d2. Dividing per pair was thousands of divisions a frame
+ * with long trails side by side (2026-11-01: 61% of a frame, 51 fps, in round 3 late on): the
+ * SH-2 has no divide instruction, so each was a software call of tens of cycles. Now it's two
+ * divisions per near segment (at most TRAIL_OCCLUDERS_MAX of them a frame).
  *
  * Only segments running the same way are compared (every trail runs N/S/E/W). Diagonal ones
  * (the debug stress trail's head) are never hidden and hide nothing.
@@ -40,8 +47,11 @@ typedef struct
 	int count;
 	unsigned char along_x[TRAIL_OCCLUDERS_MAX]; // 1: runs east-west (along x, across y); 0: north-south
 	int across[TRAIL_OCCLUDERS_MAX];			// distance across from the eye (signed: which side)
-	int along_min[TRAIL_OCCLUDERS_MAX];			// where it starts and ends along, from the eye,
-	int along_max[TRAIL_OCCLUDERS_MAX];			// capped to +-8192 (nothing further is drawn)
+	// The slopes from the eye past its ends: along / |across|, x65536 (16.16 fixed point), where
+	// along (capped to +-8192: nothing further is drawn) is where it starts and ends from the eye.
+	// Rounded inwards, the min up and the max down, so the range hidden can only come out smaller
+	int slope_min[TRAIL_OCCLUDERS_MAX];
+	int slope_max[TRAIL_OCCLUDERS_MAX];
 } trail_occluders;
 
 // Starts a frame's list, seen from eye (the 1st person camera, on the floor under it)
@@ -50,6 +60,11 @@ void trail_occluders_begin(trail_occluders *o, world_point eye);
 // Adds a trail's segments inside view (drawn with head_gap, as trail_pieces.h) to the list,
 // up to TRAIL_OCCLUDERS_MAX
 void trail_occluders_add(trail_occluders *o, const trail *t, int head_gap, const world_rect *view);
+
+// Adds the faces of the arena's blocks (arena.h) turned towards the eye, at most two a block: a
+// face is a straight N/S/E/W line, like a trail segment, and as tall as the walls, so it hides
+// what's behind it as a nearer trail does. Add them first: they hide the most
+void trail_occluders_add_blocks(trail_occluders *o, const world_rect *blocks, int count, const world_rect *view);
 
 /*
  * The parts of the segment from -> to between steps s0 and s1 (steps along it, as in

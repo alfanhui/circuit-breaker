@@ -1,0 +1,63 @@
+# The grey box (game/corridor.h's boxes, game/walker.h's heights), booted on foot in the corridor:
+# up the corridor holding Up all the way: it builds to a run, vaults the crate, climbs the stairs
+# onto the platform (160) and jumps off its end onto the lower roof (64), and on to the tower
+# beyond it, a wall (run_vault.steps films that closely). A shot a second. Then off the lower roof's side
+# (L: facing west, that's towards the corridor's middle), 64 down to the floor.
+# Film it with tests\e2e\run_e2e.ps1 -Steps greybox.steps (built with BOOT_ON_FOOT 1)
+wait_up # booted on foot in the corridor (BOOT_ON_FOOT): no ride there
+shot gb_00_stood
+keydown up
+wait 1
+shot gb_01
+wait 1
+shot gb_02
+wait 1
+shot gb_03
+wait 1
+shot gb_04
+wait 1
+shot gb_05
+wait 1
+shot gb_06
+wait 1
+shot gb_07
+wait 1
+shot gb_08
+wait 1
+shot gb_09
+wait 1
+shot gb_10
+wait 1
+shot gb_11
+wait 1
+shot gb_12
+wait 1
+shot gb_13
+wait 1
+shot gb_14
+wait 1
+shot gb_15
+wait 1
+shot gb_16
+wait 1
+shot gb_17
+wait 1
+shot gb_18
+wait 1
+shot gb_19
+wait 1
+shot gb_20
+keyup up
+# Off the lower roof's side: strafe left, held
+keydown l
+wait 1
+shot gb_21
+wait 1
+shot gb_22
+wait 1
+shot gb_23
+keyup l
+# Look back at the tower and the lower roof
+hold left 0.5
+wait 0.5
+shot gb_24

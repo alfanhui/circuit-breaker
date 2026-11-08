@@ -1,16 +1,17 @@
-# A dead bot's trail sinks into the floor (game/rider.h). The player U-turns back towards the
-# middle, then START, X x6, START shrinks the arena to 4000 across: the bot, 2000 out to the side, is pulled
-# inside the wall (a crash) and dies; the player, heading back to the middle, doesn't.
-# Iso, 0.25 s apart.
-wait 17
-press right
-wait 0.2
-press right
-wait 0.3
+# A dead bot's trail sinks into the floor (game/rider.h). Straight after boot, in the debug camera:
+# Z (a crash only stops the player, who'll reach the small arena's edge), then X x7 shrinks the
+# arena to 2000 across. The bot, still 2000 out to the side, is left outside it: pulled to the
+# edge when play resumes, a crash, and it dies. (It used to be shrunk later, but the bot now
+# boosts clear before then.) Iso, 0.25 s apart: its trail, in the far corner (top right), sinks
+# over 1 s and is gone by sink_4.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 5.4
+press start
+press z
+press x 7
+press start
 press down
-press start
-press x 6
-press start
 shot sink_1
 wait 0.25
 shot sink_2

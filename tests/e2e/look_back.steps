@@ -1,0 +1,29 @@
+# Looking back from the corridor (level.c's broken glass over the hole): up, a few steps on,
+# turned right round, and walking back up to the glass.
+# Film it with tests\e2e\run_e2e.ps1 -Steps look_back.steps (built with BOOT_ON_FOOT 1)
+wait_up # booted on foot in the corridor (BOOT_ON_FOOT): no ride there
+hold up 1
+# Right round: about 1.4 s at 90 degrees in ~0.7 s
+hold left 1.4
+wait 0.3
+shot lb_00_looking_back
+hold up 3
+wait 0.3
+shot lb_01_nearer
+hold up 4
+wait 0.3
+shot lb_02_at_the_glass
+keydown y
+wait 0.6
+shot lb_03_look_up
+keyup y
+keydown b
+wait 0.6
+shot lb_04_look_down
+keyup b
+keydown c
+keydown z
+wait 0.6
+shot lb_05_look_right
+keyup c
+keyup z

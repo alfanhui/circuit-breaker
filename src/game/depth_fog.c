@@ -41,6 +41,16 @@ int depth_fog_level(const depth_fog *f, int x, int y)
 	return low;
 }
 
+unsigned short depth_fog_darken(unsigned short colour, int steps)
+{
+	int r = (colour & 31) - steps, g = ((colour >> 5) & 31) - steps, b = ((colour >> 10) & 31) - steps;
+
+	r = r < 0 ? 0 : r;
+	g = g < 0 ? 0 : g;
+	b = b < 0 ? 0 : b;
+	return (unsigned short)(0x8000 | b << 10 | g << 5 | r);
+}
+
 unsigned short depth_fog_gouraud_colour(int level)
 {
 	int channel;
@@ -52,4 +62,26 @@ unsigned short depth_fog_gouraud_colour(int level)
 	// 16 (no change) at level 0 down to 0 (16 darker) at full fog, rounded to the nearest step
 	channel = GOURAUD_NONE - (level * GOURAUD_NONE + MAX_LEVEL / 2) / MAX_LEVEL;
 	return (unsigned short)(0x8000 | channel << 10 | channel << 5 | channel);
+}
+
+int depth_fog_shared_table(int level0, int level1, int level2, int level3)
+{
+	// A level is 0 .. 15: a x 16 is a shift by 4 (two of the SH-2's shifts by 2)
+	if (level0 == level1 && level2 == level3)
+		return (level0 << 4) | level2; // a a b b
+	if (level0 == level3 && level1 == level2)
+		return DEPTH_FOG_LEVELS * DEPTH_FOG_LEVELS + ((level0 << 4) | level1); // a b b a
+	return -1;
+}
+
+void depth_fog_shared_levels(int table, int levels[4])
+{
+	const int second = table >= DEPTH_FOG_LEVELS * DEPTH_FOG_LEVELS; // a b b a
+	const int pair = second ? table - DEPTH_FOG_LEVELS * DEPTH_FOG_LEVELS : table;
+	const int a = pair >> 4, b = pair & (DEPTH_FOG_LEVELS - 1);
+
+	levels[0] = a;
+	levels[1] = second ? b : a;
+	levels[2] = b;
+	levels[3] = second ? a : b;
 }

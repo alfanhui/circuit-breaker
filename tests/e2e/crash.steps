@@ -1,7 +1,13 @@
 # Collision (game/collision.h): drive a box and turn back into the cycle's own trail. The cycle
 # should stop dead 25 short of it, the trail still whole in front of the 1st person camera;
 # then turn away and build back up from a standing start.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 2
 press right

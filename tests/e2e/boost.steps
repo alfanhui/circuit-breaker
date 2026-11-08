@@ -1,6 +1,8 @@
 # Boost (hold Up): the view widens and the gauge bar at the bottom turns white and drains;
 # after letting go the bar is dim teal for half a second, then cyan as it refills.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # Faster cruise, so the boost's +75% shows; let the speed settle
 press c 6
 wait 2

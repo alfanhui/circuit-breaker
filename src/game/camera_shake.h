@@ -28,6 +28,7 @@
 #define CAMERA_SHAKE_DECAY 13 // sixteenths of the size kept each frame
 #define CAMERA_SHAKE_MIN 32	  // 0.18 degrees: below this it stops
 #define CAMERA_SHAKE_BOT_KILL 546 // 3 degrees: a bot died
+#define CAMERA_SHAKE_BREACH 1456  // 8 degrees: the designed crash's hit (breach.h)
 
 typedef struct
 {
@@ -41,6 +42,11 @@ void camera_shake_init(camera_shake *s);
 // Start a shake of this strength. One already going keeps the bigger of the two, so two
 // crashes close together don't make it smaller
 void camera_shake_start(camera_shake *s, int strength);
+
+// Keep a shake going at least this strong, without starting it afresh: a rumble, called every
+// frame while something goes on (the last round's walls moving in). Start would put it back on
+// the + side every frame: a steady tilt, not a shake
+void camera_shake_hold(camera_shake *s, int strength);
 
 // One frame: this frame's yaw and pitch to add to the camera (ANGLE), then it dies away a little.
 // Both are 0 once it's still

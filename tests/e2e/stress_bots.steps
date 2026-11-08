@@ -1,0 +1,17 @@
+# Worst case for drawing, late in round 3 (build with BOOT_ROUND 2, input.c): X fills your trail and every
+# live bot's with a serpentine across the arena, side by side 120 apart. Y first: a ghost, so the
+# serpentine can't stop you. The debug line's cpu, bots and trl figures, a second apart.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+shot stress_0_before
+press y
+press x
+wait 1.1
+shot stress_1
+wait 1
+shot stress_2
+wait 1
+shot stress_3
+wait 1.5
+shot stress_4

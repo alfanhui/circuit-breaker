@@ -1,0 +1,60 @@
+# The last round closing in, in lunges (game/rounds.h). Film it with
+# tests\e2e\film_round.ps1 -Round 5 -Steps closing.steps. Rides fast north to near the north wall,
+# turns along it, and shoots through a lunge: iso first (the wall sliding in beside the cycle),
+# then 1st person looking left at it (the camera rumbles while it moves). The debug text's
+# "arena" is the square's width: it drops by 1000 a lunge.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at the round's start
+# START, Z, START: a crash only stops the cycle (NOTERM), so the shots go on whatever hits it
+press start
+press z
+press start
+wait 0.5
+# C x6: cruise 7 -> 13
+press c 6
+wait 6.2
+press right
+press down
+wait 1.2
+shot close_00
+wait 0.3
+shot close_01
+wait 0.3
+shot close_02
+wait 0.3
+shot close_03
+wait 0.3
+shot close_04
+wait 0.3
+shot close_05
+wait 0.3
+shot close_06
+wait 0.3
+shot close_07
+wait 0.3
+shot close_08
+wait 0.3
+shot close_09
+wait 0.3
+shot close_10
+wait 0.3
+shot close_11
+press down
+keydown l
+wait 0.6
+shot close_look_00
+wait 0.3
+shot close_look_01
+wait 0.3
+shot close_look_02
+wait 0.3
+shot close_look_03
+wait 0.3
+shot close_look_04
+wait 0.3
+shot close_look_05
+wait 0.3
+shot close_look_06
+wait 0.3
+shot close_look_07
+keyup l

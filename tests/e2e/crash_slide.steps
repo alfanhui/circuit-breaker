@@ -1,6 +1,12 @@
 # Crash into the cycle's own trail, then turn along it in slow motion: shots about a game frame
 # apart while the camera eases round with the trail 25 to the side.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 2
 press right

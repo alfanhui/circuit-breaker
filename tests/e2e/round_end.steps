@@ -1,0 +1,29 @@
+# Between rounds (game/rounds.h): once the last rival's gone, the walls sink, you ride on with no
+# edge for 3 s, and the next round's walls rise round you, its bot coming in with "Loop
+# iteration 2" (in the small arena it comes in only 400 to the side). The bot's killed as in bot_dies.steps: the arena shrunk to 2000 across leaves it
+# outside, pulled to the edge, a crash. The small arena stays: you're a ghost from then, so its
+# edge can't stop you. Z first: you're already past where the edge will be, and stop there. Iso, to see the walls: sinking (1 s), flat, rising (1 s), up.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 5.4
+press start
+press z
+press x 7
+press start
+press down
+wait 0.2
+shot round_1_sinking
+wait 0.3
+shot round_2_sinking
+wait 0.8
+shot round_3_open
+wait 2.4
+shot round_4_rising
+wait 0.4
+shot round_5_rising
+wait 0.8
+shot round_6_begins
+wait 1.0
+shot round_7a_status
+wait 1.0
+shot round_7_playing

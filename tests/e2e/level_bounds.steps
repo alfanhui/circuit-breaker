@@ -1,6 +1,11 @@
 # alfanhui/circuit-breaker#6: centred start, boundary toggle, debug camera Z limits.
 # The BIOS intro and Sega licence screen take ~13 s; the game starts moving straight away
-wait 13.5
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3

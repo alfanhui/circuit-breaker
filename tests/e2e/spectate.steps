@@ -1,0 +1,15 @@
+# The spectator camera (view.c): the prologue's far-off view, as if watching at the arcades.
+# The game boots into the opening flight, which lands here (hurried along: see below). The
+# cycle should be a few pixels across in the middle, with no walls and no HUD, the floor fading
+# into the dark. No bot: in the loop the CPU is alone. The camera keeps its diagonal angle.
+wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
+# Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
+press b
+wait 3.5
+wait 0.5
+shot spectate_1
+wait 2.5
+shot spectate_2
+wait 2.5
+shot spectate_3

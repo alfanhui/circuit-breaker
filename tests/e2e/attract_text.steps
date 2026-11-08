@@ -1,0 +1,48 @@
+# The prologue's loop (input.c, game/attract_text.h): spectating, the cycle writes "SEGA SATURN
+# SH-2" across the floor, the camera panning after it; each word sinks once it's spelt, and
+# after the message it jumps back (unseen) and writes it again. A shot every 6 s.
+wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
+# Hurry it (any button but START or Z, once: x3), so it lands in about 3 s
+press b
+wait 3.5
+wait 6
+shot text_01
+wait 6
+shot text_02
+wait 6
+shot text_03
+wait 6
+shot text_04
+wait 6
+shot text_05
+wait 6
+shot text_06
+wait 6
+shot text_07
+wait 6
+shot text_08
+wait 6
+shot text_09
+wait 6
+shot text_10
+wait 6
+shot text_11
+wait 6
+shot text_12
+wait 6
+shot text_13
+wait 6
+shot text_14
+wait 6
+shot text_15
+wait 6
+shot text_16
+wait 6
+shot text_17
+wait 6
+shot text_18
+wait 6
+shot text_19
+wait 6
+shot text_20

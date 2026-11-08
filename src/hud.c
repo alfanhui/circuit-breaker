@@ -1,6 +1,8 @@
 #include "hud.h"
 #include "view.h"
 #include "game/minimap.h"
+#include "game/arena.h"
+#include "input.h" // arena_wall_rise
 
 /*
  * The HUD: one instrument at the bottom centre of the screen. A radar of the trails round the
@@ -44,8 +46,9 @@
 #define MAP_LINE_DEPTH (4 * JO_FIXED_1)
 #define GAUGE_DEPTH (3 * JO_FIXED_1)
 #define MARKER_DEPTH (5 * JO_FIXED_1 / 2) // 2.5: over the gauge, and still drawn in iso (2 isn't)
+#define GLITCH_DEPTH (12 * JO_FIXED_1 / 5) // 2.4: over everything else, the radar and gauge too
 #define MAP_DISC_SIZE 32 // the glass's texture, stretched to the map's size
-#define MAP_TRAILS_MAX 4 // trail colours ready: player 1 and a bot so far
+#define MAP_TRAILS_MAX 4 // trail colours: player 1 and up to 3 bots (input.h: FIELD_TRAIL_COUNT)
 /*
  * The tilted disc in perspective (game/minimap.h). VDP1 stretches a texture across a quad
  * linearly, not in perspective, so one quad bent the circle. So the glass is cut into MAP_STRIPS
@@ -68,6 +71,10 @@ enum
 	PART_MAP_TRAIL,							   // one per trail colour, MAP_TRAILS_MAX of them
 	PART_MAP_FILL = PART_MAP_TRAIL + MAP_TRAILS_MAX, // one per band of the glass, MAP_STRIPS of them
 	PART_TEXT_CURSOR = PART_MAP_FILL + MAP_STRIPS,	 // the terminal's block cursor
+	PART_BURST,										 // the prologue's burst of light
+	PART_MAP_WALL,									 // the arena's walls and blocks on the map
+	PART_GLITCH_DARK,								 // the designed crash's tear bands (breach.h)
+	PART_GLITCH_PINK,
 	PART_COUNT
 };
 
@@ -175,6 +182,10 @@ void hud_init(void)
 	for (int k = 0; k < MAP_STRIPS; ++k)
 		part_sprites[PART_MAP_FILL + k] = make_map_strip(k);
 	part_sprites[PART_TEXT_CURSOR] = make_part(HUD_TERMINAL_GREEN);
+	part_sprites[PART_BURST] = make_part(JO_COLOR_RGB(255, 255, 255));
+	part_sprites[PART_MAP_WALL] = make_part(JO_COLOR_RGB(170, 150, 255)); // pale violet: not any rider's
+	part_sprites[PART_GLITCH_DARK] = make_part(JO_COLOR_RGB(8, 0, 16));  // near black (all 0 would be see-through)
+	part_sprites[PART_GLITCH_PINK] = make_part(JO_COLOR_RGB(255, 40, 160)); // the flicker's pink
 	minimap_init();
 	prepare_map_disc();
 }
@@ -297,10 +308,23 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 	const int forward_x = -(slSin(view_rz) >> 6);
 	const int forward_y = -(slCos(view_rz) >> 6);
 	int n;
+	int walls;
+	int block_count;
 
 	if (trail_count > MAP_TRAILS_MAX)
 		trail_count = MAP_TRAILS_MAX;
 	n = minimap_build(trails, trail_count, eye, forward_x, forward_y, map_lines, MINIMAP_LINES_MAX);
+	// The walls round you, as you need to know them weaving between the blocks (and as the last
+	// round closes in). Thin lines, drawn first: under the trails, as structure not riders
+	// Between rounds, sunk flat into the floor, there's nothing there
+	walls = 0;
+	if (arena_wall_rise() > 0)
+	{
+		const world_rect *blocks = arena_blocks(&block_count);
+
+		walls = minimap_build_walls(blocks, block_count, arena_half(), eye, forward_x, forward_y, &map_lines[n],
+									MINIMAP_LINES_MAX - n);
+	}
 
 	// The glass as a mesh: VDP1 draws every other pixel, in a checkerboard, and the world shows
 	// through the gaps. A Saturn's composite or RF picture blurs that into see-through glass (a
@@ -310,6 +334,8 @@ void hud_draw_minimap(world_point eye, const trail *const *trails, int trail_cou
 	draw_map_glass();
 	jo_sprite_disable_screen_doors_filter();
 
+	for (int i = n; i < n + walls; ++i)
+		draw_map_line(PART_MAP_WALL, map_lines[i].x0, map_lines[i].y0, map_lines[i].x1, map_lines[i].y1);
 	for (int i = 0; i < n; ++i)
 		draw_thick_map_line(PART_MAP_TRAIL + map_lines[i].trail, map_lines[i].x0, map_lines[i].y0, map_lines[i].x1,
 							map_lines[i].y1);
@@ -359,4 +385,58 @@ void hud_draw_boost(const cycle *c)
 				draw_gauge_piece(PART_BACK, side, k, lit - start, 16);
 			}
 		}
+}
+
+/*
+ * The prologue's burst of light (game/loop_break.h): BURST_RAYS rays round (cx, cy), from inner to
+ * outer pixels out, every other one shorter, like the star of a hit in The Wind Waker. Each ray
+ * is a thin spike: BURST_WIDTH across at its inner end, to a point at its outer end (a quad with
+ * its two outer corners together).
+ * The directions are a table, x64 (the ray's length then >> 6): no trigonometry at runtime
+ */
+#define BURST_RAYS 12
+#define BURST_WIDTH 2 // pixels either side of the ray at its inner end
+// Deeper than the rest of the HUD: SGL drops anything nearer than its screen distance / 128
+// (slZdspLevel 7), and through the spectator camera's 30 degree FOV that's 160 / tan 15 / 128 =
+// 4.7. At the gauge's 3 the burst vanished while spectating. Still far nearer than the world
+#define BURST_DEPTH (6 * JO_FIXED_1)
+static const signed char burst_directions[BURST_RAYS][2] = {
+	// cos, sin x 64, every 30 degrees, starting 15 degrees round so none is level or upright
+	{62, 17}, {45, 45}, {17, 62}, {-17, 62}, {-45, 45}, {-62, 17},
+	{-62, -17}, {-45, -45}, {-17, -62}, {17, -62}, {45, -45}, {62, -17},
+};
+
+void hud_draw_burst(int cx, int cy, int inner, int outer)
+{
+	for (int i = 0; i < BURST_RAYS; ++i)
+	{
+		const int dx = burst_directions[i][0];
+		const int dy = burst_directions[i][1];
+		const int reach = (i & 1) ? (outer * 3) >> 2 : outer; // every other ray three quarters as long
+		const int start = (i & 1) ? (inner * 3) >> 2 : inner;
+		// Across the ray: its direction turned 90 degrees, x BURST_WIDTH / 64
+		const int wx = (-dy * BURST_WIDTH) >> 6;
+		const int wy = (dx * BURST_WIDTH) >> 6;
+		const int ix = cx + ((dx * start) >> 6);
+		const int iy = cy + ((dy * start) >> 6);
+		const int ox = cx + ((dx * reach) >> 6);
+		const int oy = cy + ((dy * reach) >> 6);
+
+		if (reach <= start)
+			continue;
+		// Corners: inner left, outer, outer, inner right; at least a pixel wide where it starts
+		draw_corners(PART_BURST, ix + wx - (wx == 0), iy + wy - (wy == 0), ox, oy, ox, oy, ix - wx + (wx == 0),
+					 iy - wy + (wy == 0), BURST_DEPTH);
+	}
+}
+
+void hud_draw_band(int top, int height, bool pink)
+{
+	// Screen pixels from the centre: the whole width, top to top + height - 1 (edges inclusive)
+	const int y0 = top - JO_TV_HEIGHT_2;
+	const int y1 = y0 + height - 1;
+	const int x0 = -JO_TV_WIDTH_2;
+	const int x1 = JO_TV_WIDTH_2 - 1;
+
+	draw_corners(pink ? PART_GLITCH_PINK : PART_GLITCH_DARK, x0, y0, x1, y0, x1, y1, x0, y1, GLITCH_DEPTH);
 }

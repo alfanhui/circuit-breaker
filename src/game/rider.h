@@ -40,6 +40,11 @@ void rider_init(rider *r, short x, short y, unsigned char heading);
 // lowers its trail into the floor. Its trail should stop blocking anyone straight away
 void rider_kill(rider *r);
 
+// Take a rider out of the field altogether: dead, with its trail already sunk away. It's drawn
+// nowhere, stops nobody and doesn't move: a bot kept out of the prologue's loop. rider_init
+// brings it back
+void rider_remove(rider *r);
+
 // Each frame for a dead rider: its trail sinks RIDER_SINK_SPEED lower, and once it's into the
 // floor it's removed. Returns 1 while there's still some of it to draw
 int rider_sink(rider *r);

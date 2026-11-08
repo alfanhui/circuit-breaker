@@ -2,7 +2,9 @@
 # completely, so the farther isn't drawn there. Ride north 3 s (trail A), left: west 1 s, left:
 # south 4 s (trail B, 420 west of A, reaching past A's start), left: east 2 s (round A's start),
 # left: north again 420 east of A, with B 840 away beyond it. The radar shows the layout.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 wait 3
 press left
 wait 1

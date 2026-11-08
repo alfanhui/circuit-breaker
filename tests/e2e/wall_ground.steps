@@ -1,5 +1,7 @@
 # Do the walls sit on the floor? Close-ups of the north wall's base in both views.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3

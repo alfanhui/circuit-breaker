@@ -1,0 +1,71 @@
+# Running and vaulting in the grey box (game/walker.h), booted on foot in the corridor: Up held
+# all the way builds to a run in ~0.8 s. At a run the crate (40, before the stairs) is vaulted:
+# up onto it, the eye following, and off its end in a jump to the floor. Then up the stairs (the
+# eye gliding, not jolting) and off the platform's end in a jump onto the lower roof (64), and on
+# into the tower. Shots every ~0.25 s round the crate (~5 s in) and the platform (~8 s).
+# Film it with tests\e2eun_e2e.ps1 -Steps run_vault.steps (built with BOOT_ON_FOOT 1)
+wait_up
+shot rv_00_stood
+keydown up
+wait 2
+shot rv_01_running
+wait 2
+shot rv_02_crate
+wait 0.12
+shot rv_03_crate
+wait 0.12
+shot rv_04_crate
+wait 0.12
+shot rv_05_crate
+wait 0.12
+shot rv_06_crate
+wait 0.12
+shot rv_07_crate
+wait 0.12
+shot rv_08_crate
+wait 0.12
+shot rv_09_crate
+wait 0.12
+shot rv_10_crate
+wait 0.12
+shot rv_11_crate
+wait 0.12
+shot rv_12_crate
+wait 0.12
+shot rv_13_crate
+wait 0.12
+wait 0.6
+shot rv_14_stairs
+wait 0.12
+shot rv_15_stairs
+wait 0.12
+shot rv_16_stairs
+wait 0.12
+shot rv_17_stairs
+wait 0.12
+shot rv_18_stairs
+wait 0.12
+shot rv_19_stairs
+wait 0.12
+shot rv_20_stairs
+wait 0.12
+shot rv_21_stairs
+wait 0.12
+shot rv_22_stairs
+wait 0.12
+shot rv_23_stairs
+wait 0.12
+shot rv_24_stairs
+wait 0.12
+shot rv_25_stairs
+wait 0.12
+shot rv_26_stairs
+wait 0.12
+shot rv_27_stairs
+wait 0.12
+shot rv_28_stairs
+wait 0.12
+shot rv_29_stairs
+wait 0.12
+keyup up
+shot rv_30_end

@@ -1,7 +1,7 @@
 JO_COMPILE_WITH_VIDEO_MODULE = 0
 JO_COMPILE_WITH_BACKUP_MODULE = 0
 JO_COMPILE_WITH_TGA_MODULE = 1
-JO_COMPILE_WITH_AUDIO_MODULE = 0
+JO_COMPILE_WITH_AUDIO_MODULE = 1
 JO_COMPILE_WITH_3D_MODULE = 1
 JO_COMPILE_WITH_PSEUDO_MODE7_MODULE = 0
 JO_COMPILE_WITH_EFFECTS_MODULE = 0
@@ -12,6 +12,10 @@ JO_FRAMERATE = 1
 # 60Hz NTSC output: the target console is a Japanese Saturn (0 = 50Hz PAL)
 JO_NTSC = 1
 JO_COMPILE_USING_SGL=1
+# jo's malloc heap is a static array in our BSS, in high Work RAM, which must end before SGL's
+# sort list at 0x060C0000 (jo checks, and with JO_DEBUG won't start: a black screen). 352 KB (jo's
+# default is 384) leaves room for our own arrays; main.c adds low Work RAM as more heap behind it
+JO_GLOBAL_MEMORY_SIZE_FOR_MALLOC = 360448
 SRCS=main.c \
 	src/utils/3d.c \
 	src/utils/low_level_input.c \
@@ -36,13 +40,29 @@ SRCS=main.c \
 	src/game/game_state.c \
 	src/game/camera_shake.c \
 	src/game/status_message.c \
+	src/game/attract_route.c \
+	src/game/attract_text.c \
+	src/game/loop_break.c \
+	src/game/intro_flight.c \
+	src/game/arrival_flight.c \
+	src/game/surround.c \
+	src/game/rounds.c \
+	src/game/wall_flicker.c \
+	src/game/breach.c \
+	src/game/corridor.c \
+	src/game/city.c \
+	src/game/frustum.c \
+	src/game/vdp1_gauge.c \
+	src/game/occluder.c \
+	src/game/walker.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \
 	src/input.c \
 	src/level.c \
 	src/trail_render.c \
-	src/hud.c
+	src/hud.c \
+	src/sound.c
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler
 include $(COMPILER_DIR)/COMMON/jo_engine_makefile

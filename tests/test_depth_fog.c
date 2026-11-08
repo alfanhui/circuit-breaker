@@ -98,8 +98,73 @@ static void gouraud_darkens_steadily_and_greys(void)
 	}
 }
 
+// A flat colour darkened as Gouraud would: each channel down, none below black, bit 15 kept
+static void darken_takes_steps_off_each_channel(void)
+{
+	CHECK_EQ(0x8000 | 10 << 10 | 20 << 5 | 30, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 0));
+	CHECK_EQ(0x8000 | 6 << 10 | 16 << 5 | 26, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 4));
+	CHECK_EQ(0x8000 | 0 << 10 | 4 << 5 | 14, depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 16));
+	// The most a level takes off is the Gouraud's: 16 - its channel
+	CHECK_EQ(0x8000 | 0 << 10 | 4 << 5 | 14,
+			 depth_fog_darken(0x8000 | 10 << 10 | 20 << 5 | 30, 16 - (depth_fog_gouraud_colour(DEPTH_FOG_LEVELS - 1) & 31)));
+}
+
+// A trail piece (a a b b) and an arena strip (a b b a) each find a shared table, and it holds
+// their corners; the same two levels in the two orders are different tables
+static void two_level_pieces_share_a_table(void)
+{
+	int levels[4];
+	const int trail = depth_fog_shared_table(3, 3, 9, 9);
+	const int strip = depth_fog_shared_table(3, 9, 9, 3);
+
+	CHECK(trail >= 0 && trail < DEPTH_FOG_SHARED_TABLES);
+	CHECK(strip >= 0 && strip < DEPTH_FOG_SHARED_TABLES);
+	CHECK(trail != strip);
+	depth_fog_shared_levels(trail, levels);
+	CHECK_EQ(3, levels[0]);
+	CHECK_EQ(3, levels[1]);
+	CHECK_EQ(9, levels[2]);
+	CHECK_EQ(9, levels[3]);
+	depth_fog_shared_levels(strip, levels);
+	CHECK_EQ(3, levels[0]);
+	CHECK_EQ(9, levels[1]);
+	CHECK_EQ(9, levels[2]);
+	CHECK_EQ(3, levels[3]);
+	// One level all round: a shared table too
+	CHECK(depth_fog_shared_table(15, 15, 15, 15) >= 0);
+}
+
+// Every shared table's corners come back to it: all 512 are reachable and none is used twice
+static void every_shared_table_round_trips(void)
+{
+	for (int t = 0; t < DEPTH_FOG_SHARED_TABLES; ++t)
+	{
+		int levels[4];
+
+		depth_fog_shared_levels(t, levels);
+		for (int k = 0; k < 4; ++k)
+			CHECK(levels[k] >= 0 && levels[k] < DEPTH_FOG_LEVELS);
+		// a a a a is both orders: it's found as a a b b, the first
+		if (levels[0] == levels[1] && levels[1] == levels[2] && t >= DEPTH_FOG_LEVELS * DEPTH_FOG_LEVELS)
+			continue;
+		CHECK_EQ(t, depth_fog_shared_table(levels[0], levels[1], levels[2], levels[3]));
+	}
+}
+
+// A face cut by the view (on foot) can have any four levels: no shared table, its own is written
+static void other_corners_have_none(void)
+{
+	CHECK_EQ(-1, depth_fog_shared_table(1, 2, 3, 4));
+	CHECK_EQ(-1, depth_fog_shared_table(1, 2, 1, 2));
+	CHECK_EQ(-1, depth_fog_shared_table(5, 5, 5, 6));
+}
+
 void run_depth_fog_tests(void)
 {
+	RUN(two_level_pieces_share_a_table);
+	RUN(every_shared_table_round_trips);
+	RUN(other_corners_have_none);
+	RUN(darken_takes_steps_off_each_channel);
 	RUN(agrees_with_the_floor_at_every_distance);
 	RUN(clear_near_and_full_far);
 	RUN(behind_the_camera_is_clear);

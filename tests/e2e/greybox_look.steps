@@ -1,0 +1,47 @@
+# The grey box's looks (feedback, 2026-11-02): looking up from the floor (the sky and the horizon),
+# then up the stairs onto the platform, and looking down while turning (the floor at the sides).
+# Film it with tests\e2e\run_e2e.ps1 -Steps greybox_look.steps (built with BOOT_ON_FOOT 1)
+wait_up # booted on foot in the corridor (BOOT_ON_FOOT): no ride there
+shot gl_00_stood
+# Y: look up, from the floor
+keydown y
+wait 0.6
+shot gl_01_look_up
+keyup y
+wait 0.5
+# Turning at floor level: the sides, mid-turn
+keydown right
+wait 0.2
+shot gl_01b_turning
+keyup right
+keydown left
+wait 0.2
+keyup left
+wait 0.3
+# Up the stairs onto the platform (13 s holding Up: short of its lip)
+hold up 13
+wait 0.3
+shot gl_02_platform
+# B: look down, and turn right while looking down
+keydown b
+wait 0.6
+shot gl_03_look_down
+keydown right
+wait 0.15
+shot gl_04_turning_down
+wait 0.15
+shot gl_05_turning_down
+keyup right
+wait 0.3
+shot gl_06_turned_down
+keydown left
+wait 0.3
+shot gl_07_turning_back
+keyup left
+keyup b
+wait 0.5
+# Y: look up from the platform
+keydown y
+wait 0.6
+shot gl_08_look_up_high
+keyup y

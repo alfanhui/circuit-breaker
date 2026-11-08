@@ -5,6 +5,7 @@
 #include "game/cycle.h"
 #include "game/view_cull.h"
 #include "game/wall_clip.h"
+#include "game/frustum.h"
 
 // SGL sees the world this many times smaller than world units (see view_push_world_matrix)
 #define VIEW_WORLD_SCALE 4
@@ -15,6 +16,9 @@
  */
 
 extern bool first_person;
+// The prologue's camera: the arena from far off, as a spectator (view.c). It wins over the
+// other two; view_init applies a change
+extern bool spectating;
 
 // Camera focus in world space and the floor height relative to the camera (old pos.x/y/z)
 extern int view_x;
@@ -31,6 +35,11 @@ void view_toggle(const cycle *c);
 // free_camera: the debug camera, which can look anywhere.
 world_rect view_visible_rect(const cycle *c, bool free_camera, int range);
 
+// In 1st person, the camera's planes in 3D (game/frustum.h): near, and the screen's four edges a
+// sixteenth wider than the screen. The corridor and the city are cut to them (level.c).
+// Returns false (nothing written) in other views, or with the debug camera
+bool view_frustum(bool free_camera, frustum *out);
+
 // The 1st person camera on the floor, for keeping wall corners in front of it.
 // Returns false (nothing written) in other views.
 bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *out);
@@ -46,9 +55,77 @@ void view_turn_left(void);
 void view_turn_right(void);
 // 1st person: turn the head to look aside (-1 left, 1 right) or back ahead (0); it eases there
 void view_look(int direction);
+// On foot (game/walker.h), every frame: the body facing yaw (ANGLE, any way at all, at once), the
+// head looking look_x (-1 left, 1 right) and look_y (-1 down, 1 up), easing there, and the eye bob
+// lower than standing on the floor (a step's bob, a landing's dip, less the roof's height). Off
+// again at view_init
+void view_on_foot(int yaw, int look_x, int look_y, int bob);
+// Whether you're on foot (view_on_foot since the last view_init)
+bool view_is_on_foot(void);
+// On foot, how far the head's looking down now (ANGLE; negative: up). 0 otherwise
+int view_look_pitch(void);
+// How high the floor's grid (VDP2) lies: 0 riding, the arena's floor; on foot, far below, as the
+// ground under Work RAM's city (city.h: CITY_GROUND), the towers' feet
+int view_ground_height(void);
 // Shake the camera: a jolt of this strength (ANGLE) that dies away (game/camera_shake.h).
 // In iso it's half the size: the whole arena swinging is too much
 void view_shake(int strength);
+// Keep the camera rumbling at least this hard (ANGLE), called every frame while it should
+// (camera_shake_hold): it dies away once the calls stop
+void view_rumble(int strength);
+// The designed crash (game/breach.h): the camera's roll and, in 1st person, its tip down towards
+// the floor (ANGLE) and how far the eye's dropped, each frame of it. Back to 0 when the game
+// starts again (view_init)
+void view_breach(int roll, int dip, int drop);
+// Spectating: move the camera dx along x at once, with the cycle (the prologue's loop jumping
+// back to its start, input.c), so the jump doesn't show as a pan
+void view_spectate_shift(int dx);
+// Spectating: move the seat itself (where it pans with and the line it looks across) and the
+// camera by (dx, dy), as the loop's break slides the world under it (input.c). The flight down
+// starts from the seat (view_arrival_start), so call this first
+void view_spectate_move(int dx, int dy);
+// Spectating: the line the message is written along (its y). The camera pans along it, staying
+// across from it, rather than bobbing after the cycle as it rides up and down the letters
+void view_spectate_line(int y);
+// Spectating: the point along the message the camera pans with (its x), moving at one steady
+// speed (input.c works it out each frame): it looks a little west of it, from far behind
+void view_spectate_pan(int x);
+
+// The opening flight into the spectator's seat (game/intro_flight.h), from the cycle where it is
+// now. Spectating must be on; view_init applies it, and it lands in the spectator's view by itself
+void view_intro_start(const cycle *c);
+// Cut it short (the loop broken, or a debug jump): view_init then puts the camera where it should be
+void view_intro_stop(void);
+bool view_intro_flying(void);
+// Its frame, 0..INTRO_FLIGHT_FRAMES (-1: not flying): the debug line shows it (main.c)
+int view_intro_frame(void);
+// The flight down from the stands into the cycle once the loop's broken (game/arrival_flight.h),
+// from the spectator's camera now to the cycle (at its start). Call with spectating still on or
+// just turned off, before view_init; play waits for it to land (input.c)
+void view_arrival_start(const cycle *c);
+void view_arrival_stop(void);
+bool view_arriving(void);
+int view_arrival_frame(void); // 0..ARRIVAL_FRAMES, -1 when not flying (the debug line)
+// Where the camera sees a level plane `height` above the floor: the four points where the rays
+// through the screen's corners (an eighth wider all round) meet it, in order round them. Anything
+// drawn on that plane inside them is on the screen or just off it, and in front of the camera
+// (game/surround.h). Returns false when it can't be seen from above: the camera's under or level
+// with it, or spectating
+bool view_floor_quad(int height, world_point *quad);
+// The same for the floor itself, however low the camera (1st person's eye is only 35 up, too low
+// for view_floor_quad): for things laid on the floor (the corridor's glass, level.c)
+bool view_ground_quad(world_point *quad);
+// The same for a roof at a height (level.c's grey box): seen however little the eye's above it,
+// as you stand on it. False when the eye's not above it
+bool view_roof_quad(int height, world_point *quad);
+
+// How far to move the sky (main.c) up or down for the camera's pitch now: the sky's drawn
+// outside the world's matrix, so it doesn't tilt with the camera on its own. 0 looking level
+int view_sky_rise(void);
+// How far the arena's walls have risen out of the floor: 0..256, 256 (full) but while arriving
+int view_wall_rise(void);
+// The floor is drawn 2^this times larger (main.c): far off, its tiles grow, so the grid holds up
+extern int view_floor_shift;
 void view_follow(const cycle *c);
 void view_push_world_matrix(void);
 

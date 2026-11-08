@@ -1,0 +1,33 @@
+# Out onto the city's entry (as city.steps), then a full turn on the spot in eighths: looking back
+# at the corridor, and the sky and the ground as you turn (the user's artefacts 3 and 4).
+# Film it: tests\e2e\run_e2e.ps1 -Steps city_turn.steps
+wait_up
+hold up 13
+hold l 3
+keydown up
+wait 1.8
+keyup up
+wait 0.5
+shot ctn_00
+hold right 0.2
+shot ctn_01
+hold right 0.2
+shot ctn_02
+hold right 0.2
+shot ctn_03
+hold right 0.2
+shot ctn_04
+hold right 0.2
+shot ctn_05
+hold right 0.2
+shot ctn_06
+hold right 0.2
+shot ctn_07
+hold right 0.2
+shot ctn_08
+hold right 0.2
+shot ctn_09
+hold right 0.2
+shot ctn_10
+hold right 0.2
+shot ctn_11

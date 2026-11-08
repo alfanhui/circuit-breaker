@@ -1,0 +1,39 @@
+# The flicker (game/wall_flicker.h): a section of the outer wall glitching, somewhere else each
+# round from round 2. Film it with tests\e2e\film_round.ps1 -Round N -Steps flicker.steps: round 5's
+# is the obvious one, mid west wall (+x: on your left at the start, facing north). Shots ahead,
+# then looking left, then riding west up to it. Termination off (debug camera Z), so a crash only
+# stops the cycle and the shots go on.
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at the round's start
+press start
+press z
+press start
+wait 1
+shot flicker_00_ahead
+wait 0.1
+shot flicker_01_ahead
+wait 0.1
+shot flicker_02_ahead
+keydown l
+wait 0.6
+shot flicker_03_left
+wait 0.1
+shot flicker_04_left
+wait 0.1
+shot flicker_05_left
+wait 0.1
+shot flicker_06_left
+keyup l
+# Left: face west. C x6: cruise 7 -> 13
+press left
+press c 6
+wait 7
+shot flicker_07_near
+wait 0.1
+shot flicker_08_near
+wait 0.1
+shot flicker_09_near
+wait 0.1
+shot flicker_10_near
+wait 0.1
+shot flicker_11_near

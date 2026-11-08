@@ -27,13 +27,39 @@ The prologue hides in plain sight, as the attract mode: the demo every arcade-st
 on its own before you press anything. A cycle runs the arena by itself, on the same route,
 forever. It's the loop.
 
-1. The player presses a button, thinking it's "press start".
-2. The cycle turns, off its route. That's the CPU's first free decision: its first act of
-   consciousness is your first input.
-3. The game carries straight on into the arena, as if nothing happened.
+There's no title screen or main menu. The game opens face down on the floor, the grid filling
+the screen, as a cycle rides in and lays a trail across it: the first stroke of a message. The
+camera lifts its head off the floor and slowly picks up speed, rides along beside the cycle as
+it writes, and banks round, climbing, into a spectator's seat (`game/intro_flight.h`). You only
+watch it: a press doesn't touch the loop yet, it hurries the flight along (once, to three
+times the speed).
 
-No words are needed, and first-time players won't notice. Those who come back will. The title
-gets a second meaning: you break the loop, not just the circuit.
+From there it's a spectator's view of the arena, far off, high and shallow, as if you were
+watching someone else play at the arcades: a lone cycle writing "SEGA SATURN SH-2" across an
+endless floor, no walls, no HUD. Each word sinks into the floor once it's spelt, and the message
+begins again. No bot: in the loop the CPU is alone.
+
+1. The player presses a direction, thinking it starts the game. The cycle wavers, and keeps
+   to its route.
+2. Again: it wavers harder. The loop is fighting back.
+3. The third press forces the choice. Something visibly breaks: the picture flashes and
+   jolts, and under the flash the world slides so the cycle that was writing is at the
+   arena's centre, and it turns north: you're given the same cycle you were watching. The
+   camera climbs out of the stands to an overview of the whole arena as its walls rise out
+   of the floor round the cycle, so you see the box you're in, then swoops down behind it into 1st person, with no cut, in 3 s
+   (`arrival_flight.c`). The message sinks away meanwhile. That's the CPU's first free
+   decision: its first act of consciousness is your input, forced through three times.
+4. The game carries on into the arena: the HUD and the rival appear, as if this had been the
+   game all along.
+
+No words are needed. It must be obvious that something strange happened (the loop broke, and
+the SH-2 now chooses for itself), even if first-time players don't yet know what it means.
+Those who come back will. The title gets a second meaning: you break the loop, not just the
+circuit.
+
+**Player 2** joins without a menu: a second cycle in player 2's colour waits at the edge of
+the arena, idling. A press on pad 2, while spectating or in the arena level, brings it in, and
+the game is multiplayer from there.
 
 ## The disguise: it starts as a snake game
 
@@ -54,6 +80,32 @@ arena we've already built.
 The title has a double meaning: you break the loop, not just the circuit. The opening should
 look deliberately plainer than everything after it, so the escape feels like the world getting
 bigger.
+
+### The arena's rounds (decided 2026-11-01)
+
+The arena is five rounds, about 5-10 minutes in all. Each round is one turn of the loop the CPU
+is stuck in, and each comes up a little different, as if the loop were trying variations on
+itself.
+
+| Round | Layout | Rivals | What's wrong |
+|---|---|---|---|
+| 1 | A square | One bot | Nothing yet |
+| 2 | A square donut: a solid block in the middle | Two bots | One section of wall flickers; the HUD glitches on near misses |
+| 3 | A square with four square pillars | Three bots, and an ally pick-up | The flicker again, somewhere else |
+| 4 | Four rooms, a cross of walls between them with a gap (a door) in each arm | The Watchdog arrives: faster, and it copies itself (DMA) | The flicker grows |
+| 5 | A square again, the first round's, closing in | The Watchdog alone | The flicker is obvious |
+
+- **Between rounds** the walls (and any pillars) sink into the ground. For a few seconds there's
+  no edge: you ride on over the endless floor. Then the next layout rises around you. The world
+  slides first so you're somewhere clear in the new layout (as at the loop's break, by whole
+  floor tiles), so a wall never rises through you.
+- **Losing a round** (you crash) resets you to that round's start, with a reset effect: the
+  Watchdog doing its job. Winning a round is being the last one moving.
+- **The flicker** is a section of the outer wall, in every round after the first. Before round 5
+  it's solid: riding into it is a crash like any other (and a hint: it glitches as you die).
+- **The designed crash.** In round 5 the Watchdog doesn't go for the flicker itself. It herds
+  you: it cuts off the ways *away* from the section, so the only way left open leads into it.
+  You hit the section, the Watchdog's reset fails, the screen tears, and you fall through.
 
 ## Telling it: mostly without words
 
@@ -240,8 +292,8 @@ The mechanic is safe: leaving a wall behind you and boxing people in goes back t
 
 ## Still to decide
 
-- **The designed crash**: where it is, how players find it, and how many hints they get.
-- **What a crash means** in the arena: reset by the Watchdog and back to the start of the loop?
+- **The overclock in the arena**: a charge from near misses that you spend as a surge. Does the
+  break need a surge, or only the hit in round 5?
 - **The main CPU's turn**: what changes its mind?
 - **The palette**: one per place, or one for the whole game?
 - **Versus mode**: two players in the arena. Does it share the story, or stand apart?

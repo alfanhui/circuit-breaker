@@ -1,5 +1,7 @@
 # Worst-case trail at once (X: 64 corners across the arena), to measure CPU per frame.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press x
 wait 3
 shot stress_1st

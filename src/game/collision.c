@@ -1,4 +1,5 @@
 #include "collision.h"
+#include "arena.h"
 
 /*
  * Every check works in two coordinates relative to the heading, so one piece of code covers all
@@ -73,6 +74,22 @@ int collision_trail(world_point from, int heading, int distance, const trail *t)
 	const int from_across = ACROSS(from);
 	const int from_along = ALONG(from);
 	const int corners = t->corner_count;
+	// The trail's box (trail.h), as across and along: along flips with sign, so its ends swap
+	const int box_across_min = along_x ? t->box.y_min : t->box.x_min;
+	const int box_across_max = along_x ? t->box.y_max : t->box.x_max;
+	const int box_along_min = sign > 0 ? (along_x ? t->box.x_min : t->box.y_min) : -(along_x ? t->box.x_max : t->box.y_max);
+	const int box_along_max = sign > 0 ? (along_x ? t->box.x_max : t->box.y_max) : -(along_x ? t->box.x_min : t->box.y_min);
+
+	// The whole trail at once, from its box: no segment can stop the cycle unless it's across the
+	// path (as the test below, for each segment), some of it's ahead of the cycle (else it's
+	// behind: past it), and it starts before the cycle gets there (near edge inside distance).
+	// A trail far off is skipped in 4 comparisons instead of a walk along all its corners: the
+	// bots ask ~12 questions each, about every trail, whenever they think (2026-11-01: 3 bots
+	// among long trails took 45% of a frame)
+	if (from_across <= box_across_min - COLLISION_TRAIL_CLEARANCE ||
+		from_across >= box_across_max + COLLISION_TRAIL_CLEARANCE || box_along_max <= from_along ||
+		box_along_min - COLLISION_TRAIL_CLEARANCE - from_along >= distance)
+		return distance;
 
 	// Every segment, oldest to newest, including the live one the cycle is laying (it's always
 	// inside that one, so it never stops it). Each hit can only shorten the distance, so the
@@ -130,4 +147,32 @@ int collision_free_distance(world_point from, int heading, int distance, int lim
 	for (int i = 0; i < trail_count; ++i)
 		distance = collision_trail(from, heading, distance, trails[i]);
 	return distance;
+}
+
+int collision_blocks(world_point from, int heading, int distance, const world_rect *blocks, int count)
+{
+	for (int i = 0; i < count; ++i)
+	{
+		// A block is a fattened segment from one corner to the other: collision_segment works
+		// with each end's along and across, the smaller and the bigger, which for opposite
+		// corners are the block's sides. Inside it, with any of it ahead, is a crash, as inside
+		// a trail is
+		world_point a, b;
+
+		a.x = blocks[i].x_min;
+		a.y = blocks[i].y_min;
+		b.x = blocks[i].x_max;
+		b.y = blocks[i].y_max;
+		distance = collision_segment(from, heading, distance, a, b, ARENA_WALL_CLEARANCE);
+	}
+	return distance;
+}
+
+int collision_arena(world_point from, int heading, int distance, const trail *const *trails, int trail_count)
+{
+	int count;
+	const world_rect *blocks = arena_blocks(&count);
+
+	distance = collision_blocks(from, heading, distance, blocks, count);
+	return collision_free_distance(from, heading, distance, arena_player_limit(), trails, trail_count);
 }

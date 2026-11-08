@@ -10,17 +10,54 @@ static int live_segment_exists(const trail *t)
 	return t->corner_count > 0 && !points_equal(t->corners[t->corner_count - 1], t->head);
 }
 
+// Grows the box to take in p: four comparisons, cheap enough for every frame's new head
+static void box_add(world_rect *box, world_point p)
+{
+	if (p.x < box->x_min)
+		box->x_min = p.x;
+	if (p.x > box->x_max)
+		box->x_max = p.x;
+	if (p.y < box->y_min)
+		box->y_min = p.y;
+	if (p.y > box->y_max)
+		box->y_max = p.y;
+}
+
+static void box_at(world_rect *box, world_point p)
+{
+	box->x_min = box->x_max = p.x;
+	box->y_min = box->y_max = p.y;
+}
+
 void trail_reset(trail *t, world_point start)
 {
 	t->corners[0] = start;
 	t->corner_count = 1;
 	t->version++;
 	t->head = start;
+	box_at(&t->box, start);
+}
+
+void trail_shift(trail *t, int dx, int dy)
+{
+	for (int i = 0; i < t->corner_count; ++i)
+	{
+		t->corners[i].x = (short)(t->corners[i].x + dx);
+		t->corners[i].y = (short)(t->corners[i].y + dy);
+	}
+	t->head.x = (short)(t->head.x + dx);
+	t->head.y = (short)(t->head.y + dy);
+	t->box.x_min = (short)(t->box.x_min + dx);
+	t->box.x_max = (short)(t->box.x_max + dx);
+	t->box.y_min = (short)(t->box.y_min + dy);
+	t->box.y_max = (short)(t->box.y_max + dy);
+	t->version++; // the corners moved: a renderer's cached copy is stale
 }
 
 void trail_set_head(trail *t, world_point head)
 {
 	t->head = head;
+	box_add(&t->box, head);
 }
 
 void trail_add_corner(trail *t)
@@ -36,6 +73,11 @@ void trail_add_corner(trail *t)
 		for (i = 1; i < TRAIL_MAX_CORNERS; ++i)
 			t->corners[i - 1] = t->corners[i];
 		t->corner_count--;
+		// The oldest corner's gone: the box may shrink. Built again from what's left (on a turn
+		// only, as the shift above)
+		box_at(&t->box, t->head);
+		for (i = 0; i < t->corner_count; ++i)
+			box_add(&t->box, t->corners[i]);
 	}
 	t->corners[t->corner_count++] = t->head;
 	t->version++;

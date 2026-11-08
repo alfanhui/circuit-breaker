@@ -2,7 +2,9 @@
 # when the bot dies. The arena shrinks to the smallest (2000 across) in the debug camera: the player
 # soon crashes into the edge, and after the restart the bot, starting 2000 out, is outside the
 # arena and crashes at once. 1st person while it types, then iso.
-wait 21
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 5.4
 press start
 press x 7
 press start

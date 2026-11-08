@@ -1,7 +1,13 @@
 # Collision: crash into the cycle's own trail, jink left a little, turn right into the same trail
 # again, then right once more, back up the bit just laid. It must not drive back over its trail:
 # it stays stopped (x and y unchanged between the last two shots).
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
+# Debug camera Z: a crash only stops the cycle (this crashes on purpose, to look at what's left)
+press start
+press z
+press start
 press c 3
 wait 2
 press right

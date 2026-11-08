@@ -1,6 +1,8 @@
 # Boost in slow motion (1/8 speed), for a GIF: the view widens and narrows smoothly, the bar
 # turns white and drains. Shots are back to back, about one game frame apart.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press c 6
 press z
 wait 1.5

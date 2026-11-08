@@ -1,6 +1,7 @@
 # Turn presses reach the game (through the press latch): one press, one turn.
 # The BIOS intro, licence screen and loading take ~15 s; the cycle starts north
-wait 15.5
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3

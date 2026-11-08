@@ -1,10 +1,11 @@
 # Fog to black: black beyond the walls; the far floor (1st person: under the walls; iso: the
 # top of the screen) darkens to black, the near floor stays clear.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 # The game starts in 1st person; these steps were written from iso, so switch to it first
 press down
 wait 0.3
-press b 6
 wait 1
 shot dark_iso
 press down

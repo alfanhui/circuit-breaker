@@ -3,7 +3,8 @@
 # (it used to weave back and forth across their line); it races alongside, on their new
 # heading, while the player runs into its trail. 1st person then iso, 1 s apart; the debug
 # text's last line is the bot.
-wait 14
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
 press right
 wait 1
 shot cut_1

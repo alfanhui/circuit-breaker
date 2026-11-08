@@ -138,8 +138,67 @@ static int add_strip(world_point from, world_point to, int length, int f, world_
 	return count;
 }
 
+// Narrows [*s0, *s1] to the steps where a + b * s >= 0: one side of a straight line, tested along
+// the segment. Rounded outwards (a step more rather than less: nothing in view is lost). One
+// division, once per segment. Returns 0 if nothing is left
+static int keep_where(int a, int b, int *s0, int *s1)
+{
+	if (b == 0)
+		return a >= 0 && *s0 < *s1; // the whole segment is on one side
+	if (b > 0)
+	{
+		// s >= -a / b, rounded down
+		int n = -a;
+
+		*s0 = max_int(*s0, n >= 0 ? n / b : -((-n + b - 1) / b));
+	}
+	else
+	{
+		// s <= a / -b, rounded up
+		int d = -b;
+
+		*s1 = min_int(*s1, a >= 0 ? (a + d - 1) / d : -(-a / d));
+	}
+	return *s0 < *s1;
+}
+
+/*
+ * 1st person: narrows [*s0, *s1] to the steps inside the camera's view wedge, with
+ * WALL_CLIP_FOV_MARGIN to spare at its edges, as the walls (wall_clip.h).
+ * Why: the view rectangle (view_cull.h) is a box round the whole wedge, 12000 across ahead, but
+ * a trail just in front of you is only in view for as far to the side as it is ahead. Cut into
+ * pieces first and dropped by the clip after, the rest cost most of the frame with long trails
+ * side by side (2026-11-01: 4 trails, 35-50%, the frame rate down to 30). Now they're never cut.
+ * Seen from the camera, a point q (from the eye) is forward = q . F ahead and side = q . R to the
+ * side (F the camera's forward, R square to it, both x1024). It's inside one edge of the wedge
+ * while forward x width / 16 - side + margin >= 0, and the other with + side. Along a straight
+ * segment q = from - eye + u * s (u: one step along it), so each is a straight-line test in s
+ */
+static int keep_in_view(world_point from, world_point to, const wall_clip_camera *camera, int *s0, int *s1)
+{
+	const int fx = camera->forward_x;
+	const int fy = camera->forward_y;
+	const int qx = from.x - camera->eye.x;
+	const int qy = from.y - camera->eye.y;
+	const int ux = to.x > from.x ? 1 : to.x < from.x ? -1 : 0;
+	const int uy = to.y > from.y ? 1 : to.y < from.y ? -1 : 0;
+	const int margin = WALL_CLIP_FOV_MARGIN << 10; // x1024, as forward and side
+	// At s = 0 (from), and the change per step. forward x width fits an int: under 2^26 x 20
+	const int ahead_a = ((qx * fx + qy * fy) * camera->view_width) >> 4;
+	const int ahead_b = ((ux * fx + uy * fy) * camera->view_width) >> 4;
+	const int side_a = qy * fx - qx * fy;
+	const int side_b = uy * fx - ux * fy;
+
+	if (ux != 0 && uy != 0)
+		return 1; // diagonal (only the debug zig-zag's head): left whole
+	// >> 4 rounds each down, by under a unit x1024: far less than the margin
+	return keep_where(ahead_a - side_a + margin, ahead_b - side_b, s0, s1) &&
+		   keep_where(ahead_a + side_a + margin, ahead_b + side_b, s0, s1);
+}
+
 static int add_segment(world_point from, world_point to, world_point focus, const world_rect *view,
-					   const trail_occluders *occluders, trail_column *out, int count, int max_columns)
+					   const trail_occluders *occluders, const wall_clip_camera *camera, trail_column *out, int count,
+					   int max_columns)
 {
 	const int length = max_int(abs_int(to.x - from.x), abs_int(to.y - from.y));
 	const int f = focus_step(from, to, focus);
@@ -153,6 +212,8 @@ static int add_segment(world_point from, world_point to, world_point focus, cons
 		return count;
 	if (!clip_axis(from.x, to.x - from.x, length, view->x_min, view->x_max, &s0, &s1) ||
 		!clip_axis(from.y, to.y - from.y, length, view->y_min, view->y_max, &s0, &s1))
+		return count;
+	if (camera && !keep_in_view(from, to, camera, &s0, &s1))
 		return count;
 
 	// Each part not hidden behind a nearer trail is its own strip. The pieces stay on the same
@@ -204,13 +265,14 @@ int trail_clip_columns(const trail_column *columns, int count, const wall_clip_c
 }
 
 int trail_build_columns(const trail *t, int head_gap, world_point focus, const world_rect *view,
-						const trail_occluders *occluders, trail_column *out, int max_columns)
+						const trail_occluders *occluders, const wall_clip_camera *camera, trail_column *out,
+						int max_columns)
 {
 	world_point from, to;
 	int count = 0;
 
 	for (int i = trail_segment_count(t) - 1; i >= 0; --i) // newest first
 		if (trail_get_segment(t, i, head_gap, &from, &to))
-			count = add_segment(from, to, focus, view, occluders, out, count, max_columns);
+			count = add_segment(from, to, focus, view, occluders, camera, out, count, max_columns);
 	return count;
 }

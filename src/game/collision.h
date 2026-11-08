@@ -5,7 +5,7 @@
 #include "trail.h"
 
 /*
- * What stops a cycle: the arena edge and light cycle trails. Pure C, unit-tested on the PC.
+ * What stops a cycle: the arena edge, the blocks inside it (arena.h) and light cycle trails. Pure C, unit-tested on the PC.
  *
  * Asked before the cycle moves: "it wants to go `distance` this frame; how far can it go?"
  * The answer is distance if nothing is in the way, or less if it would run into something.
@@ -50,5 +50,13 @@ int collision_edge(world_point from, int heading, int distance, int limit);
 // when there are none). A result less than distance is a crash.
 int collision_free_distance(world_point from, int heading, int distance, int limit,
 							const trail *const *trails, int trail_count);
+
+// The same for the blocks standing inside the arena (arena.h's layout), each fattened by the
+// walls' clearance (ARENA_WALL_CLEARANCE) as a trail is by its own
+int collision_blocks(world_point from, int heading, int distance, const world_rect *blocks, int count);
+
+// Everything in the arena as it is now: its walls (arena_player_limit), its blocks and the trails.
+// What a bounded cycle runs into, and what a bot asks about
+int collision_arena(world_point from, int heading, int distance, const trail *const *trails, int trail_count);
 
 #endif

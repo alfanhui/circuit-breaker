@@ -1,0 +1,42 @@
+# The camera's flight down into the cycle once the loop's broken (game/arrival_flight.h): from the
+# stands up to an overview of the arena as its walls rise out of the floor, and down behind the
+# cycle into 1st person, in 3 s. The cycle starts at the arena's centre, facing north, wherever
+# the message had got to. Shots every ~0.25 s through it, then play.
+wait_boot # the opening flight is up
+start_intro # the opening flight, from wherever the game boots (run.sh)
+# Hurry it to x3: it lands in about 3 s
+press b
+wait 3.5
+wait 2
+press left
+wait 0.6
+press left
+wait 0.6
+press left
+shot arrive_00
+wait 0.12
+shot arrive_01
+wait 0.12
+shot arrive_02
+wait 0.12
+shot arrive_03
+wait 0.12
+shot arrive_04
+wait 0.12
+shot arrive_05
+wait 0.12
+shot arrive_06
+wait 0.12
+shot arrive_07
+wait 0.12
+shot arrive_08
+wait 0.12
+shot arrive_09
+wait 0.12
+shot arrive_10
+wait 0.12
+shot arrive_11
+wait 0.5
+shot arrive_landed
+wait 1.5
+shot arrive_riding

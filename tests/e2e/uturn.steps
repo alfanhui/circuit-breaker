@@ -1,7 +1,9 @@
 # U-turn by double tap (turn_gate.h): the second turn waits for a cycle-width gap, so the cycle
 # comes back alongside its own trail 50+ units away. 1st person shots while the camera swings
 # round and while running beside the trail: the trail should look solid, nothing showing past it.
-wait 17
+wait_boot # the opening flight is up
+skip_prologue # straight to play, the cycle at its start
+wait 1.4
 press c 3
 wait 3
 press left

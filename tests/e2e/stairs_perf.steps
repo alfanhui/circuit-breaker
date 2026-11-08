@@ -1,0 +1,33 @@
+# The grey box's frame rate, stood still at points up the stairs (booted on foot: BOOT_ON_FOOT 1).
+# The debug line's fps and cpu are one-second averages, so each stop waits 2.5 s before its shot:
+# the figures are for that view alone. A run up first (over the crate, to just short of the
+# stairs), then short walks of ~100 between stops: the stairs' foot, up them, the platform facing
+# the tower. Read each shot's first line (fps, cpu, pk) and third (where you stand: out is x less
+# the corridor's wall, 8000; the stairs are out 3360-3600)
+# Film it: tests\e2e\run_e2e.ps1 -Steps stairs_perf.steps
+wait_up
+wait 2.5
+shot sp_00_start
+keydown up
+wait 5.8
+keyup up
+wait 2.5
+shot sp_01_stairs_foot
+hold up 0.6
+wait 2.5
+shot sp_02_stairs_low
+hold up 0.6
+wait 2.5
+shot sp_03_stairs_mid
+hold up 0.6
+wait 2.5
+shot sp_04_stairs_high
+hold up 0.6
+wait 2.5
+shot sp_05_platform
+hold up 0.6
+wait 2.5
+shot sp_06_platform_mid
+hold up 0.6
+wait 2.5
+shot sp_07_platform_end
