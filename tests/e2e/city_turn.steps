@@ -1,9 +1,18 @@
-# Out onto the city's entry (as city.steps), then a full turn on the spot in eighths: looking back
-# at the corridor, and the sky and the ground as you turn (the user's artefacts 3 and 4).
+# Out of the corridor (as city.steps), then a full turn on the spot in eighths: looking back at the
+# corridor, and the sky and the ground as you turn (the user's artefacts 3 and 4).
 # Film it: tests\e2e\run_e2e.ps1 -Steps city_turn.steps
+# Out of the corridor into Work RAM's city (game/city.h), booted on foot. The route (2026-11-08,
+# after the parkour moves): a run up the left half, over the crate and up the stairs, over the
+# platform onto the low roof (64), stopped by the tower. A strafe left (south, +y) pushes off the
+# low roof's edge onto the floor of the corridor's right half. Then on, out of the corridor's open
+# end onto the entry tower's roof (level with the floor): the city below.
+# Each stage ends against something (the tower, the right half's floor), so it doesn't hang on timing.
 wait_up
-hold up 13
-hold l 3
+keydown up
+wait 8.5
+keyup up
+hold l 2.2
+wait 0.3
 keydown up
 wait 1.8
 keyup up

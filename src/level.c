@@ -118,6 +118,15 @@ void load_arena_textures(void)
 	low_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL_LO.TGA", JO_COLOR_Transparent);
 	high_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL_HI.TGA", JO_COLOR_Transparent);
 	base_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALLBASE.TGA", JO_COLOR_Transparent);
+	// A wall piece right beside the camera reaches far off the screen, past jo-engine 2026's guard
+	// band (512 pixels out: SGL's limit, and wall_clip's, was VDP1's 1023). jo then cuts the
+	// polygon, and VDP1 stretched the whole texture over the cut shape: the near wall's lines
+	// slanted the wrong way and fanned out (2026-11-08). With tiles of the texture, jo cuts such a
+	// polygon into parts each with its own piece of it. Only those polygons (_near_only): the rest
+	// are drawn whole, as before. The tiles are copies of the texture: ~60 KB more of VDP1 RAM
+	jo_3d_set_texture_subdivision_near_only(low_texture_id);
+	jo_3d_set_texture_subdivision_near_only(high_texture_id);
+	jo_3d_set_texture_subdivision_near_only(base_texture_id);
 }
 
 static void init_attributes(jo_3d_polygon_attribute *attributes, int texture_id)
@@ -2405,8 +2414,39 @@ static int level_deepest(const level_mesh *m, int first, int last)
 }
 
 /*
- * The chain's first polygon (slot 0, kept for it): a quad with all four corners on one point, the
- * floor's deepest (a dot; drawn first, and the floor drawn over it), sorted JO_3D_SORT_MAX. Every other
+ * A point added to mesh m straight ahead of the camera, as deep as its point `deepest`: in the middle
+ * of the screen across, so jo always draws it. (The deepest point itself is usually on an edge the floor
+ * was cut to: the view's sides are a little wider than the screen (frustum.h), and a dot there was
+ * off the screen to jo, which then skipped it. The chain had no key of its own and took the one
+ * before it in the slave's list, the nearest there is: facing across the corridor, the floor was
+ * drawn over the grey boxes and the map. Play-test 2026-11-08, tests/e2e/floor_chain.steps)
+ * The depth is the same dot product as level_deepest's, x FRUSTUM_ONE; the camera's forward is
+ * FRUSTUM_ONE long too, so the point is eye + forward x depth / FRUSTUM_ONE^2: two shifts by 10
+ * (FRUSTUM_ONE is 1024), no division. Without room for one more point, the deepest itself
+ */
+static int level_ahead(level_mesh *m, int deepest)
+{
+	const frustum *v = &level_view;
+	const int depth = ((jo_fixed2int(m->points[deepest].x) - v->eye.x) * v->forward[0] +
+					   (jo_fixed2int(m->points[deepest].y) - v->eye.y) * v->forward[1] +
+					   (jo_fixed2int(m->points[deepest].z) - v->eye.z) * v->forward[2]) >> 10; // world units
+	jo_pos3D_fixed *p;
+
+	if (m->point_count >= m->points_max)
+		return deepest;
+	p = &m->points[m->point_count];
+	p->x = jo_int2fixed(v->eye.x + ((v->forward[0] * depth) >> 10));
+	p->y = jo_int2fixed(v->eye.y + ((v->forward[1] * depth) >> 10));
+	// At the deepest point's height (the floor's), not the eye's: the floor's drawn over it there, as it
+	// was over the deepest point (the dot is black; in the middle of the sky it showed). Looking down
+	// or up, that moves it a little nearer or further than `depth`: forward[2] x the height between
+	p->z = m->points[deepest].z;
+	return m->point_count++;
+}
+
+/*
+ * The chain's first polygon (slot 0, kept for it): a quad with all four corners on one point, as deep
+ * as the floor's deepest (a dot; drawn first, and the floor drawn over it), sorted JO_3D_SORT_MAX. Every other
  * polygon of the floor is JO_3D_SORT_PREVIOUS, drawn straight after it in the order they were added: so the
  * whole floor's drawn at its deepest point's depth, behind everything stood on it, the tiles on the
  * far glass and the outlines on the tiles. Chained off a tile instead (one moved to the front), its
@@ -2591,9 +2631,9 @@ static void draw_glass_floor(const corridor *passage)
 	if (glass_out.point_count == 0)
 		return; // none of the floor's on the screen
 	// The deepest point of the far glass, or with none on the screen (near the corridor's end,
-	// looking at it), of the tiles: the chain's first
-	glass_anchor(&glass_out, tiles_from > 0 ? level_deepest(&glass_out, 0, tiles_from)
-											: level_deepest(&glass_out, 0, glass_out.point_count));
+	// looking at it), of the tiles: the chain's first, put straight ahead of the camera at that depth
+	glass_anchor(&glass_out, level_ahead(&glass_out, tiles_from > 0 ? level_deepest(&glass_out, 0, tiles_from)
+																	 : level_deepest(&glass_out, 0, glass_out.point_count)));
 	corridor_mesh.data.point_count = (unsigned short)glass_out.point_count;
 	corridor_mesh.data.polygon_count = (unsigned short)glass_out.quad_count;
 	slave_draw_mesh(&corridor_mesh); // the slave draws it (slave_draw.h)

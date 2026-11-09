@@ -205,6 +205,40 @@ static int wall_at(const walker_area *a, int x, int y, int feet, int top, int he
 	return blocked_by(a, x, y, feet, top, head).count > 0;
 }
 
+// How far a point is inside a roof's edges grown by `margin`: its distance from the nearest of
+// them, more than 0 inside, 0 or less outside
+static int depth_in(const world_rect *r, int x, int y, int margin)
+{
+	int d = x - (r->x_min - margin);
+
+	d = (r->x_max + margin) - x < d ? (r->x_max + margin) - x : d;
+	d = y - (r->y_min - margin) < d ? y - (r->y_min - margin) : d;
+	return (r->y_max + margin) - y < d ? (r->y_max + margin) - y : d;
+}
+
+/*
+ * A step from (from_x, from_y) to (x, y): whether a wall's in the way, as wall_at, but a wall you're
+ * already nearer than its margin only stops a step that takes you further in. A landing can leave
+ * you there (off a vault, 29 from the corridor's side; off the tall box onto the lower roof, 34 from
+ * its side: WALKER_RADIUS is 40). Testing only where you'd be, every step was then into the wall,
+ * stepping away too: stuck in the corner for good (play-test 2026-11-08). Now you walk out of it
+ */
+static int wall_in_way(const walker_area *a, int from_x, int from_y, int x, int y, int feet, int top, int head)
+{
+	const int waist = feet + WALKER_WAIST;
+
+	for (int i = 0; i < a->count; ++i)
+	{
+		const int margin = a->heights[i] > waist || a->bottoms[i] > feet ? WALKER_RADIUS : WALKER_FOOT;
+		const int deeper = depth_in(&a->rects[i], x, y, margin);
+
+		if (a->heights[i] > top && a->bottoms[i] < head && deeper >= 0 &&
+			deeper > depth_in(&a->rects[i], from_x, from_y, margin))
+			return 1;
+	}
+	return 0;
+}
+
 // Whether anything's solid at a point between `feet` and `head` (no margin): in the air, what
 // you'd go into the side of
 static int solid_at(const walker_area *a, int x, int y, int feet, int head)
@@ -282,7 +316,7 @@ static int step_axis(walker *w, const walker_area *area, int x, int y, int rise)
 	const int top = feet + rise; // the highest you can step up to
 	int under, to;
 
-	if (wall_at(area, x, y, feet, top, feet + head_room(w)))
+	if (wall_in_way(area, w->x >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, x, y, feet, top, feet + head_room(w)))
 		return 0;
 	under = roof_at(area, x, y, top);
 	if (under < 0 || area->heights[under] < feet - WALKER_STEP_UP)

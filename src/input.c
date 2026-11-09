@@ -17,8 +17,8 @@
 #define BOOT_ROUND 0
 // 1: the game boots stood up in the corridor behind round 5's flicker, as if you'd just got up
 // after the designed crash (boot_on_foot): for working on Work RAM without riding there first.
-// The arena's films build with 0 (tests/e2e/film_round.ps1); the corridor's with 1 (run_e2e.ps1
-// -OnFoot)
+// Films don't depend on it: tests/e2e/run_e2e.ps1 builds with whichever a film needs (wait_boot:
+// the arena, 0; wait_up: the corridor, 1) and puts it back afterwards
 #define BOOT_ON_FOOT 1
 
 rider player1;

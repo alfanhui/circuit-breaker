@@ -62,6 +62,42 @@
 #define FLOOR_TEXELS 256
 #define FLOOR_TILE_UNITS 125
 #define FLOOR_SCALE ((FLOOR_TILE_UNITS << 16) / FLOOR_TEXELS) // jo_fixed 16.16: world units per texel
+
+/*
+ * The floor's matrix, for VDP2 (jo-engine 2026). jo turns it into VDP2's rotation parameters:
+ * entries A-F of its matrix are 4 x the texels per matrix unit (jo's vdp2.c,
+ * jo_vdp2_set_rotation_matrix), and VDP2 keeps only a sign, 3 integer bits and 10 bits of
+ * fraction of each: under 8, or it wraps. Under SGL the floor was drawn in the world's matrix, at
+ * 1/VIEW_WORLD_SCALE size: 2.048 texels a world unit made 32.8 texels a matrix unit, and on jo
+ * that wrapped, a floor ~10 times too big that changed with the view (2026-11-08).
+ * So the floor has the world at 17/16 its size round the camera instead: 2.048 / (17/16) = 1.93
+ * texels a matrix unit, 7.7 in VDP2's entries. VIEW_WORLD_SCALE is only
+ * for VDP1's depths (view.c).
+ * Not larger either: the bigger the world in the matrix, the deeper the floor in it, and jo looks
+ * up the floor's zoom with depth (VDP2's coefficient table, 128 / address): far off, a big zoom
+ * comes in coarse steps, and whole bands of rows jumped. Seen from the opening flight's heights
+ * (thousands of units away) the grid broke into dashes. So drawn larger (view_floor_shift, its
+ * texels bigger), the world's shrunk by as much: the texels a matrix unit stay 1.93, the depths
+ * get smaller. Then there's the limit on its position:
+ */
+#define FLOOR_VIEW_SCALE ((JO_FIXED_1 * VIEW_WORLD_SCALE * 17) >> 4) // x 4.25: the world's 1/4 undone, x 17/16
+/*
+ * ...where the camera is, in texels: VDP2 keeps 13 integer bits (under 8192 texels, 4000 world
+ * units), and the arena's 28000 across. The grid repeats every tile, so only the camera's place
+ * within some whole number of tiles matters: FLOOR_WRAP, 16 of them (2000 units, ~3900 texels)
+ */
+#define FLOOR_WRAP (16 * FLOOR_TILE_UNITS)
+
+// v within the grid's repeat: 0 to FLOOR_WRAP. By subtraction, not %: the arena's at most ~15
+// repeats across, so a few steps a frame, and no division (CLAUDE.md)
+static int floor_wrap(int v)
+{
+	while (v >= FLOOR_WRAP)
+		v -= FLOOR_WRAP;
+	while (v < 0)
+		v += FLOOR_WRAP;
+	return v;
+}
 // (Spectating, it's drawn larger: view_floor_shift, view.c)
 #define PLAYER_HALF 25
 #define CYCLE_RADIUS 36 // centre to a corner of the cube, across the floor: 25 x sqrt(2)
@@ -80,6 +116,7 @@ short draw_distance = 30000 / VIEW_WORLD_SCALE;
 
 int hud1_texture_id = 0;
 int plane1_texture_id = 0;
+static int plane1_palette_id = 0; // WALL1.TGA is 8-bit: the palette it loaded with (load_textures)
 
 bool enable_trails = true;
 
@@ -568,12 +605,10 @@ void draw_3d(void)
 		return;
 	}
 
-	jo_3d_camera_look_at(&cam);
-
-	//HUD
-	//draw_hud();
-
-	// SKY: scrolls with the heading, outside the world matrix
+	// SKY: scrolls with the heading, outside the world matrix. Before the camera's matrix: jo
+	// starts each frame with none (the identity), as in jo's own plane sample. After it, on
+	// jo-engine 2026 the sky came out wholly transparent: the camera looks along -z, and jo takes
+	// the sky's depth from that matrix (jo's vdp2.c, jo_vdp2_set_rotation_matrix)
 	if (SHOW_SKY)
 	{
 		jo_3d_push_matrix();
@@ -586,6 +621,11 @@ void draw_3d(void)
 		}
 		jo_3d_pop_matrix();
 	}
+
+	jo_3d_camera_look_at(&cam);
+
+	//HUD
+	//draw_hud();
 
 	// What the camera can see this frame: walls and trails outside it aren't sent to SGL.
 	// Walls are seen across the whole arena; trails only nearby
@@ -615,12 +655,21 @@ void draw_3d(void)
 		//  FLOOR
 		jo_3d_push_matrix();
 		{
-			const jo_fixed floor_scale = FLOOR_SCALE << view_floor_shift;
-
 			floor_frc = jo_time_get_frc(); // the debug line's "gr" (utils/perf.h): the grid
-			// On foot, far down: the ground under Work RAM's city (view.h)
-			jo_3d_translate_matrix_fixed(JO_FIXED_0, JO_FIXED_0, jo_int2fixed(view_ground_height()));
-			matrix_scale(floor_scale, floor_scale, JO_FIXED_1); // only x and y: the plane is flat
+			// The world's matrix (view.c) is the camera's turn, the world at 1/VIEW_WORLD_SCALE, and
+			// the camera's position. The floor undoes the last two and does them again its own way
+			// (FLOOR_VIEW_SCALE): the position back, the world 17/16 its size round the camera
+			// (the picture doesn't change: VIEW_WORLD_SCALE's own trick), then the camera's place
+			// within the grid's repeat (floor_wrap). On foot, far down: the ground under Work
+			// RAM's city (view.h)
+			jo_3d_translate_matrix(view_x, view_y, -view_z);
+			// (Drawn larger, the floor's texels are bigger: the world's shrunk by as much, and the
+			// texels a matrix unit stay the same. FLOOR_VIEW_SCALE says why)
+			matrix_scale(FLOOR_VIEW_SCALE >> view_floor_shift, FLOOR_VIEW_SCALE >> view_floor_shift,
+						 FLOOR_VIEW_SCALE >> view_floor_shift);
+			jo_3d_translate_matrix(-floor_wrap(view_x), -floor_wrap(view_y), view_z + view_ground_height());
+			// Then the floor's texels in world units. Spectating, it's drawn larger (view_floor_shift)
+			matrix_scale(FLOOR_SCALE << view_floor_shift, FLOOR_SCALE << view_floor_shift, JO_FIXED_1);
 			jo_background_3d_plane_a_draw(true);
 			perf_part_add(PERF_GRID, floor_frc);
 		}
@@ -815,15 +864,27 @@ void load_player_model(void)
 	static_mesh_init(&cube, cube_points, 12, cube_polygons, cube_attributes, 7);
 	polygon = static_mesh_add_quad(&cube, anchor);
 	if (polygon >= 0)
+	{
 		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon); // sorted by its centre (JO_3D_SORT_CENTER)
+		cube_attributes[polygon].color = (unsigned short)JO_MULT_BY_256(plane1_palette_id);
+	}
 	for (int i = 0; i < 6; ++i)
 	{
-		polygon = static_mesh_add_quad(&cube, &faces[i * 4]);
+		// Corners the other way round: jo-engine 2026 tells a single-sided face's front by its
+		// winding on screen (clockwise, jo's 3d.c), where SGL used the normal. As listed
+		// (JO_3D_CUBE_CUSTOM_VERTICES) each face's outside is anticlockwise: jo hid the outsides
+		// and drew the far faces' insides, a dark, broken cube
+		const jo_vertice face[4] = {faces[i * 4 + 3], faces[i * 4 + 2], faces[i * 4 + 1], faces[i * 4]};
+
+		polygon = static_mesh_add_quad(&cube, face);
 		if (polygon < 0)
 			continue;
 		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
-		set_outward_normal(&cube_polygons[polygon], &faces[i * 4]);
+		set_outward_normal(&cube_polygons[polygon], face);
 		cube_attributes[polygon].plane = JO_3D_SINGLE_PLANE;
+		// Its own palette: jo's texture setter takes the 8-bit sprites' current one
+		// (jo_sprite_set_palette), which isn't WALL1.TGA's
+		cube_attributes[polygon].color = (unsigned short)JO_MULT_BY_256(plane1_palette_id);
 		// The texture setter wrote JO_3D_SORT_CENTER into the low 2 bits: swap it for JO_3D_SORT_PREVIOUS
 		cube_attributes[polygon].sort = (cube_attributes[polygon].sort & ~3) | JO_3D_SORT_PREVIOUS;
 	}
@@ -885,6 +946,7 @@ void load_textures(void)
 {
 	// FLOOR.TGA is only used by the VDP2 floor (init_3d_planes); as a VDP1 sprite it would waste 64 KB
 	plane1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "WALL1.TGA", JO_COLOR_Transparent); // spirit 6
+	plane1_palette_id = image_pal.id; // my_tga_palette_handling made it a palette of its own
 	hud1_texture_id = jo_sprite_add_tga(JO_ROOT_DIR, "HUD.TGA", JO_COLOR_Black);		   // spirit 7
 }
 

@@ -220,6 +220,37 @@ static void walls_stop_you_and_you_slide(void)
 	CHECK(!walker_area_add(&area, 0, 0, 1000, 1000));
 }
 
+// Left nearer a wall than WALKER_RADIUS (a landing can do it: the probe found 29 and 34 off one),
+// you can walk away from it and along it, but no further into it. Before, every step was into the
+// wall, walking away too, and you were stuck (play-test 2026-11-08: the corner of two grey walls)
+static void nearer_a_wall_than_its_margin_you_walk_out(void)
+{
+	walker_area area;
+	walker w;
+	world_point at = {0, -1000 + 30}; // 30 off the north wall's face (y = -1000)
+
+	room(&area);
+	// Away (south, +y: facing south is half a turn)
+	walker_init(&w, at, 0x8000);
+	run(&w, pad(0, 1, 0), &area, 30);
+	CHECK(walker_position(&w).y > -1000 + WALKER_RADIUS);
+	// Along it (east, -x: a quarter turn right): it slides along, the same 30 off
+	walker_init(&w, at, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 30);
+	CHECK(walker_position(&w).x < -50);
+	CHECK_EQ(-1000 + 30, walker_position(&w).y);
+	// Into it (north): no nearer
+	walker_init(&w, at, 0);
+	run(&w, pad(0, 1, 0), &area, 30);
+	CHECK_EQ(-1000 + 30, walker_position(&w).y);
+	// And in the corner (30 off the north wall and 30 off the east one at x = -500), out on the diagonal
+	at.x = -500 + 30;
+	walker_init(&w, at, 0xA000); // south-west: away from both
+	run(&w, pad(0, 1, 0), &area, 30);
+	CHECK(walker_position(&w).y > -1000 + WALKER_RADIUS);
+	CHECK(walker_position(&w).x > -500 + WALKER_RADIUS);
+}
+
 // The face buttons: the left column left, the right right, the top row up, the bottom down; two
 // in a column level out
 static void the_face_buttons_turn_the_head(void)
@@ -856,6 +887,7 @@ void run_walker_tests(void)
 	RUN(turning_speeds_up_and_stops_dead);
 	RUN(a_quarter_turn_takes_half_a_second);
 	RUN(walls_stop_you_and_you_slide);
+	RUN(nearer_a_wall_than_its_margin_you_walk_out);
 	RUN(the_face_buttons_turn_the_head);
 	RUN(the_eye_bobs_walking);
 }

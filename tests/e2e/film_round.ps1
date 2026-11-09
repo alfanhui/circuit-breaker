@@ -29,7 +29,12 @@ $was_on_foot = if ([System.IO.File]::ReadAllText($input_c) -match "(?m)^#define 
 function Build
 {
 	Push-Location $project
-	try { cmd /c "scripts\compile.bat" | Select-String -Pattern " error" } finally { Pop-Location }
+	# (stderr joined inside cmd: under "Stop", a compiler warning on PowerShell's stderr ended the script)
+	# A failed build leaves the old game.iso, and the film then runs on it: stop instead (run_e2e.ps1)
+	$started = Get-Date
+	try { cmd /c "scripts\compile.bat 2>&1" | Select-String -Pattern ": error|\*\*\*" } finally { Pop-Location }
+	if (-not (Test-Path "$project\game.iso") -or (Get-Item "$project\game.iso").LastWriteTime -lt $started)
+	{ throw "The build failed: game.iso wasn't made again (open in an emulator?)" }
 }
 
 Set-BootRound ($Round - 1) 0

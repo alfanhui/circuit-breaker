@@ -1,0 +1,37 @@
+# The glass floor's chain (level.c's glass_anchor): every tile is sorted JO_3D_SORT_PREVIOUS behind
+# one dot at the floor's deepest point. A tile jo cuts into parts near the camera moved the chain's
+# key to its nearest corner, and the rest of the floor was then drawn over the grey boxes and the
+# map (fixed in jo: the parts of a chained polygon keep the chain's key).
+# Booted facing west at (9300, -250): a little way west, turned left (south), and walked slowly
+# up to the grey box there (play-test 2026-11-08 at 8588, 162 facing south), a shot every step.
+# Film it with tests\e2e\run_e2e.ps1 -Steps floor_chain.steps (built with BOOT_ON_FOOT 1)
+wait_up # booted on foot in the corridor (BOOT_ON_FOOT): no ride there
+hold up 0.9
+wait 0.4
+hold left 0.7
+wait 0.4
+shot fc_00_south
+hold up 0.25
+wait 0.3
+shot fc_01
+hold up 0.25
+wait 0.3
+shot fc_02
+hold up 0.25
+wait 0.3
+shot fc_03
+hold up 0.25
+wait 0.3
+shot fc_04
+hold up 0.25
+wait 0.3
+shot fc_05
+hold up 0.25
+wait 0.3
+shot fc_06
+hold up 0.25
+wait 0.3
+shot fc_07
+hold up 0.25
+wait 0.3
+shot fc_08

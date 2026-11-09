@@ -1,0 +1,50 @@
+# After the designed crash (game/breach.h), on foot: does play stay at 60 fps once you've come
+# through the hole, as in a real game (booted on foot it does)? Round 5, ride west into the flicker
+# (as breach.steps), the skid to a stop, then up and walking on west, out to the city, a shot every 0.8 s, and
+# turned north and south there (the play-test went to 30 fps here: 10111 61, 10758 2499).
+# Film it with tests\e2e\film_round.ps1 -Round 5 -Steps breach_walk.steps
+wait_boot
+skip_prologue
+press start
+press z
+press start
+wait 0.5
+# Left: face west. C x6: cruise 7 -> 13
+press left
+press c 6
+wait 5
+wait 13
+shot bw_00_lying
+hold up 1
+wait 0.3
+shot bw_01_up
+hold up 0.8
+shot bw_02
+hold up 0.8
+shot bw_03
+hold up 0.8
+shot bw_04
+hold up 0.8
+shot bw_05
+hold up 0.8
+shot bw_06
+hold up 0.8
+shot bw_07
+hold up 0.8
+shot bw_08
+hold up 0.8
+shot bw_09
+hold up 0.8
+shot bw_10
+hold up 0.8
+shot bw_11
+hold right 0.7
+wait 0.3
+shot bw_12_north
+hold up 0.6
+shot bw_13
+hold up 0.6
+shot bw_14
+hold left 1.4
+wait 0.3
+shot bw_15_south
