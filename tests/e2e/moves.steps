@@ -1,0 +1,38 @@
+# The moves with hands (game/body.h): from where you get up, run at the rail (vault: the right hand
+# comes up into view), slide under the duct, then across to the ledge and run at it (climb: both
+# hands on its edge as your eye comes up past it)
+wait_up
+keydown up
+wait 0.7
+shot moves_vault_0
+shot moves_vault_1
+shot moves_vault_2
+shot moves_vault_3
+shot moves_vault_4
+shot moves_vault_5
+shot moves_vault_6
+shot moves_vault_7
+shot moves_vault_8
+shot moves_vault_9
+wait 0.6
+keyup up
+wait 0.5
+shot moves_after_slide
+hold l 2.8
+wait 0.3
+shot moves_before_ledge
+keydown up
+wait 0.15
+shot moves_climb_0
+shot moves_climb_1
+shot moves_climb_2
+shot moves_climb_3
+shot moves_climb_4
+shot moves_climb_5
+shot moves_climb_6
+shot moves_climb_7
+shot moves_climb_8
+shot moves_climb_9
+keyup up
+wait 0.5
+shot moves_on_ledge

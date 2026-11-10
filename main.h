@@ -42,7 +42,7 @@ extern short draw_distance;
 
 void initCamera(jo_camera *curCam);
 void debug_3d(bool show);
-void draw_cycle(world_point position);
+void draw_cycle(world_point position, int heading, jo_color colour, bool running);
 void draw_hud(void);
 void draw_3d(void);
 jo_palette *my_tga_palette_handling(void);

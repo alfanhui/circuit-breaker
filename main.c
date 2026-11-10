@@ -171,12 +171,18 @@ static int burst_y;
 static trail_occluders occluders;
 
 //Third person
-// Cycle: one 8 point mesh drawn with a single slPutPolygon. 7 polygons: an anchor inside, then
-// the 6 faces (load_player_model)
-static jo_pos3D_fixed cube_points[12];
-static jo_3d_polygon cube_polygons[7];
-static jo_3d_polygon_attribute cube_attributes[7];
-static static_mesh cube;
+// A cycle: one model for every rider (load_player_model has its shape), 10 points and 5 polygons
+#define PLAYER_COLOUR JO_COLOR_RGB(0, 220, 255) // the player's trail, and cycle
+// A quarter turn for the model, as jo's matrix turns it (0x4000 is a quarter of 0x10000). Its sign
+// is which way round a heading goes: east is -x (game/world.h)
+#define RIBBON_QUARTER_TURN (-0x4000)
+#define RIBBON_PARTS 4					// the twist's strips
+#define RIBBON_EDGE RIBBON_PARTS		// then the leading edge's line
+#define RIBBON_POINTS ((RIBBON_PARTS + 1) * 2)
+static jo_pos3D_fixed ribbon_points[RIBBON_POINTS];
+static jo_3d_polygon ribbon_polygons[RIBBON_PARTS + 1];
+static jo_3d_polygon_attribute ribbon_attributes[RIBBON_PARTS + 1];
+static jo_3d_mesh ribbon;
 
 void initCamera(jo_camera *curCam)
 {
@@ -800,7 +806,7 @@ void draw_3d(void)
 		// In 1st person the camera is inside it; coming down into it, it's seen until the camera's close
 		if (!first_person || spectating ||
 			(view_arriving() && JO_ABS(view_x - player1.bike.position.x) + JO_ABS(view_y - player1.bike.position.y) > 150))
-			draw_cycle(player1.bike.position);
+			draw_cycle(player1.bike.position, player1.bike.heading, PLAYER_COLOUR, player1.alive);
 		// Where the cycle is on screen, for the burst of light round it (draw_loop_break): SGL
 		// works it out through the camera, so it has to be asked in here. In 1st person the
 		// camera's inside it: the middle of the screen
@@ -825,7 +831,29 @@ void draw_3d(void)
 		for (int i = 0; i < BOT_COUNT_MAX; ++i)
 			if (bots[i].alive &&
 				(!clip || wall_clip_object_visible(clip, bots[i].bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
-				draw_cycle(bots[i].bike.position);
+				draw_cycle(bots[i].bike.position, bots[i].bike.heading, bot_trail_colours[i], true);
+	}
+	// Your body (game/body.h), once you have one (from the crash on): posed once here, then drawn
+	// from your own eyes, and again in the mirror below
+	{
+		static body player_body;
+		static bool had_body = false;
+		body_state doing;
+		int yaw, feet;
+
+		if (!spectating && foot_body_state(&doing, &yaw, &feet))
+		{
+			if (!had_body)
+				body_init(&player_body); // a new one: its first pose is where it is, not eased to
+			had_body = true;
+			level_body_set(&player_body, &doing, yaw, feet);
+			level_body_draw(true);
+		}
+		else
+		{
+			had_body = false;
+			level_body_clear();
+		}
 	}
 	slave_draw_end(); // everything handed to the slave is drawn
 	// The mirror over the hole you broke through (level.h): the corridor again, reflected in it.
@@ -841,9 +869,10 @@ void draw_3d(void)
 			level_mirror_matrix();
 			slave_draw_begin();
 			level_mirror_draw(arena_corridor, &mirrored);
+			level_body_draw(false); // you, in the glass: the same joints your own eyes see
 			slave_draw_end();
 			jo_3d_pop_matrix();
-			level_mirror_end(arena_corridor, clip, player1.bike.position, foot_feet_height(), foot_head_height());
+			level_mirror_end(arena_corridor, clip);
 			perf_part_add(PERF_MIRROR, mirror_frc);
 		}
 	}
@@ -889,79 +918,130 @@ void draw_3d(void)
 	perf_frame_end(); // includes the debug text
 }
 
-// A face of the cube points out along the one axis on which its 4 corners all agree: that
-// value's sign is which way. SGL needs it to tell front faces from back (JO_3D_SINGLE_PLANE)
-static void set_outward_normal(jo_3d_polygon *polygon, const jo_vertice corners[4])
+/*
+ * A cycle isn't a vehicle: it's a CPU process (docs/STORY.md), and it's what writes its trail. So
+ * it's a signal: a ribbon of light that leads with a horizontal edge as wide as the cycle (what
+ * hits a wall is what you see) and twists a quarter turn along its length into the upright edge
+ * its trail starts from. The leading edge rises and falls as it rides, a wave: it goes by how far
+ * the cycle's ridden, so it's quicker the faster you go, still when you stop, and level, a flat
+ * line, once the process is terminated. (A white square pulse stepping along the edge was tried
+ * first: it read as something stuck on. The cube before it was a placeholder; other shapes are in
+ * docs/BACKLOG.md.)
+ *
+ * The shape, in its own space (the cycle's place on the floor at the origin, facing -y, as heading
+ * north): five cross-sections from the front (y = -PLAYER_HALF) to the back (+PLAYER_HALF), each a
+ * line through (0, y, TRAIL_HEIGHT / 2), turned 0, 22.5, 45, 67.5 and 90 degrees from level and a
+ * little longer each time (the width at the front, the trail's height at the back). Four strips
+ * join them.
+ *
+ * One model, built once here. Each rider is the same points moved and turned by the matrix
+ * (draw_cycle): nothing's built per rider or per frame. Only what differs is written before a
+ * draw: the five colours, and how high the front two cross-sections are (the wave)
+ */
+#define RIBBON_MIDDLE (TRAIL_HEIGHT / 2)
+// The wave: the leading edge's height above (or below) the middle, a sine of 16 steps, one step
+// for every 8 units ridden: a whole rise and fall every 128, about 3 a second at cruise and 6 at
+// a full boost (every 64 was a flutter: film 2026-11-10). +-12 of
+// the trail's 60. The next cross-section back moves half as far, so the twist stays smooth, and
+// the rest stay put: the back edge must meet the trail
+#define WAVE_STEPS 16
+#define WAVE_STEP_SHIFT 3
+#define RIBBON_SECOND_UP 9 // the second cross-section's ends: sin(22.5 degrees) x its half length, 26
+static const signed char wave[WAVE_STEPS] = {0, 5, 8, 11, 12, 11, 8, 5, 0, -5, -8, -11, -12, -11, -8, -5};
+
+static void ribbon_flat(jo_3d_polygon_attribute *a, unsigned int kind)
 {
-	polygon->normal.x = JO_FIXED_0;
-	polygon->normal.y = JO_FIXED_0;
-	polygon->normal.z = JO_FIXED_0;
-	if (corners[0].x == corners[1].x && corners[0].x == corners[2].x)
-		polygon->normal.x = corners[0].x > 0 ? JO_FIXED_1 : -JO_FIXED_1;
-	else if (corners[0].y == corners[1].y && corners[0].y == corners[2].y)
-		polygon->normal.y = corners[0].y > 0 ? JO_FIXED_1 : -JO_FIXED_1;
-	else
-		polygon->normal.z = corners[0].z > 0 ? JO_FIXED_1 : -JO_FIXED_1;
+	a->plane = JO_3D_DUAL_PLANE; // seen from both sides: it's a surface, not a solid
+	a->sort = JO_3D_SORT_CENTER | ((kind >> 16) & 0x1c) | JO_3D_NO_OPTION;
+	a->texture_id = JO_3D_NO_TEXTURE;
+	a->draw_mode = (unsigned short)((JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((kind >> 24) & 0xc0));
+	a->color = JO_COLOR_White;
+	a->gouraud_table = 0;
+	a->direction = (unsigned short)(kind & 0x3f);
+}
+
+static void ribbon_polygon(int index, int p0, int p1, int p2, int p3, unsigned int kind)
+{
+	jo_3d_polygon *q = &ribbon_polygons[index];
+
+	q->normal.x = JO_FIXED_0; // unlit
+	q->normal.y = JO_FIXED_0;
+	q->normal.z = JO_FIXED_1;
+	q->vertices[0] = (unsigned short)p0;
+	q->vertices[1] = (unsigned short)p1;
+	q->vertices[2] = (unsigned short)p2;
+	q->vertices[3] = (unsigned short)p3;
+	ribbon_flat(&ribbon_attributes[index], kind);
+}
+
+void load_player_model(void)
+{
+	// Each cross-section's turn from level: cos and sin x1024 (0, 22.5, 45, 67.5, 90 degrees), and
+	// half its length: half the cycle's width at the front, half the trail's height at the back
+	static const short turn[RIBBON_PARTS + 1][2] = {{1024, 0}, {946, 392}, {724, 724}, {392, 946}, {0, 1024}};
+	static const signed char half[RIBBON_PARTS + 1] = {PLAYER_HALF, 26, 28, 29, TRAIL_HEIGHT / 2};
+
+	for (int k = 0; k <= RIBBON_PARTS; ++k)
+	{
+		const int y = -PLAYER_HALF + ((2 * PLAYER_HALF * k) >> 2); // RIBBON_PARTS is 4: a shift
+		const int across = (turn[k][0] * half[k]) >> 10, up = (turn[k][1] * half[k]) >> 10;
+
+		for (int end = 0; end < 2; ++end)
+		{
+			jo_pos3D_fixed *p = &ribbon_points[k * 2 + end];
+			const int sign = end == 0 ? -1 : 1;
+
+			p->x = jo_int2fixed(sign * across);
+			p->y = jo_int2fixed(y);
+			p->z = jo_int2fixed(RIBBON_MIDDLE + sign * up);
+		}
+	}
+	for (int k = 0; k < RIBBON_PARTS; ++k)
+		ribbon_polygon(k, k * 2, k * 2 + 1, k * 2 + 3, k * 2 + 2, JO_VDP1_POLYGON);
+	// The leading edge: a line of light along the front (a VDP1 line: its first two corners)
+	ribbon_polygon(RIBBON_EDGE, 0, 1, 1, 0, JO_VDP1_LINE);
+	ribbon.data.points = ribbon_points;
+	ribbon.data.polygons = ribbon_polygons;
+	ribbon.data.attributes = ribbon_attributes;
+	ribbon.data.point_count = RIBBON_POINTS;
+	ribbon.data.polygon_count = RIBBON_PARTS + 1;
+}
+
+// A rider's colour, a share of the way to white (0 .. 4 quarters): per channel, RGB555, no division
+static jo_color lighter(jo_color colour, int quarters)
+{
+	const int r = colour & 31, g = (colour >> 5) & 31, b = (colour >> 10) & 31;
+
+	return (jo_color)(0x8000 | ((b + (((31 - b) * quarters) >> 2)) << 10) | ((g + (((31 - g) * quarters) >> 2)) << 5) |
+					  (r + (((31 - r) * quarters) >> 2)));
 }
 
 /*
- * The cycle is drawn as one object at one depth: its centre's.
- * VDP1 has no depth buffer, so SGL draws polygons back to front, each judged by its own centre
- * (JO_3D_SORT_CENTER). Judged face by face, the cube's top (50 up) counted as nearer than a trail right
- * beside it on the camera's side, and was drawn over the trail that should hide it.
- * So: first an anchor, a square across the middle of the cube whose centre is the cube's
- * centre, sorted as usual. Then the 6 faces with JO_3D_SORT_PREVIOUS, "where the last polygon was": all
- * drawn just after the anchor, at its depth. The anchor is inside the cube, so its own faces
- * always cover it. With every face at the same depth their order no longer sorts itself out, so
- * the faces are single-sided: back faces are skipped, and the 3 front ones never overlap.
+ * A cycle at position, facing heading (HEADING_NORTH ...), in its rider's colour (its trail's).
+ * The model's turned and moved by the matrix; what's written here is only the colours (the front
+ * strip nearly white, the back one the trail's own colour, so the ribbon runs into its trail) and
+ * the wave: how high the leading edge is, by the position along the way it's going (no counter to
+ * keep). running: false for a terminated process: a flat line, level
  */
-void load_player_model(void)
+void draw_cycle(world_point position, int heading, jo_color colour, bool running)
 {
-	jo_vertice faces[24] = JO_3D_CUBE_CUSTOM_VERTICES(PLAYER_HALF, PLAYER_HALF, PLAYER_HALF);
-	jo_vertice anchor[4] = {
-		{-PLAYER_HALF, -PLAYER_HALF, 0},
-		{PLAYER_HALF, -PLAYER_HALF, 0},
-		{PLAYER_HALF, PLAYER_HALF, 0},
-		{-PLAYER_HALF, PLAYER_HALF, 0},
-	};
-	int polygon;
+	const int along = heading == HEADING_NORTH || heading == HEADING_SOUTH ? position.y : position.x;
+	const int lift = running ? wave[(along >> WAVE_STEP_SHIFT) & (WAVE_STEPS - 1)] : 0;
 
-	static_mesh_init(&cube, cube_points, 12, cube_polygons, cube_attributes, 7);
-	polygon = static_mesh_add_quad(&cube, anchor);
-	if (polygon >= 0)
-	{
-		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon); // sorted by its centre (JO_3D_SORT_CENTER)
-		cube_attributes[polygon].color = (unsigned short)JO_MULT_BY_256(plane1_palette_id);
-	}
-	for (int i = 0; i < 6; ++i)
-	{
-		// Corners the other way round: jo-engine 2026 tells a single-sided face's front by its
-		// winding on screen (clockwise, jo's 3d.c), where SGL used the normal. As listed
-		// (JO_3D_CUBE_CUSTOM_VERTICES) each face's outside is anticlockwise: jo hid the outsides
-		// and drew the far faces' insides, a dark, broken cube
-		const jo_vertice face[4] = {faces[i * 4 + 3], faces[i * 4 + 2], faces[i * 4 + 1], faces[i * 4]};
-
-		polygon = static_mesh_add_quad(&cube, face);
-		if (polygon < 0)
-			continue;
-		jo_3d_set_mesh_polygon_texture(&cube.mesh, plane1_texture_id, polygon);
-		set_outward_normal(&cube_polygons[polygon], face);
-		cube_attributes[polygon].plane = JO_3D_SINGLE_PLANE;
-		// Its own palette: jo's texture setter takes the 8-bit sprites' current one
-		// (jo_sprite_set_palette), which isn't WALL1.TGA's
-		cube_attributes[polygon].color = (unsigned short)JO_MULT_BY_256(plane1_palette_id);
-		// The texture setter wrote JO_3D_SORT_CENTER into the low 2 bits: swap it for JO_3D_SORT_PREVIOUS
-		cube_attributes[polygon].sort = (cube_attributes[polygon].sort & ~3) | JO_3D_SORT_PREVIOUS;
-	}
-}
-
-// A cycle (the cube for now) standing at position
-void draw_cycle(world_point position)
-{
+	for (int k = 0; k < RIBBON_PARTS; ++k)
+		ribbon_attributes[k].color = lighter(colour, 2 - k < 0 ? 0 : 2 - k);
+	ribbon_attributes[RIBBON_EDGE].color = JO_COLOR_White;
+	// The front cross-section (level: both ends at the middle's height) up or down by the wave
+	ribbon_points[0].z = ribbon_points[1].z = jo_int2fixed(RIBBON_MIDDLE + lift);
+	// The next one back (turned 22.5 degrees: its ends 10 below and above the middle) by half
+	ribbon_points[2].z = jo_int2fixed(RIBBON_MIDDLE - RIBBON_SECOND_UP + (lift >> 1));
+	ribbon_points[3].z = jo_int2fixed(RIBBON_MIDDLE + RIBBON_SECOND_UP + (lift >> 1));
 	jo_3d_push_matrix();
 	{
-		jo_3d_translate_matrix(position.x, position.y, PLAYER_HALF);
-		jo_3d_mesh_draw(&cube.mesh);
+		jo_3d_translate_matrix(position.x, position.y, 0);
+		// The model faces north; a quarter turn for each heading on from it
+		angle_rotate_z((jo_angle)(heading * RIBBON_QUARTER_TURN));
+		jo_3d_mesh_draw(&ribbon);
 	}
 	jo_3d_pop_matrix();
 }

@@ -200,6 +200,7 @@ typedef struct
 	unsigned char eye;	   // how high the eye is above your feet: straightening up to WALKER_EYE
 	signed char lag;	   // the eye's lag behind a step up (or down): walker_step_lag
 	unsigned char slide;   // frames left of a slide under a bar (0: not sliding)
+	unsigned char move;	   // WALKER_MOVE_...: the move you're in the middle of (walker_move)
 } walker;
 
 void walker_area_clear(walker_area *a);
@@ -247,6 +248,20 @@ int walker_step_lag(const walker *w);
 
 // Whether you're sliding (under a bar): the eye's low, and the pad doesn't steer
 int walker_sliding(const walker *w);
+
+/*
+ * The move you're in the middle of, for whoever shows it (game/body.h: where your hands go). It
+ * starts the frame the move does: your feet are already on the top's near edge (walker_position,
+ * walker_height: wherever and however high that top is, so nothing here knows a block's size), and
+ * the eye's still below, catching up (walker_step_lag). It ends when you're up, or have landed
+ *   WALKER_MOVE_VAULT  over something low: a hand on its top as you go over (you're in the air)
+ *   WALKER_MOVE_CLIMB  up onto a ledge, or a vault up onto something low: both hands on its edge
+ */
+#define WALKER_MOVE_NONE 0
+#define WALKER_MOVE_VAULT 1
+#define WALKER_MOVE_CLIMB 2
+#define WALKER_MOVE_DONE_LAG 10 // a climb's over once the eye's within this of where it's going
+int walker_move(const walker *w);
 
 // sin(angle) x1024, for an ANGLE: a table of a quarter turn, the rest by symmetry, in between by a
 // straight line. cos is sin a quarter turn on. No division, no floats

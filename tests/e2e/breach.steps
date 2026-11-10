@@ -97,3 +97,14 @@ wait 0.2
 shot breach_47
 wait 2
 shot breach_48_stopped
+# Lying there, you lift a hand and look at it (game/body.h). Then a button: you push up off the floor
+shot breach_49_your_hand
+press a
+wait 0.25
+shot breach_50_rise
+wait 0.3
+shot breach_51_rise
+wait 0.3
+shot breach_52_rise
+wait 0.8
+shot breach_53_up

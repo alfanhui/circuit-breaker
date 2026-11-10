@@ -5,6 +5,7 @@
 #include "game/arrival_flight.h"
 #include "game/walker.h"
 #include "game/target.h"
+#include "game/body.h"
 #include "level.h"
 #include "scene_memory.h"
 #include "sound.h"
@@ -807,10 +808,46 @@ int foot_feet_height(void)
 	return walker_height(&player_feet);
 }
 
-int foot_head_height(void)
+/*
+ * What your body's doing (game/body.h), where it faces and how high its feet are: for main.c to
+ * pose and draw it. false while you've no body: on the cycle, up to the moment it goes down. Then
+ * you're thrown from it, hands out (the fall and the skid), lie where you stop, and get up; on
+ * foot it goes by the walker
+ */
+bool foot_body_state(body_state *s, int *yaw, int *feet)
 {
-	// The head's a little above the eye (WALKER_HEAD to WALKER_EYE)
-	return walker_height(&player_feet) + walker_eye(&player_feet) + (WALKER_HEAD - WALKER_EYE);
+	s->eye = 0; // level_body_set fills it in: the camera's height
+	s->stride = 0;
+	s->speed = 0;
+	*yaw = player1.bike.heading * 0x4000;
+	*feet = 0;
+	switch (arena_breach.phase)
+	{
+	case BREACH_FALL:
+	case BREACH_SKID:
+		s->mode = BODY_BRACE;
+		return true;
+	case BREACH_STOPPED:
+		s->mode = BODY_LIE;
+		return true;
+	case BREACH_RISE:
+		s->mode = BODY_RISE;
+		return true;
+	case BREACH_ON_FOOT:
+		// A move first: a vault over is in the air too, and a climb's a walk on top
+		s->mode = walker_move(&player_feet) == WALKER_MOVE_VAULT   ? BODY_VAULT
+				  : walker_move(&player_feet) == WALKER_MOVE_CLIMB ? BODY_CLIMB
+				  : player_feet.falling							   ? BODY_AIR
+				  : walker_sliding(&player_feet)				   ? BODY_SLIDE
+																   : BODY_MOVING;
+		s->stride = player_feet.stride;
+		s->speed = player_feet.forward;
+		*yaw = player_feet.yaw;
+		*feet = walker_height(&player_feet);
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool foot_target_on_screen(int *screen_x, int *screen_y)

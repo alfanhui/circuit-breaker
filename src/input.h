@@ -3,6 +3,7 @@
 
 #include <jo/jo.h>
 #include "utils/low_level_input.h"
+#include "game/body.h"
 #include "game/rider.h"
 #include "game/game_state.h"
 #include "game/status_message.h"
@@ -64,6 +65,6 @@ bool foot_target_on_screen(int *screen_x, int *screen_y);
 // On foot: how high your feet are (the roof you're on) and the top of your head (lower crouched in a
 // slide): for you in the mirror (level.h)
 int foot_feet_height(void);
-int foot_head_height(void);
+bool foot_body_state(body_state *s, int *yaw, int *feet); // your body: input.c has what
 
 #endif

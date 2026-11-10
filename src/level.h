@@ -7,6 +7,7 @@
 #include "game/wall_clip.h"
 #include "game/wall_flicker.h"
 #include "game/corridor.h"
+#include "game/body.h"
 
 void load_arena_textures(void);
 // The broken glass over the hole behind you, from the disc: loaded in the hidden load at the
@@ -37,16 +38,27 @@ void level_view_begin(const corridor *passage, bool free_camera);
  *     {
  *         push the matrix; level_mirror_matrix();
  *         level_mirror_draw(passage, &mirrored);
- *         pop the matrix; level_mirror_end(passage, clip, you, feet, head);
+ *         level_body_draw(false); // you, in the glass
+ *         pop the matrix; level_mirror_end(passage, clip);
  *     }
  * level_mirror_begin returns false when the glass isn't in view from inside the corridor.
- * level_mirror_end puts the view back, then draws you in the glass (where you stand, your feet's
- * and head's heights) and the glass's streaks of light over it
+ * level_mirror_end puts the view back, then draws the glass's streaks of light over it all
  */
 bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera, wall_clip_camera *mirrored);
 void level_mirror_matrix(void);
 void level_mirror_draw(const corridor *passage, const wall_clip_camera *mirrored);
-void level_mirror_end(const corridor *passage, const wall_clip_camera *camera, world_point you, int feet, int head);
+void level_mirror_end(const corridor *passage, const wall_clip_camera *camera);
+
+/*
+ * You (game/body.h), drawn from the same joints both times: from your own eyes and in the mirror.
+ * Once a frame, after level_view_begin: level_body_set poses the body (state's eye is filled in
+ * here: the camera's height above your feet) and places it in the world, facing yaw (the walker's),
+ * feet at that height; or level_body_clear when there's no body (on the cycle). Then
+ * level_body_draw(true) in the world's matrix (no head: you're in it), and (false) in the mirror's
+ */
+void level_body_set(body *b, body_state *state, int yaw, int feet);
+void level_body_clear(void);
+void level_body_draw(bool own_eyes);
 
 // Call inside view_push_world_matrix(), after the floor and before the walls: the corridor's
 // floor of dark glass hexagons (game/corridor.h), once it's open

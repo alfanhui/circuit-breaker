@@ -113,6 +113,7 @@ void walker_init_at(walker *w, world_point at, int z, int yaw)
 	w->falling = 0;
 	w->lag = 0;
 	w->slide = 0;
+	w->move = WALKER_MOVE_NONE;
 	w->push = 0;
 	w->stagger = 0;
 	w->dip = 0;
@@ -512,6 +513,7 @@ static int vault_over(walker *w, const walker_area *area, int along_x, int sign,
 			w->fall_from = b.top;
 			w->take_off = b.top;
 			w->push = 0;
+			w->move = WALKER_MOVE_VAULT;
 			return 1;
 		}
 	}
@@ -541,6 +543,7 @@ static int climb(walker *w, const walker_area *area, int along_x, int sign, int 
 	if (w->forward > WALKER_FORWARD_SPEED)
 		w->forward = WALKER_FORWARD_SPEED;
 	w->push = 0;
+	w->move = WALKER_MOVE_CLIMB;
 	return 1;
 }
 
@@ -629,6 +632,8 @@ static int run_on(walker *w, const walker_area *area, int along_x, int d)
 			w->x += on;
 		else
 			w->y += on;
+		if (s == 3)
+			w->move = WALKER_MOVE_CLIMB; // a vault up: hands on its edge, as a short climb
 		return 1;
 	}
 	return climb(w, area, along_x, sign, x, y);
@@ -756,6 +761,9 @@ static void ease_eye(walker *w)
 
 		w->lag = (signed char)(w->lag - (step != 0 ? step : 1));
 	}
+	// A move's over once you're down from it (a vault) and the eye's all but caught up (a climb)
+	if (w->move != WALKER_MOVE_NONE && !w->falling && w->lag < WALKER_MOVE_DONE_LAG)
+		w->move = WALKER_MOVE_NONE;
 }
 
 void walker_update(walker *w, walker_controls controls, const walker_area *area)
@@ -903,6 +911,11 @@ int walker_eye(const walker *w)
 int walker_step_lag(const walker *w)
 {
 	return w->lag;
+}
+
+int walker_move(const walker *w)
+{
+	return w->move;
 }
 
 int walker_sliding(const walker *w)

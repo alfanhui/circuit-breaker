@@ -1,4 +1,6 @@
 #include "level.h"
+#include "game/body.h"
+#include "game/walker.h"
 #include "utils/angles.h"
 #include "scene_memory.h"
 #include "game/arena.h"
@@ -1636,7 +1638,6 @@ void level_mirror_matrix(void)
 #define GLASS_PIECES 4
 static jo_3d_polygon_attribute glass_attributes[GLASS_PIECES];
 static bool glass_loaded = false;
-static jo_3d_polygon_attribute figure_attribute; // you, in the mirror (tools/make_figure.py)
 
 void load_corridor_glass(void)
 {
@@ -1656,17 +1657,6 @@ void load_corridor_glass(void)
 		JO_ZERO(glass_attributes[k].draw_mode);
 		JO_ZERO(glass_attributes[k].gouraud_table);
 		glass_attributes[k].plane = JO_3D_DUAL_PLANE;
-		jo_3d_set_mesh_polygon_texture(&setter, id, 0);
-	}
-	{
-		// Magenta round the figure: see-through
-		const int id = jo_sprite_add_tga(JO_ROOT_DIR, "FIGURE.TGA", JO_COLOR_RGB(255, 0, 255));
-
-		setter.data.attributes = &figure_attribute;
-		JO_ZERO(figure_attribute.sort);
-		JO_ZERO(figure_attribute.draw_mode);
-		JO_ZERO(figure_attribute.gouraud_table);
-		figure_attribute.plane = JO_3D_DUAL_PLANE;
 		jo_3d_set_mesh_polygon_texture(&setter, id, 0);
 	}
 	glass_loaded = true;
@@ -2993,60 +2983,277 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 }
 
 /*
- * In the mirror, you: a faceless figure (tools/make_figure.py), stood where your reflection is.
- * You stand at the same across as your eye, so the line from your eye to your reflection runs
- * straight along the corridor: a flat figure across the corridor faces you head on, always, with no
- * turning worked out. As tall as you are now (crouched in a slide, lower). Drawn at its true depth:
- * the reflected floor's chain is keyed at its deepest (glass_anchor), so it's never drawn over it.
- *
- * And the glass itself: two streaks of light across it, half-transparent (VDP1 reads the pixel
+ * The glass itself: two streaks of light across it, half-transparent (VDP1 reads the pixel
  * behind each of theirs: 6 times a plain pixel's cost, but they're thin), just this side of it, so
  * they're drawn over the reflection: it reads as a pane, solid, not a way through
  */
-#define FIGURE_HALF_WIDTH 12 // 24 across: the texture's 32 texels at ~0.8 units each
 #define GLINT_POINTS 24
 #define GLINT_QUADS 12
-static jo_pos3D_fixed figure_points[4];
-static jo_3d_polygon figure_polygon;
-static jo_3d_mesh figure_mesh;
 static jo_pos3D_fixed glint_points[GLINT_POINTS];
 static jo_3d_polygon glint_polygons[GLINT_QUADS];
 static jo_3d_polygon_attribute glint_attributes[GLINT_QUADS];
 static jo_3d_mesh glint_mesh;
 
-static void mirror_figure(const corridor *passage, world_point you, int feet, int head)
-{
-	const int out = corridor_out(passage, you);
-	// The reflection's across: you, as the eye sees it (corridor_point's across is x or y, the axis
-	// the glass doesn't flip)
-	const int across = mirror_axis == 0 ? you.y : you.x;
-	const world_point a = corridor_point(passage, -out, across - FIGURE_HALF_WIDTH);
-	const world_point b = corridor_point(passage, -out, across + FIGURE_HALF_WIDTH);
-	frustum_point corners[4];
+/*
+ * You (game/body.h): the skeleton's bones, each one flat strip from a joint to the next, turned to
+ * face whoever's looking (a billboard along the bone: from any side a limb looks the same width,
+ * as a tube would, for one quad). Filled in the skin's colour, with a rim of light round it (a
+ * VDP1 polyline chained after it: 4 thin lines).
+ *
+ * Drawn twice from the same joints, which is the point of it: from your own eyes, in the world's
+ * matrix (level_body_draw(true): no head, you're inside it), and in the mirror's (false), where
+ * level_view is the reflected eye's. So what you see of your arms is what the mirror shows.
+ *
+ * Finer than the world's whole units: a hand's 20 units from your eye, where a unit is 8 pixels,
+ * and joints snapped to whole units would judder. The body's worked out x16 (BODY_SUB), and cut by
+ * a copy of the view with its eye and its planes' distances x16 too: the same planes, in the finer
+ * measure. It hangs from the camera's eye (whole units, as the camera moves), so it's steady in
+ * your view.
+ *
+ * Call it between slave_draw_begin and slave_draw_end, each pass.
+ *
+ * Cost: a division a bone for the strip's across (body_across), up to two more for the edges it
+ * shares with its neighbours (body_mitre): 18 bones a pass, never per pixel or per corner. And the
+ * cut's, only for a bone crossing the near plane or an edge
+ */
+#define BODY_FAR 500 // further than this from the mirror's eye, a silhouette (level_body_draw)
+#define BODY_POINTS 112
+#define BODY_QUADS 80
+static jo_pos3D_fixed body_points[BODY_POINTS];
+static jo_3d_polygon body_polygons[BODY_QUADS];
+static jo_3d_polygon_attribute body_attributes[BODY_QUADS];
+static jo_3d_mesh body_mesh;
+static frustum_point body_world[BODY_JOINTS]; // the joints in the world, x16
+static bool body_on = false;				  // this frame: there's a body to draw
+static const body_skin *body_look = &body_skin_glass;
 
-	corners[0] = grey_point(a, head); // as the texture: top left, top right, bottom right, bottom left
-	corners[1] = grey_point(b, head);
-	corners[2] = grey_point(b, feet);
-	corners[3] = grey_point(a, feet);
-	// Only wholly in front of the eye (a corner behind it would be drawn wrapped round the screen)
-	if (frustum_classify(&level_view, corners, 4, 1u << FRUSTUM_NEAR) != 0)
+void level_body_clear(void)
+{
+	body_on = false;
+}
+
+void level_body_set(body *b, body_state *state, int yaw, int feet)
+{
+	// The way you face, and your right, x1024 (walker.h: yaw 0 faces north, -y; right is east, -x)
+	const int forward_x = -walker_sin(yaw), forward_y = -walker_cos(yaw);
+	const int right_x = forward_y, right_y = -forward_x;
+	int ground;
+
+	body_on = false;
+	if (!level_view_on)
 		return;
-	for (int k = 0; k < 4; ++k)
+	// Your eye is the camera's: however high that is above your feet now (its bob, a landing's dip,
+	// lying after the crash). Never lower than a head lying on the floor
+	state->eye = (level_view.eye.z - feet) << BODY_SUB_SHIFT;
+	// (climbing, your feet are on the ledge's top already and the eye's still below it: negative)
+	if (state->eye < 10 * BODY_SUB && state->mode != BODY_CLIMB)
+		state->eye = 10 * BODY_SUB;
+	body_update(b, state);
+	ground = (level_view.eye.z << BODY_SUB_SHIFT) - state->eye;
+	for (int k = 0; k < BODY_JOINTS; ++k)
 	{
-		figure_points[k].x = jo_int2fixed(corners[k].x);
-		figure_points[k].y = jo_int2fixed(corners[k].y);
-		figure_points[k].z = jo_int2fixed(corners[k].z);
+		const body_point *j = &b->joint[k];
+
+		body_world[k].x = (level_view.eye.x << BODY_SUB_SHIFT) + ((j->x * right_x + j->y * forward_x) >> 10);
+		body_world[k].y = (level_view.eye.y << BODY_SUB_SHIFT) + ((j->x * right_y + j->y * forward_y) >> 10);
+		body_world[k].z = ground + j->z;
 	}
-	figure_polygon.normal.x = figure_polygon.normal.y = JO_FIXED_0;
-	figure_polygon.normal.z = JO_FIXED_1;
-	for (int k = 0; k < 4; ++k)
-		figure_polygon.vertices[k] = (unsigned short)k;
-	figure_mesh.data.points = figure_points;
-	figure_mesh.data.polygons = &figure_polygon;
-	figure_mesh.data.attributes = &figure_attribute;
-	figure_mesh.data.point_count = 4;
-	figure_mesh.data.polygon_count = 1;
-	jo_3d_mesh_draw(&figure_mesh);
+	body_on = true;
+}
+
+/*
+ * Across bone i, as the view (fine: x16) sees it: square to the bone and to the line of sight from
+ * the eye to its middle (their cross product), 1024 long. false if it's seen end on (looking
+ * straight down your own arm): nothing to show. The one division a bone: a reciprocal of the
+ * cross product's length, then multiplies
+ */
+static bool body_across(int i, const frustum *fine, int *across)
+{
+	const frustum_point a = body_world[body_bones[i].from], b = body_world[body_bones[i].to];
+	const int along_x = b.x - a.x, along_y = b.y - a.y, along_z = b.z - a.z;
+	// From the eye to the bone's middle: only its direction matters, so it's halved until it fits
+	// 10 bits (the products below stay in 32)
+	int to_x = ((a.x + b.x) >> 1) - fine->eye.x, to_y = ((a.y + b.y) >> 1) - fine->eye.y, to_z = ((a.z + b.z) >> 1) - fine->eye.z;
+	int x, y, z, length, recip;
+
+	while (to_x > 1023 || to_x < -1023 || to_y > 1023 || to_y < -1023 || to_z > 1023 || to_z < -1023)
+	{
+		to_x >>= 1;
+		to_y >>= 1;
+		to_z >>= 1;
+	}
+	x = (along_y * to_z - along_z * to_y) >> 6;
+	y = (along_z * to_x - along_x * to_z) >> 6;
+	z = (along_x * to_y - along_y * to_x) >> 6;
+	length = frustum_isqrt((unsigned int)(x * x + y * y + z * z));
+	if (length < 8)
+		return false;
+	recip = (1 << 24) / length;
+	across[0] = (x * recip) >> 14;
+	across[1] = (y * recip) >> 14;
+	across[2] = (z * recip) >> 14;
+	return true;
+}
+
+/*
+ * The edge two strips share where one bone ends and the next begins (an elbow, a knee): halfway
+ * between their two acrosses, so neither strip pinches or sticks out at the bend: a mitre, as a
+ * picture frame's corner. The sum of the two (each 1024 long) points the right way and is
+ * 2 cos(t) long, t half the angle between them; the edge has to be 1 / cos(t), longer the sharper
+ * the bend, to keep both strips their width. So it's the sum x 2 / |sum|^2 (x1024 again): one
+ * division a joint, no square root. false past 120 degrees between them (the edge would be over
+ * twice the width, a spike): each strip keeps its own square end there
+ */
+static bool body_mitre(const int *one, const int *other, int *edge)
+{
+	const int x = one[0] + other[0], y = one[1] + other[1], z = one[2] + other[2];
+	const int size = (x * x + y * y + z * z) >> 10; // |sum|^2, 4096 for the same across twice
+	int scale;
+
+	if (size < 1024)
+		return false;
+	scale = (2048 << 10) / size;
+	edge[0] = (x * scale) >> 10;
+	edge[1] = (y * scale) >> 10;
+	edge[2] = (z * scale) >> 10;
+	return true;
+}
+
+void level_body_draw(bool own_eyes)
+{
+	// Your own eyes: cut at the near plane and the guard band only (VDP1 clips the rest for less
+	// than a cut costs). The mirror: at the glass's edges too (planes 1 .. 4 there)
+	const unsigned cut_by = own_eyes ? FRUSTUM_GUARD : FRUSTUM_SCREEN | FRUSTUM_GUARD;
+	frustum fine; // level_view in the body's x16
+	level_mesh m;
+	bool far_off = false;
+	int across[BODY_BONES][3]; // each bone's across, 1024 long (body_across)
+	bool seen[BODY_BONES];	   // drawn this pass, and not end on
+
+	if (!body_on || !level_view_on)
+		return;
+	/*
+	 * Far off in the mirror (over BODY_FAR from the reflected eye: you're under 30 pixels tall), a
+	 * silhouette: each strip filled in its rim's colour, no rim drawn, no hands or feet (a pixel
+	 * or two each). 11 polygons for 36: every polygon is ~0.45% of a frame of jo's work whoever
+	 * draws it (the body in the mirror was 12%: film 2026-11-10), and at that size the rims were
+	 * all you saw of it anyway
+	 */
+	if (!own_eyes)
+	{
+		const int dx = body_world[BODY_NECK].x - (level_view.eye.x << BODY_SUB_SHIFT);
+		const int dy = body_world[BODY_NECK].y - (level_view.eye.y << BODY_SUB_SHIFT);
+
+		far_off = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy) > BODY_FAR * BODY_SUB;
+	}
+	fine = level_view;
+	fine.eye.x <<= BODY_SUB_SHIFT;
+	fine.eye.y <<= BODY_SUB_SHIFT;
+	fine.eye.z <<= BODY_SUB_SHIFT;
+	for (int i = 0; i < fine.count; ++i)
+		fine.planes[i].offset <<= BODY_SUB_SHIFT;
+	level_mesh_begin(&m, body_points, body_polygons, body_attributes, BODY_POINTS, BODY_QUADS);
+	// Each bone's across first: a strip's ends need its neighbours' too
+	for (int i = 0; i < BODY_BONES; ++i)
+	{
+		const int part = body_bones[i].part;
+
+		seen[i] = !(own_eyes && i < BODY_BONES_HEAD) && !(far_off && (part == BODY_PART_HAND || part == BODY_PART_FOOT)) &&
+				  body_across(i, &fine, across[i]);
+	}
+	for (int i = 0; i < BODY_BONES; ++i)
+	{
+		const body_bone *bone = &body_bones[i];
+		const frustum_point a = body_world[bone->from], b = body_world[bone->to];
+		const jo_color fill = (jo_color)(far_off ? body_look->rim[bone->part] : body_look->fill[bone->part]);
+		int start[3], end[3], n;
+		frustum_point corners[4], cut[FRUSTUM_POLY_MAX];
+		const frustum_point *p = corners;
+		unsigned planes;
+		const int first = m.point_count;
+
+		if (!seen[i])
+			continue;
+		// Its two ends' edges: shared with the bone before and the bone after in a limb (the
+		// table lists a limb's bones in a row: each starts at the joint the last ended at)
+		for (int k = 0; k < 3; ++k)
+			start[k] = end[k] = across[i][k];
+		if (i > 0 && body_bones[i - 1].to == bone->from && seen[i - 1])
+			body_mitre(across[i - 1], across[i], start);
+		if (i + 1 < BODY_BONES && body_bones[i + 1].from == bone->to && seen[i + 1])
+			body_mitre(across[i], across[i + 1], end);
+		for (int k = 0; k < 4; ++k)
+		{
+			const frustum_point *joint = k < 2 ? &a : &b;
+			const int *edge = k < 2 ? start : end;
+			const int half = (k == 0 || k == 3 ? -1 : 1) * (k < 2 ? bone->half_from : bone->half_to);
+
+			corners[k].x = joint->x + ((edge[0] * half) >> 10);
+			corners[k].y = joint->y + ((edge[1] * half) >> 10);
+			corners[k].z = joint->z + ((edge[2] * half) >> 10);
+		}
+		planes = frustum_classify(&fine, corners, 4, FRUSTUM_SCREEN | FRUSTUM_GUARD);
+		if (planes == FRUSTUM_OUTSIDE)
+			continue;
+		n = 4;
+		if (planes & cut_by)
+		{
+			n = frustum_clip(&fine, planes & cut_by, corners, 4, cut);
+			p = cut;
+		}
+		if (n < 3 || m.point_count + n > m.points_max || m.quad_count + (n - 1) / 2 + n > m.quads_max)
+			continue;
+		// x16 to 16.16: 12 more bits
+		for (int k = 0; k < n; ++k)
+		{
+			m.points[first + k].x = p[k].x << (16 - BODY_SUB_SHIFT);
+			m.points[first + k].y = p[k].y << (16 - BODY_SUB_SHIFT);
+			m.points[first + k].z = p[k].z << (16 - BODY_SUB_SHIFT);
+		}
+		m.point_count += n;
+		// A fan of quads, as level_face_add's
+		for (int k = 1; k < n - 1; k += 2)
+		{
+			jo_3d_polygon *q = &m.polygons[m.quad_count];
+			jo_3d_polygon_attribute *at = &m.attributes[m.quad_count];
+			const int last = k + 2 < n ? k + 2 : n - 1;
+
+			q->normal.x = JO_FIXED_0;
+			q->normal.y = JO_FIXED_0;
+			q->normal.z = JO_FIXED_1;
+			q->vertices[0] = (unsigned short)first;
+			q->vertices[1] = (unsigned short)(first + k);
+			q->vertices[2] = (unsigned short)(first + k + 1);
+			q->vertices[3] = (unsigned short)(first + last);
+			set_corridor_wall_attribute(at, mirror_colour(fill));
+			at->sort = (unsigned char)((at->sort & ~3) | JO_3D_SORT_CENTER);
+			++m.quad_count;
+		}
+		// The rim of light, drawn straight after it: one polyline round a whole strip; round a cut
+		// one (more corners), a line an edge
+		if (far_off)
+			continue;
+		if (n == 4)
+			glass_line_add(&m, first, first + 1, first + 2, first + 3, JO_VDP1_POLYLINE, (jo_color)body_look->rim[bone->part]);
+		else
+			for (int k = 0; k < n; ++k)
+			{
+				const int next = first + (k + 1 < n ? k + 1 : 0);
+
+				glass_line_add(&m, first + k, next, next, first + k, JO_VDP1_LINE, (jo_color)body_look->rim[bone->part]);
+			}
+	}
+	if (m.quad_count == 0)
+		return;
+	body_mesh.data.points = body_points;
+	body_mesh.data.polygons = body_polygons;
+	body_mesh.data.attributes = body_attributes;
+	body_mesh.data.point_count = (unsigned short)m.point_count;
+	body_mesh.data.polygon_count = (unsigned short)m.quad_count;
+	// The slave draws it (slave_draw.h): on the master its 28 polygons were 13% of a frame in the
+	// mirror (film 2026-11-10). Its arrays aren't touched again until the slave's done: the second
+	// pass comes after slave_draw_end
+	slave_draw_mesh(&body_mesh);
 }
 
 static void mirror_glints(const corridor *passage)
@@ -3088,16 +3295,14 @@ static void mirror_glints(const corridor *passage)
 	jo_3d_mesh_draw(&glint_mesh);
 }
 
-void level_mirror_end(const corridor *passage, const wall_clip_camera *camera, world_point you, int feet, int head)
+void level_mirror_end(const corridor *passage, const wall_clip_camera *camera)
 {
 	level_view = mirror_saved;
 	portal = mirror_saved_portal;
 	if (object_fog_enabled && camera != JO_NULL)
 		object_fog_set_camera(camera->eye, camera->forward_x, camera->forward_y);
 	mirror_shade = 0;
-	// In the world's own matrix again: you in the glass, then the glass's streaks over it all
-	if (glass_loaded)
-		mirror_figure(passage, you, feet, head);
+	// In the world's own matrix again: the glass's streaks over it all
 	mirror_glints(passage);
 }
 

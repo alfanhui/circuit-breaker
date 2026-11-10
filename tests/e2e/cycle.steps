@@ -1,0 +1,23 @@
+# The cycle (main.c, load_player_model): a ribbon twisting from a level leading edge into the upright
+# edge its trail starts from, a pulse stepping along the front. In iso, riding each way (the model
+# is turned by the matrix). For a close view from beside it, intro.steps: the opening flight
+wait_boot
+skip_prologue
+wait 1.0
+press start
+press z
+press start
+press down
+wait 0.6
+shot cycle_iso_north
+wait 0.1
+shot cycle_iso_north_2
+press right
+wait 0.5
+shot cycle_iso_east
+press right
+wait 0.5
+shot cycle_iso_south
+press right
+wait 0.5
+shot cycle_iso_west

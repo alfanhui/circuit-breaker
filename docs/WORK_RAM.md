@@ -189,6 +189,29 @@ Numbers to start from (units: the cycle is 50 tall, the eye 35 up, a grid cell 2
 - **Landing:** a dip of the eye (as `breach_drop`), a glassy thud, and you keep your speed. The
   thud is loud: the drone hears it. So vaulting is quick but noisy, and dropping is quiet but slow.
 
+## Your body
+
+On the cycle you were only energy. After the crash you're a person, and you see it: your hands
+thrown out as the cycle goes down, your arms on the glass where you lie, a hand lifted in front of
+your face, and, looking back, all of you in the mirror.
+
+- **One body, two views** (`game/body.h`, built 2026-11-10). One skeleton is posed once a frame and
+  drawn from wherever it's looked at: your own eyes and the mirror. No separate "arms in the HUD":
+  what you see of yourself is what the mirror shows.
+- **Poses are four points.** Each thing you do says where the two hands and two feet go; they ease
+  there, and the elbows and knees follow. A new move is four points, not an animation.
+- **Designed for your eyes.** Honest arms are mostly out of sight, so the run pumps the hands up
+  into the bottom of the view; in the air they come up at the corners; sliding, your legs go ahead.
+- **Skins.** How it looks is apart from how it moves (`body_skin`: colours per part now; widths and
+  textures later).
+- **Hands on the edge.** A vault puts your left hand on the top as you go over; a climb, both hands
+  on the ledge's edge while you pull up past them. Where they go comes from where the walker is
+  (its feet are on the top as the move starts), not from the block: resize or move the city's
+  blocks and the hands still land.
+- **Shape.** Each bone is one strip that tapers (forearm to wrist, torso to waist), joined to the
+  next at a mitred edge, so limbs bend without notches; the hand has a palm and fingers.
+- **Next:** a climb slow enough to watch your hands do it; textures per part, if the skin wants them.
+
 ## The watchdog drone
 
 A real watchdog timer resets the machine unless it's fed regularly. That's both the enemy and
