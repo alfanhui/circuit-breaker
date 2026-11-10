@@ -9,17 +9,17 @@
  *
  * Off the cycle you're not moving all the time: you stand, and move only while a button's held.
  * The pad (a Saturn pad: a d-pad, two shoulders and six face buttons, no stick):
- *   d-pad left / right   turn (the whole body: where you walk is where you face)
+ *   d-pad left / right   turn (the whole body: where you walk is where you face); while the
+ *                        head's locked onto a target, switch target instead (game/target.h)
  *   d-pad up / down      walk forwards / backwards
  *   L / R                step sideways (strafe)
- *   A B C / X Y Z        turn the head, as on the cycle: it eases back once let go
- * There's no button left for doing anything: on purpose. It's a stealth part: you get through by
- * moving and looking, not by pressing things.
- *
- * The face buttons in their two rows, the head's way for each:
- *       X  Y  Z         up-left    up     up-right
- *       A  B  C         down-left  down   down-right
- * Two in a column cancel up and down: A + X together look straight left, C + Z straight right.
+ *   X / Z                lock the head onto a target left / right of your view; again, let go
+ *   Y / B                look up / down (unlocked)
+ *   A / C                free
+ * There's no button for doing anything: on purpose. It's a stealth part: you get through by
+ * moving and looking, not by pressing things. (Until 2026-11-09 the six face buttons each turned
+ * the head a fixed way: up-left, up, up-right, down-left, down, down-right. With no stick to aim
+ * with, none was ever quite where you wanted to look: the lock replaced them.)
  *
  * Weight: nothing starts or stops dead. Speeds ramp up over a few frames and down over fewer
  * (stopping quicker than starting reads as control, the other way round as ice). Turning starts
@@ -57,17 +57,21 @@
 #define WALKER_STRAFE_SPEED 576	  // 2.25
 #define WALKER_SPEED_UP 96		  // a frame: full walking speed in 8 frames
 #define WALKER_SLOW_DOWN 160	  // a frame: stopped from full in 5
-#define WALKER_DIAGONAL_X256 181  // walking and strafing together: each x 1 / sqrt 2, so it's no faster
+// Walking and strafing together keep both speeds: strafing costs you nothing going forwards
+// (play-test 2026-11-09: it was each x 1 / sqrt 2, so diagonals were no quicker, but a sidestep
+// while running threw the run away). Diagonally you're a little quicker (3.75 walking): freer
 
 /*
  * Running (docs/WORK_RAM.md, "Moving"). There's no button for it: it's how long you've held
- * forward. Walking straight on at walking speed, you go on speeding up, slowly, to a run: full
- * speed about 0.75 s from standing. Strafing, backing off, turning hard (a turn held up to its
- * full speed: about 15 degrees) or running into a wall or a lip head on drops you back to a walk.
- * A tap of forward never gets past a creep, so the ramp's the stealth control, and the run's loud.
+ * forward. Holding forward at walking speed, you go on speeding up to a run: full speed about
+ * 0.4 s from standing. Strafing and turning while you run keep it (you line up for a move on the
+ * way, not before it); backing off, or running into a wall or a lip head on, drops you back to a
+ * walk. A tap of forward never gets past a creep, so the ramp's the stealth control, and the
+ * run's loud. (Play-test 2026-11-09: the run took 0.8 s, and a strafe or a hard turn lost it,
+ * so lining up for a vault took too much care.)
  *
- * Only at a full run, head on, do edges and obstacles carry you on, with no button (Mirror's
- * Edge's flow). Each is worked out whole before it starts (flown or slid on a copy of you), so
+ * From WALKER_MOVE_SPEED, head on, edges and obstacles carry you on, with no button (Mirror's
+ * Edge's flow): a few strides of run-up, not a full run. Each is worked out whole before it starts (flown or slid on a copy of you), so
  * it's predictable: if it took you once, it always will. Otherwise you stop, as walking:
  *   - a lip: you jump off it, WALKER_VAULT_HOP up, and fly on at your speed, if where you'd come
  *     down is a clean landing (vault_off). Pushing on at a lip you stopped at steps you off
@@ -83,7 +87,12 @@
  * and arms will show which move it is
  */
 #define WALKER_RUN_SPEED 1536		// 6 a frame: twice walking
-#define WALKER_RUN_SPEED_UP 20		// a frame, past walking speed: a run 38 frames after walking
+#define WALKER_RUN_SPEED_UP 48		// a frame, past walking speed: a run 16 frames after walking
+									// (24 from standing, 0.4 s; it was 20: 46 frames)
+#define WALKER_MOVE_SPEED 1152		// 4.5 a frame: fast enough for the moves (a vault, a climb, a
+									// slide, a jump off a lip). 8 frames after walking speed, 16
+									// from standing: ~45 of run-up. A jump's length still comes
+									// from your speed, so a slower one lands nearer
 #define WALKER_VAULT_HOP 1216		// x256 a frame upwards, leaving a lip: 45 up at the top of the
 									// jump (a little under your waist: plainly a jump, not a step),
 									// 38 frames in the air on the level, a gap of ~225 (5.2 m). It
@@ -149,7 +158,7 @@
 // Most roofs go all the way down (a tower, a crate). A bar has a bottom too: it floats, and you
 // pass under it if your head clears its bottom (a duct, a pipe: walking, WALKER_HEAD; sliding,
 // WALKER_SLIDE_HEAD). Its top is a roof like any other
-#define WALKER_AREA_RECTS_MAX 64 // the corridor (5), its grey box (25) and the city's first towers (21)
+#define WALKER_AREA_RECTS_MAX 128 // the corridor (5), its grey box (29) and the city's towers (84)
 
 typedef struct
 {
@@ -211,8 +220,6 @@ void walker_init(walker *w, world_point at, int yaw);
 // Stood on a roof: the same, at a height
 void walker_init_at(walker *w, world_point at, int z, int yaw);
 
-// The head's way from the face buttons held (each 0 or 1), as walker_controls' look_x and look_y
-void walker_look_from_buttons(int a, int b, int c, int x, int y, int z, signed char *look_x, signed char *look_y);
 
 // One frame: turn, then move, sliding along any edge of the area rather than stopping at it
 // (each axis is tried on its own: walking into a wall at an angle slides you along it)

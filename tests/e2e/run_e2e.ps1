@@ -40,13 +40,15 @@ function Set-OnFoot([int]$on_foot)
 }
 
 docker build -q -t circuit-breaker-e2e $PSScriptRoot | Out-Null
-if ($switch)
-{
-	"Building with BOOT_ON_FOOT $needs for $Steps"
-	Set-OnFoot $needs
-}
 try
 {
+	# Inside the try: if this build fails, the finally still puts BOOT_ON_FOOT back (it was left
+	# switched, twice, 2026-11-09)
+	if ($switch)
+	{
+		"Building with BOOT_ON_FOOT $needs for $Steps"
+		Set-OnFoot $needs
+	}
 	docker run --rm `
 		-v "${project}:/game:ro" `
 		-v "${Bios}:/bios/bios.bin:ro" `

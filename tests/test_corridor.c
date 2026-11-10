@@ -271,10 +271,11 @@ static void the_grid_tails_off(void)
 	}
 }
 
-// The yard (corridor.h), on the right half: running out from before it, you vault over the rail
-// (landing beyond it, still running), slide under the duct, and with a run-up climb the ledge (90).
-// A quarter of the way in from the right wall, the ledge's half: its other half (140) is a wall
-static void the_yard_vaults_slides_and_climbs(void)
+// Where you get up (corridor.h), the way on is the run's moves: from there (out 1300, a quarter
+// across, facing out) holding forward vaults over the rail (landing beyond, still running), slides
+// under the duct and vaults over the crate. Then, from beside the ledge on the right half, a run-up
+// climbs it (90)
+static void the_start_teaches_the_moves(void)
 {
 	corridor c;
 	walker_area area;
@@ -285,22 +286,50 @@ static void the_yard_vaults_slides_and_climbs(void)
 
 	open_round_five(&c);
 	corridor_walker_area(&c, &area);
-	at = corridor_point(&c, 1250, c.across_min + (((c.across_max - c.across_min) * 5) >> 3));
+	at = corridor_point(&c, 1300, c.across_min + ((c.across_max - c.across_min) >> 2));
 	walker_init(&w, at, 0xC000);
 	for (frames = 0; frames < 600 && !w.falling; ++frames)
 		walker_update(&w, ahead, &area);
 	CHECK(w.falling); // over the rail
 	CHECK_EQ(40, walker_height(&w));
-	CHECK(corridor_out(&c, walker_position(&w)) >= 1600 && corridor_out(&c, walker_position(&w)) <= 1630);
-	for (frames = 0; frames < 600 && walker_height(&w) != 90; ++frames)
+	CHECK(corridor_out(&c, walker_position(&w)) >= 1650 && corridor_out(&c, walker_position(&w)) <= 1680);
+	for (frames = 0; frames < 600 && corridor_out(&c, walker_position(&w)) < 2200; ++frames)
 	{
 		walker_update(&w, ahead, &area);
-		slid |= walker_sliding(&w) && corridor_out(&c, walker_position(&w)) > 1900 &&
-				corridor_out(&c, walker_position(&w)) < 1960; // under the duct
+		slid |= walker_sliding(&w) && corridor_out(&c, walker_position(&w)) > 2050 &&
+				corridor_out(&c, walker_position(&w)) < 2110; // under the duct
 	}
 	CHECK(slid);
-	CHECK_EQ(90, walker_height(&w)); // up the ledge
+	for (frames = 0; frames < 600 && !(w.falling && walker_height(&w) == 40); ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK(corridor_out(&c, walker_position(&w)) >= 3000 && corridor_out(&c, walker_position(&w)) <= 3010); // the crate
+
+	// The ledge: from 2250 on the right half, a quarter in from its wall
+	at = corridor_point(&c, 2250, c.across_min + (((c.across_max - c.across_min) * 5) >> 3));
+	walker_init(&w, at, 0xC000);
+	for (frames = 0; frames < 600 && walker_height(&w) != 90; ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK_EQ(90, walker_height(&w));
 	CHECK(corridor_out(&c, walker_position(&w)) >= 2450);
+}
+
+// The rail, the duct and the crate leave no way round: across the whole corridor, each is there
+static void no_way_round_the_moves(void)
+{
+	corridor c;
+	walker_area area;
+	static const short outs[3] = {1665, 2080, 3030};
+	static const short heights[3] = {40, 130, 40};
+
+	open_round_five(&c);
+	corridor_walker_area(&c, &area);
+	for (int k = 0; k < 3; ++k)
+		for (int across = c.across_min + 1; across < c.across_max; across += 8)
+		{
+			const world_point p = corridor_point(&c, outs[k], across);
+
+			CHECK_EQ(heights[k], walker_area_height(&area, p.x, p.y));
+		}
 }
 
 // On foot in the grey box: from where the cycle stops, holding forward up the corridor's left half
@@ -356,10 +385,41 @@ static void the_grey_box_climbs_and_drops(void)
 	CHECK(w.stagger > 0);
 }
 
+// The head's targets (target.h): each where you can stand (not in a wall), and stood up where
+// the crash leaves you (out 1300, a quarter across, facing out), X and Z each lock onto one
+static void targets_are_in_the_corridor(void)
+{
+	corridor c;
+	walker_area area;
+	target_list list;
+	target_lock lock;
+	target_eye eye;
+	world_point at;
+
+	open_round_five(&c);
+	corridor_walker_area(&c, &area);
+	corridor_targets(&c, &list);
+	CHECK(list.count >= 8);
+	for (int i = 0; i < list.count; ++i)
+		CHECK(walker_area_holds(&area, list.markers[i].x, list.markers[i].y));
+
+	at = corridor_point(&c, 1300, c.across_min + ((c.across_max - c.across_min) >> 2));
+	eye.x = at.x;
+	eye.y = at.y;
+	eye.z = WALKER_EYE;
+	eye.yaw = eye.view_yaw = c.side * 0x4000; // the way out (the headings are the sides)
+	target_lock_init(&lock);
+	CHECK(target_press_side(&lock, &list, &eye, &area, -1));
+	target_lock_init(&lock);
+	CHECK(target_press_side(&lock, &list, &eye, &area, 1));
+}
+
 void run_corridor_tests(void)
 {
+	RUN(targets_are_in_the_corridor);
 	RUN(the_grey_box_climbs_and_drops);
-	RUN(the_yard_vaults_slides_and_climbs);
+	RUN(the_start_teaches_the_moves);
+	RUN(no_way_round_the_moves);
 	RUN(closed_until_it_opens);
 	RUN(points_run_out_through_the_wall);
 	RUN(out_is_from_the_wall);

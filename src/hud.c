@@ -75,6 +75,7 @@ enum
 	PART_MAP_WALL,									 // the arena's walls and blocks on the map
 	PART_GLITCH_DARK,								 // the designed crash's tear bands (breach.h)
 	PART_GLITCH_PINK,
+	PART_LOCK, // the head's lock on a target (game/target.h)
 	PART_COUNT
 };
 
@@ -186,6 +187,7 @@ void hud_init(void)
 	part_sprites[PART_MAP_WALL] = make_part(JO_COLOR_RGB(170, 150, 255)); // pale violet: not any rider's
 	part_sprites[PART_GLITCH_DARK] = make_part(JO_COLOR_RGB(8, 0, 16));  // near black (all 0 would be see-through)
 	part_sprites[PART_GLITCH_PINK] = make_part(JO_COLOR_RGB(255, 40, 160)); // the flicker's pink
+	part_sprites[PART_LOCK] = make_part(JO_COLOR_RGB(255, 170, 0)); // amber, as the gauge: yours, not the world's
 	minimap_init();
 	prepare_map_disc();
 }
@@ -439,4 +441,26 @@ void hud_draw_band(int top, int height, bool pink)
 	const int x1 = JO_TV_WIDTH_2 - 1;
 
 	draw_corners(pink ? PART_GLITCH_PINK : PART_GLITCH_DARK, x0, y0, x1, y0, x1, y1, x0, y1, GLITCH_DEPTH);
+}
+
+/*
+ * The lock: four corners of a square round the target, each two short bars (2 pixels thick, so
+ * they hold up on a TV), LOCK_HALF from the middle with arms LOCK_ARM long. 8 quads: a corner's
+ * bars are drawn from its point inwards, along x and along y
+ */
+#define LOCK_HALF 12
+#define LOCK_ARM 5
+
+void hud_draw_lock(int cx, int cy)
+{
+	for (int corner = 0; corner < 4; ++corner)
+	{
+		const int sx = (corner & 1) ? 1 : -1, sy = (corner & 2) ? 1 : -1; // which way out it is
+		const int x = cx + sx * LOCK_HALF, y = cy + sy * LOCK_HALF;		  // its point
+		const int ax = x - sx * LOCK_ARM, ay = y - sy * LOCK_ARM;		  // its arms' inner ends
+		const int tx = x - sx, ty = y - sy;								  // a pixel in: the thickness
+
+		draw_corners(PART_LOCK, x, y, ax, y, ax, ty, x, ty, MARKER_DEPTH);
+		draw_corners(PART_LOCK, x, y, x, ay, tx, ay, tx, y, MARKER_DEPTH);
+	}
 }

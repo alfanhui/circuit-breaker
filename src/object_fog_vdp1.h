@@ -30,6 +30,9 @@ void object_fog_set_distances(int fade_start, int fade_end);
 
 // Every frame, before drawing. on = false (the free debug camera): nothing is fogged.
 void object_fog_begin_frame(bool on, world_point eye, int forward_x, int forward_y);
+// Moves the fog's camera within a frame, keeping its tables (level.c's mirror: the corridor drawn
+// again from the eye reflected in the glass, its fog going by that eye)
+void object_fog_set_camera(world_point eye, int forward_x, int forward_y);
 
 // The fog level of a corner on (or above) the floor at x, y
 int object_fog_level(int x, int y);

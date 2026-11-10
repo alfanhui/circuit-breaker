@@ -45,4 +45,8 @@ void hud_draw_burst(int cx, int cy, int inner, int outer);
 // to top + height - 1 from the screen's top, near black or pink, over everything
 void hud_draw_band(int top, int height, bool pink);
 
+// On foot, the head's lock on a target (game/target.h): an amber bracket round (cx, cy), in pixels
+// from the screen's centre (+y down)
+void hud_draw_lock(int cx, int cy);
+
 #endif

@@ -1,0 +1,30 @@
+# The mirror (level.h): booted stood up in the corridor (out 1300, facing out), turn round to face
+# the hole you broke through. It's a mirror: the corridor again, reflected and tinted, two streaks
+# of light across the glass, and you in it: a faceless figure. Walk up to it (your reflection
+# grows), strafe (it follows), and look down at the reflected floor
+wait_up
+shot mr_00_stood
+hold left 1.45
+wait 0.5
+shot mr_01_facing_the_mirror
+hold r 0.35
+hold up 1.6
+wait 0.3
+shot mr_02_nearer
+hold up 0.5
+wait 0.3
+shot mr_03_near
+hold up 2.5
+wait 0.3
+shot mr_04_at_the_glass
+hold b 0.5
+shot mr_04b_at_the_glass_looking_down
+wait 1
+hold l 0.4
+wait 0.3
+shot mr_05_strafed
+hold down 0.6
+wait 0.3
+shot mr_06_backed_off
+hold b 0.6
+shot mr_07_look_down

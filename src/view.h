@@ -60,6 +60,17 @@ void view_look(int direction);
 // lower than standing on the floor (a step's bob, a landing's dip, less the roof's height). Off
 // again at view_init
 void view_on_foot(int yaw, int look_x, int look_y, int bob);
+// On foot, after view_on_foot: the head locked onto a target (game/target.h) instead of the
+// buttons' look: its turn from where the body faces (+ right) and its pitch (+ up), ANGLEs. Eased
+// there as a look is, and kept within how far a head turns (LOOK_ANGLE, LOOK_UP_ANGLE, LOOK_DOWN_ANGLE)
+void view_head_aim(int head_yaw, int head_pitch);
+// On foot, how far the head's turned to the side now (+ right): where the view looks is the
+// body's yaw and this
+int view_look_yaw(void);
+// Where a point the head's aiming at (view_head_aim's angles) is on the screen now, in pixels
+// from its centre (+y down): the head eases there, so until it's settled it's off the middle.
+// False if it's off the screen
+bool view_aim_on_screen(int head_yaw, int head_pitch, int *screen_x, int *screen_y);
 // Whether you're on foot (view_on_foot since the last view_init)
 bool view_is_on_foot(void);
 // On foot, how far the head's looking down now (jo_angle; negative: up). 0 otherwise

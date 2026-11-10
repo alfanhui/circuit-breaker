@@ -1,11 +1,14 @@
 #include "object_fog_vdp1.h"
 
 /*
- * Where the Gouraud tables live: near the top of VDP1's 512 KB of RAM, from 0x70000; a quad's
- * jo_3d_polygon_attribute.gouraud_table is a table's address / 8. jo keeps its own higher up, clear
- * of ours: its sprite shading (jo_set_gouraud_shading_colors) from 0x7E4F8, its 3D's from 0x7E700
- * (the polygons it cuts) and 0x7FF00 (lighting). Until jo-engine v2026.2 its sprite shading
- * counted up from 0x70000, so ours start after TABLES_FOR_JO of them: 2 KB now unused (BACKLOG).
+ * Where the Gouraud tables live: at the top of jo's user area of VDP1 RAM, ending where jo's own
+ * tables begin (JO_VDP1_USER_AREA_END_ADDR, 0x7E4F8: its sprite shading, then from 0x7E700 its 3D's
+ * for the polygons it cuts, and 0x7FF00 lighting). jo's textures fill the same area from the bottom
+ * (0x10000) upwards, so the higher ours sit, the more room the textures have. A quad's
+ * jo_3d_polygon_attribute.gouraud_table is its table's address / 8.
+ *
+ * (Until 2026-11-09 they started at 0x70000, after 256 tables left for jo's sprite shading, which
+ * counted up from there before jo-engine v2026.2. Moved up, they leave the textures ~38 KB more.)
  *
  * Most quads use a shared table (game/depth_fog.h: a wall or trail piece's corners are two levels,
  * in one of two orders), all 512 written once at start-up. Only a quad whose corners are neither
@@ -18,21 +21,23 @@
  * move between frames, so it would flicker. So there are two sets, used on alternate frames.
  */
 #define VDP1_RAM 0x25C00000
-#define GOURAUD_AREA 0x70000							  // from the start of VDP1 RAM
 #define TABLE_BYTES 8									  // four 2-byte colours
-#define TABLES_FOR_JO 256								  // was jo's sprite shading (before v2026.2)
-#define NEUTRAL_TABLE TABLES_FOR_JO						  // all four corners unchanged: shared
+#define NEUTRAL_TABLE 0									  // all four corners unchanged: shared
 #define FIRST_SHARED_TABLE (NEUTRAL_TABLE + 1)			  // DEPTH_FOG_SHARED_TABLES of them (512)
 #define FRAME_TABLES 1024								  // per frame: the faces on foot cut to the view
 #define FIRST_FRAME_TABLE (FIRST_SHARED_TABLE + DEPTH_FOG_SHARED_TABLES) // set 0; set 1 follows it
-#define TABLES_END (FIRST_FRAME_TABLE + 2 * FRAME_TABLES) // 0x75808: below jo 2026's 3D tables (0x7E700)
+#define TABLES_END (FIRST_FRAME_TABLE + 2 * FRAME_TABLES) // 2561 tables: 0x5008 bytes
+// From the start of VDP1 RAM: the tables end right at jo's (0x7E4F8 - 0x5008 = 0x794F0). Rounded
+// down to a whole table, as VDP1 reads a table's address as a multiple of 8. Worked out by the
+// compiler, so no division at run time
+#define GOURAUD_AREA ((JO_VDP1_USER_AREA_END_ADDR - VDP1_RAM - TABLES_END * TABLE_BYTES) & ~(TABLE_BYTES - 1))
 
 // jo's textures fill VDP1 RAM upwards from 0x10000 (its user area: 0x6E4F8 bytes in v2026.2, up to
 // jo's own Gouraud tables; under SGL it was 0xE1C0 and 0x71D38). They must stop below our tables; jo reports how
 // much of that area is used, as a percentage
 #define TEXTURE_AREA_START JO_VDP1_TEXTURE_DEF_BASE_ADDRESS // 0x10000
 #define TEXTURE_AREA_SIZE JO_VDP1_USER_AREA_SIZE			// 0x6E4F8
-#define TEXTURE_PERCENT_MAX ((GOURAUD_AREA - TEXTURE_AREA_START) * 100 / TEXTURE_AREA_SIZE) // 87
+#define TEXTURE_PERCENT_MAX ((GOURAUD_AREA - TEXTURE_AREA_START) * 100 / TEXTURE_AREA_SIZE) // 95 (was 87)
 
 bool object_fog_enabled = false;
 
@@ -50,7 +55,7 @@ static volatile unsigned short *table_address(unsigned int table)
 
 static unsigned short table_gstb(unsigned int table)
 {
-	return (unsigned short)((GOURAUD_AREA / TABLE_BYTES) + table); // 0xE000 + table
+	return (unsigned short)((GOURAUD_AREA / TABLE_BYTES) + table); // 0xF29E + table: the last, 0xFC9E, fits 16 bits
 }
 
 void object_fog_init(void)
@@ -92,6 +97,11 @@ void object_fog_begin_frame(bool on, world_point eye, int forward_x, int forward
 	frame_set ^= 1; // the other set from last frame: VDP1 may still be drawing with that one
 	next_table = FIRST_FRAME_TABLE + frame_set * FRAME_TABLES;
 	end_table = next_table + FRAME_TABLES;
+}
+
+void object_fog_set_camera(world_point eye, int forward_x, int forward_y)
+{
+	depth_fog_set_camera(&fog, eye, forward_x, forward_y);
 }
 
 int object_fog_level(int x, int y)

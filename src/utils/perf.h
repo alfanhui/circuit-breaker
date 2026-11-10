@@ -45,7 +45,8 @@ extern int perf_vdp1_version; // VDP1's chip version (MODR bits 15-12): Mednafen
 #define PERF_BANDS 7	// SGL taking the walls' strips: transforms and sorting (level.c)
 #define PERF_WALKER 8	// on foot: the walker's step, its roofs checked (input.c)
 #define PERF_GRID 9		// the floor's grid on VDP2: its rotation worked out (main.c)
-#define PERF_PART_COUNT 10
+#define PERF_MIRROR 10	// on foot: the corridor drawn again in the mirror (main.c, level.h)
+#define PERF_PART_COUNT 11
 extern int perf_part_peak[PERF_PART_COUNT]; // % of a display frame, the worst in the last second
 
 void perf_part_add(int part, int frc_before);

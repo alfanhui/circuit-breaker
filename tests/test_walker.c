@@ -109,8 +109,8 @@ static void speeds_ramp_up_and_down(void)
 	CHECK(-w.forward < WALKER_FORWARD_SPEED); // against the speed reached: MSVC won't check constants
 }
 
-// Diagonally, no quicker than straight
-static void diagonals_are_no_quicker(void)
+// Strafing while you walk or run costs nothing going forwards (play-test 2026-11-09)
+static void strafing_keeps_your_speed(void)
 {
 	walker straight, diagonal;
 	world_point at = {0, 0};
@@ -126,8 +126,9 @@ static void diagonals_are_no_quicker(void)
 
 		dd = x * x + y * y; // compared squared: no square root
 	}
-	CHECK(dd <= ds * ds);
-	CHECK(dd > ds * ds / 4); // but it's still moving
+	// Forward as far as walking straight (the same run), and sideways on top: further, never less
+	CHECK(-walker_position(&diagonal).y == ds);
+	CHECK(dd > ds * ds);
 }
 
 // A tap turns a little; held, it turns quicker and quicker up to the most; let go, it stops dead
@@ -253,36 +254,6 @@ static void nearer_a_wall_than_its_margin_you_walk_out(void)
 
 // The face buttons: the left column left, the right right, the top row up, the bottom down; two
 // in a column level out
-static void the_face_buttons_turn_the_head(void)
-{
-	signed char x, y;
-
-	walker_look_from_buttons(0, 0, 0, 0, 0, 0, &x, &y);
-	CHECK_EQ(0, x);
-	CHECK_EQ(0, y);
-	walker_look_from_buttons(0, 0, 0, 1, 0, 0, &x, &y); // X: up-left
-	CHECK_EQ(-1, x);
-	CHECK_EQ(1, y);
-	walker_look_from_buttons(1, 0, 0, 0, 0, 0, &x, &y); // A: down-left
-	CHECK_EQ(-1, x);
-	CHECK_EQ(-1, y);
-	walker_look_from_buttons(1, 0, 0, 1, 0, 0, &x, &y); // A + X: straight left
-	CHECK_EQ(-1, x);
-	CHECK_EQ(0, y);
-	walker_look_from_buttons(0, 0, 0, 0, 1, 0, &x, &y); // Y: up
-	CHECK_EQ(0, x);
-	CHECK_EQ(1, y);
-	walker_look_from_buttons(0, 1, 0, 0, 0, 0, &x, &y); // B: down
-	CHECK_EQ(0, x);
-	CHECK_EQ(-1, y);
-	walker_look_from_buttons(0, 0, 1, 0, 0, 1, &x, &y); // C + Z: straight right
-	CHECK_EQ(1, x);
-	CHECK_EQ(0, y);
-	walker_look_from_buttons(0, 0, 0, 0, 0, 1, &x, &y); // Z: up-right
-	CHECK_EQ(1, x);
-	CHECK_EQ(1, y);
-}
-
 // Walking, the eye bobs once a step, deeper the quicker you go: 3 walking, 6 at a run (and the
 // steps come quicker). It dies away as you stop
 static void the_eye_bobs_walking(void)
@@ -356,7 +327,7 @@ static void a_kerb_steps_up_a_wall_stops_you(void)
 {
 	walker w;
 	walker_area area;
-	world_point at = {500, 0};
+	world_point at = {260, 0}; // walking up to it: at a run, a step's more than the 4 checked below
 
 	walker_area_clear(&area);
 	walker_area_add_roof(&area, -1000, -1000, 1000, 1000, 0);
@@ -376,7 +347,8 @@ static void a_kerb_steps_up_a_wall_stops_you(void)
 	walker_area_clear(&area);
 	walker_area_add_roof(&area, -1000, -1000, 1000, 1000, 0);
 	walker_area_add_roof(&area, -1000, -1000, 200, 1000, WALKER_STEP_UP + 1);
-	at.x = 300; // walking up to it (at a full run, it's a wall you vault: a_full_run_vaults_a_low_wall)
+	at.x = 200 + WALKER_FOOT + 30; // walking up to it: from 30 off, too near to get up to
+								   // WALKER_MOVE_SPEED (running, it's a wall you vault: a_full_run_vaults_a_low_wall)
 	walker_init_at(&w, at, 0, 0x4000);
 	run(&w, pad(0, 1, 0), &area, 300);
 	CHECK_EQ(0, walker_height(&w));
@@ -389,6 +361,7 @@ static void a_kerb_steps_up_a_wall_stops_you(void)
 	walker_area_clear(&area);
 	walker_area_add_roof(&area, -1000, -1000, 1000, 1000, 0);
 	walker_area_add_roof(&area, -1000, -1000, 200, 1000, WALKER_WAIST + 1);
+	at.x = 200 + WALKER_RADIUS + 30;
 	walker_init_at(&w, at, 0, 0x4000);
 	run(&w, pad(0, 1, 0), &area, 300);
 	CHECK_EQ(0, walker_height(&w));
@@ -401,7 +374,7 @@ static void a_lip_stops_you_until_you_push(void)
 {
 	walker w;
 	walker_area area;
-	world_point at = {100, 0}; // near enough to reach it walking, not at a run (that jumps it)
+	world_point at = {30, 0}; // near enough to reach it walking, not running (that jumps it)
 	int frames;
 
 	two_roofs(&area, 300, 200);
@@ -527,25 +500,30 @@ static void running_builds_from_walking(void)
 	walker_init(&w, at, 0);
 	run(&w, pad(0, 1, 0), 0, 8);
 	CHECK_EQ(WALKER_FORWARD_SPEED, w.forward);
-	run(&w, pad(0, 1, 0), 0, 38);
+	run(&w, pad(0, 1, 0), 0, 7);
+	CHECK(w.forward < WALKER_MOVE_SPEED);
+	run(&w, pad(0, 1, 0), 0, 1);
+	CHECK(w.forward >= WALKER_MOVE_SPEED); // 16 frames: fast enough for the moves
+	run(&w, pad(0, 1, 0), 0, 7);
 	CHECK(w.forward < WALKER_RUN_SPEED);
 	run(&w, pad(0, 1, 0), 0, 1);
-	CHECK_EQ(WALKER_RUN_SPEED, w.forward); // 47 frames: about 0.8 s
+	CHECK_EQ(WALKER_RUN_SPEED, w.forward); // 24 frames: 0.4 s
 
-	// A tap of a turn, to steer: still running
-	run(&w, pad(1, 1, 0), 0, 3);
-	run(&w, pad(0, 1, 0), 0, 1);
+	// Turning, even hard, to line up: still running (play-test 2026-11-09)
+	run(&w, pad(1, 1, 0), 0, 30);
 	CHECK_EQ(WALKER_RUN_SPEED, w.forward);
-	// Turning hard: back to a walk
-	run(&w, pad(1, 1, 0), 0, 20);
-	CHECK(w.forward <= WALKER_FORWARD_SPEED + 4 * WALKER_RUN_SPEED_UP);
+	// Strafing too: still running, forward speed and all, and moving sideways as well
+	{
+		const world_point before = walker_position(&w);
 
-	// Strafing: back to a walk (less: walking diagonally)
-	walker_init(&w, at, 0);
-	run(&w, pad(0, 1, 0), 0, 60);
-	CHECK_EQ(WALKER_RUN_SPEED, w.forward);
-	run(&w, pad(0, 1, 1), 0, 10);
-	CHECK(w.forward < WALKER_FORWARD_SPEED);
+		run(&w, pad(0, 1, 1), 0, 20);
+		CHECK_EQ(WALKER_RUN_SPEED, w.forward);
+		CHECK_EQ(WALKER_STRAFE_SPEED, w.side);
+		CHECK(walker_position(&w).x != before.x && walker_position(&w).y != before.y);
+	}
+	// Backing off: down to a walk, then backwards
+	run(&w, pad(0, -1, 0), 0, 30);
+	CHECK(w.forward < 0);
 }
 
 // Runs east (-x) from `from` until in the air or at a lip, then on until landed or `frames` are
@@ -703,13 +681,14 @@ static void a_full_run_climbs_a_ledge(void)
 
 	box_ahead(&area, 90, 1000);
 	walker_init_at(&w, at, 0, 0x4000);
-	// Walking up to it: stopped at its foot
+	// Walking up to it (from 30 off: too near to get up to WALKER_MOVE_SPEED): stopped at its foot
 	{
 		walker walking;
+		const world_point near = {200 + WALKER_RADIUS + 30, 0};
 
-		walker_init_at(&walking, at, 0, 0x4000);
+		walker_init_at(&walking, near, 0, 0x4000);
 		for (frames = 0; frames < 400; ++frames)
-			walker_update(&walking, pad(0, 1, 1), &area); // strafing too: never a run
+			walker_update(&walking, pad(0, 1, 0), &area);
 		CHECK_EQ(0, walker_height(&walking));
 		CHECK(walker_position(&walking).x >= 200);
 	}
@@ -776,9 +755,13 @@ static void a_full_run_vaults_over_a_rail(void)
 	run(&w, pad(0, 1, 0), &area, 1);
 	CHECK(w.forward >= WALKER_RUN_SPEED - WALKER_SLOW_DOWN); // running on
 
-	// Walking: a wall at your foot
-	walker_init_at(&w, at, 0, 0x4000);
-	run(&w, pad(0, 1, 1), &area, 400);
+	// Walking (from 34 off: too near to get up to WALKER_MOVE_SPEED): a wall at your foot
+	{
+		const world_point near = {200 + WALKER_FOOT + 34, 0};
+
+		walker_init_at(&w, near, 0, 0x4000);
+	}
+	run(&w, pad(0, 1, 0), &area, 400);
 	CHECK_EQ(0, walker_height(&w));
 	CHECK(walker_position(&w).x >= 200);
 
@@ -789,6 +772,55 @@ static void a_full_run_vaults_over_a_rail(void)
 		walker_update(&w, pad(0, 1, 0), &area);
 	CHECK_EQ(40, walker_height(&w));
 	CHECK(!w.falling);
+}
+
+// Lands a jump off the high roof's lip from `from` (x, east to x = 0), and returns how far it
+// carried you past the lip: from your x as you left the roof to your x on landing
+static int jump_length_from(int from)
+{
+	walker w;
+	walker_area area;
+	const world_point at = {(short)from, 0};
+	int took_off = 0, frames;
+
+	two_roofs(&area, 300, 220);
+	walker_init_at(&w, at, 300, 0x4000);
+	for (frames = 0; !w.falling && frames < 300; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK(w.falling);
+	took_off = walker_position(&w).x;
+	run_at_the_lip(&w, &area, 100);
+	CHECK(!w.falling);
+	return took_off - walker_position(&w).x;
+}
+
+// A short run-up does: from WALKER_MOVE_SPEED (16 frames from standing, ~45 along) the moves are
+// taken, and each is taken at a full run (kick_to_a_run), so a jump's as long as from a long one
+static void a_short_run_up_is_enough(void)
+{
+	walker w;
+	walker_area area;
+	const world_point rail = {200 + WALKER_FOOT + 60, 0};
+	int frames, short_jump, long_jump;
+
+	// A jump off a lip: from 60 back, and from 600
+	short_jump = jump_length_from(60);
+	long_jump = jump_length_from(600);
+	CHECK(short_jump > 100);
+	CHECK(short_jump >= long_jump - 6 && short_jump <= long_jump + 6); // a frame's step either way
+
+	// A vault over a rail, from 60 short of where your foot meets it
+	box_ahead(&area, 40, 30);
+	walker_init_at(&w, rail, 0, 0x4000);
+	for (frames = 0; frames < 100 && !w.falling; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK(w.falling);
+	CHECK_EQ(40, walker_height(&w)); // hands on its top
+	CHECK_EQ(WALKER_RUN_SPEED, w.forward); // kicked to a run
+	for (frames = 0; frames < 100 && w.falling; ++frames)
+		walker_update(&w, pad(0, 1, 0), &area);
+	CHECK_EQ(0, walker_height(&w));
+	CHECK(walker_position(&w).x < 170); // over it
 }
 
 // A floor, and a bar across it west of x = 200, `depth` deep, from `bottom` up to 140
@@ -812,9 +844,13 @@ static void a_full_run_slides_under_a_bar(void)
 	bar_ahead(&area, 50, 60);
 	CHECK_EQ(140, walker_area_height(&area, 170, 0)); // its top's a roof
 
-	// Walking: stopped by it, your body off it
-	walker_init_at(&w, at, 0, 0x4000);
-	run(&w, pad(0, 1, 1), &area, 400);
+	// Walking (from 30 off: too near to get up to WALKER_MOVE_SPEED): stopped by it, your body off it
+	{
+		const world_point near = {200 + WALKER_RADIUS + 30, 0};
+
+		walker_init_at(&w, near, 0, 0x4000);
+	}
+	run(&w, pad(0, 1, 0), &area, 400);
 	CHECK(walker_position(&w).x >= 200);
 
 	// Running: a slide
@@ -873,6 +909,7 @@ void run_walker_tests(void)
 	RUN(a_full_run_climbs_a_ledge);
 	RUN(a_drop_can_be_climbed_back);
 	RUN(a_full_run_vaults_over_a_rail);
+	RUN(a_short_run_up_is_enough);
 	RUN(a_full_run_slides_under_a_bar);
 	RUN(roofs_have_heights);
 	RUN(a_kerb_steps_up_a_wall_stops_you);
@@ -883,11 +920,10 @@ void run_walker_tests(void)
 	RUN(nothing_held_stays_put);
 	RUN(walking_goes_where_you_face);
 	RUN(speeds_ramp_up_and_down);
-	RUN(diagonals_are_no_quicker);
+	RUN(strafing_keeps_your_speed);
 	RUN(turning_speeds_up_and_stops_dead);
 	RUN(a_quarter_turn_takes_half_a_second);
 	RUN(walls_stop_you_and_you_slide);
 	RUN(nearer_a_wall_than_its_margin_you_walk_out);
-	RUN(the_face_buttons_turn_the_head);
 	RUN(the_eye_bobs_walking);
 }

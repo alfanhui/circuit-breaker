@@ -7,6 +7,10 @@
  * move; input.c and main.c do it.
  *
  * One part after another:
+ *   BREACH_CODE     the screen goes black and the machine shows its hand: green code types out,
+ *                   the code that's about to take over (walking, the moves, the head's lock: walker.c,
+ *                   target.c), for BREACH_CODE_FRAMES (play-test 2026-11-09: a beat before the
+ *                   chaos, so the crash reads as the program breaking, not you)
  *   BREACH_TEAR     the reset tries and fails: the screen glitches, worse and worse. The
  *                   terminal screen ("SH-2 process termin...") flashes in for single frames and
  *                   never gets to finish. Everyone else is frozen
@@ -42,7 +46,11 @@
 #define BREACH_STOPPED 5
 #define BREACH_RISE 6
 #define BREACH_ON_FOOT 7
+#define BREACH_CODE 8 // first, though numbered last: the parts before it kept their numbers
 
+#define BREACH_CODE_FRAMES 210	 // 3.5 s of code on a black screen
+#define BREACH_CODE_LINES 22	 // the code's lines (breach_code), each at most 38 characters
+#define BREACH_CODE_CHARS 3		 // characters typed a frame: all of it in ~3 s, then it stays a moment
 #define BREACH_TEAR_FRAMES 72	 // 1.2 s: the reset fights for the screen and loses
 #define BREACH_THROUGH_FRAMES 60 // 1 s through the hole and on
 #define BREACH_FALL_FRAMES 32	 // half a second going down
@@ -94,7 +102,7 @@ typedef struct
 } breach;
 
 void breach_init(breach *b);  // nothing happening
-void breach_start(breach *b); // the crash into the flicker: the tear begins
+void breach_start(breach *b); // the crash into the flicker: the code screen, then the tear
 
 // Each frame: moves the parts on and works out the frame's glitch
 void breach_update(breach *b);
@@ -105,6 +113,9 @@ int breach_distance(const breach *b, int cruise);
 
 // The skid's first frame: the hit of the cycle going down (a jolt, input.c)
 int breach_landed(const breach *b);
+
+// The tear's first frame: the picture's back, and the hit of the wall with it (a jolt, input.c)
+int breach_hit(const breach *b);
 
 // A button's been pressed: lying still, you start getting up, or as soon as you've lain there
 // long enough. Does nothing before you've stopped
@@ -121,5 +132,10 @@ int breach_rumble(const breach *b);
 
 // How many characters of GAME_TERMINAL_TEXT the reset has typed (the tear)
 int breach_typed_chars(const breach *b);
+
+// The code screen (BREACH_CODE): its lines, and how many of their characters are typed by now, all
+// the lines' counted one after another (0 in any other part)
+extern const char *const breach_code[BREACH_CODE_LINES];
+int breach_code_typed(const breach *b);
 
 #endif

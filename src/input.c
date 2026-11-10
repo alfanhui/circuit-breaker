@@ -4,6 +4,7 @@
 #include "game/attract_route.h"
 #include "game/arrival_flight.h"
 #include "game/walker.h"
+#include "game/target.h"
 #include "level.h"
 #include "scene_memory.h"
 #include "sound.h"
@@ -19,7 +20,7 @@
 // after the designed crash (boot_on_foot): for working on Work RAM without riding there first.
 // Films don't depend on it: tests/e2e/run_e2e.ps1 builds with whichever a film needs (wait_boot:
 // the arena, 0; wait_up: the corridor, 1) and puts it back afterwards
-#define BOOT_ON_FOOT 1
+#define BOOT_ON_FOOT 0
 
 rider player1;
 rider bots[BOT_COUNT_MAX];
@@ -420,9 +421,10 @@ static void stress_fill_trail(void)
  *   SCENE_PLAY   play, in 1st person, the bot in the arena
  * The game boots into BOOT_SCENE. To work on a later part, set it to that part and build;
  * or, while it runs, jump: START (the debug camera), then A for the next part, START again.
- * For now it boots straight into play, the prologue left out (it's the game's opening, its
- * "menu"): set SCENE_INTRO to have it back. The E2E scripts find their way from whichever it
- * boots into (tests/e2e/run.sh reads this line: skip_prologue, start_intro)
+ * It boots into the prologue, the game's opening and its "main menu" (the spectator's view of
+ * the loop: three presses break it and start play). Set SCENE_PLAY to boot straight into play
+ * while working on it. The E2E scripts find their way from whichever it boots into
+ * (tests/e2e/run.sh reads this line: skip_prologue, start_intro)
  */
 typedef enum
 {
@@ -431,7 +433,7 @@ typedef enum
 	SCENE_PLAY,
 	SCENE_COUNT
 } scene;
-#define BOOT_SCENE SCENE_PLAY
+#define BOOT_SCENE SCENE_INTRO
 
 /*
  * During the opening flight you're only watching: the loop can't be hit until the camera has
@@ -719,6 +721,8 @@ static void debug_next_turn_compare(void)
 // On foot: you, and the floor you can stand on (the corridor's, for now)
 static walker player_feet;
 static walker_area feet_area;
+static target_list feet_targets; // what the head can lock onto (game/target.h)
+static target_lock feet_lock;
 
 // Getting up: stood where the cycle came to rest, facing the way it was going, on the corridor's
 // floor and the grey box's roofs (corridor_walker_area)
@@ -726,10 +730,31 @@ static void stand_up(void)
 {
 	walker_init(&player_feet, player1.bike.position, player1.bike.heading * 0x4000);
 	corridor_walker_area(arena_corridor, &feet_area);
+	corridor_targets(arena_corridor, &feet_targets);
+	target_lock_init(&feet_lock);
 }
 
-// One frame on foot: the pad (game/walker.h has the scheme) moves you, and the camera's yours
-static void walk_step(void)
+// Where you look from, for targeting: your eye, where your body faces and where the view looks
+static target_eye feet_eye(void)
+{
+	const world_point at = walker_position(&player_feet);
+	target_eye e;
+
+	e.x = at.x;
+	e.y = at.y;
+	e.z = walker_height(&player_feet) + walker_eye(&player_feet);
+	e.yaw = player_feet.yaw;
+	e.view_yaw = (player_feet.yaw + view_look_yaw()) & 0xFFFF;
+	return e;
+}
+
+/*
+ * One frame on foot: the pad (game/walker.h has the scheme) moves you, and the camera's yours.
+ * struck: this frame's presses. The head (game/target.h): X / Z lock it onto a target left or
+ * right of your view (again: let go); locked, the d-pad's left and right switch target instead of
+ * turning you (strafe with L / R); unlocked, Y / B look up and down
+ */
+static void walk_step(unsigned short struck)
 {
 	const unsigned short held = press_latch_held(&pad1_presses);
 	walker_controls controls;
@@ -737,12 +762,29 @@ static void walk_step(void)
 	const int left = (held & DIGI_LEFT) != 0, right = (held & DIGI_RIGHT) != 0;
 	const int up = (held & DIGI_UP) != 0, down = (held & DIGI_DOWN) != 0;
 	const int l = (held & DIGI_L) != 0, r = (held & DIGI_R) != 0;
+	target_eye eye = feet_eye();
+	int head_yaw, head_pitch;
 
-	controls.turn = (signed char)(right - left);
+	target_frame(&feet_lock, &feet_targets, &eye, &feet_area); // let go of one out of reach
+	if (struck & DIGI_X)
+		target_press_side(&feet_lock, &feet_targets, &eye, &feet_area, -1);
+	if (struck & DIGI_Z)
+		target_press_side(&feet_lock, &feet_targets, &eye, &feet_area, 1);
+	controls.turn = 0;
+	if (feet_lock.locked != TARGET_NONE)
+	{
+		// A press, not held: each switches once
+		if (struck & DIGI_LEFT)
+			target_press_switch(&feet_lock, &feet_targets, &eye, &feet_area, -1);
+		if (struck & DIGI_RIGHT)
+			target_press_switch(&feet_lock, &feet_targets, &eye, &feet_area, 1);
+	}
+	else
+		controls.turn = (signed char)(right - left);
 	controls.move = (signed char)(up - down);
 	controls.strafe = (signed char)(r - l);
-	walker_look_from_buttons((held & DIGI_A) != 0, (held & DIGI_B) != 0, (held & DIGI_C) != 0, (held & DIGI_X) != 0,
-							 (held & DIGI_Y) != 0, (held & DIGI_Z) != 0, &controls.look_x, &controls.look_y);
+	controls.look_x = 0;
+	controls.look_y = (signed char)(((held & DIGI_Y) != 0) - ((held & DIGI_B) != 0));
 	walker_update(&player_feet, controls, &feet_area);
 	// The cycle's position stands in for yours: the camera, culling and the walls all go by it.
 	// Its heading is the quarter turn nearest your facing, for anything that only knows those
@@ -754,6 +796,33 @@ static void walk_step(void)
 	view_on_foot(player_feet.yaw, controls.look_x, controls.look_y,
 				 walker_bob(&player_feet) + walker_dip(&player_feet) + walker_step_lag(&player_feet) -
 					 walker_height(&player_feet) - (walker_eye(&player_feet) - WALKER_EYE_RIDING));
+	// Locked: the head aims at it from where you are now (after this frame's move)
+	eye = feet_eye();
+	if (target_aim(&feet_lock, &feet_targets, &eye, &head_yaw, &head_pitch))
+		view_head_aim(head_yaw, head_pitch);
+}
+
+int foot_feet_height(void)
+{
+	return walker_height(&player_feet);
+}
+
+int foot_head_height(void)
+{
+	// The head's a little above the eye (WALKER_HEAD to WALKER_EYE)
+	return walker_height(&player_feet) + walker_eye(&player_feet) + (WALKER_HEAD - WALKER_EYE);
+}
+
+bool foot_target_on_screen(int *screen_x, int *screen_y)
+{
+	target_eye eye;
+	int head_yaw, head_pitch;
+
+	if (arena_breach.phase != BREACH_ON_FOOT)
+		return false;
+	eye = feet_eye();
+	return target_aim(&feet_lock, &feet_targets, &eye, &head_yaw, &head_pitch) &&
+		   view_aim_on_screen(head_yaw, head_pitch, screen_x, screen_y);
 }
 
 // Whether the crash this step was into the flicker where it gives way: then it's the breach
@@ -810,7 +879,7 @@ static void breach_step(unsigned short struck)
 	{
 		const int walker_frc = jo_time_get_frc(); // the debug line's "wk" (utils/perf.h)
 
-		walk_step();
+		walk_step(struck);
 		perf_part_add(PERF_WALKER, walker_frc);
 		view_follow(&player1.bike);
 		return;
@@ -831,7 +900,10 @@ static void breach_step(unsigned short struck)
 	// cycle_update, so its trail isn't stretched after it
 	player1.bike.position.x = (short)(player1.bike.position.x + WORLD_HEADING_DX(h) * distance);
 	player1.bike.position.y = (short)(player1.bike.position.y + WORLD_HEADING_DY(h) * distance);
-	// Going down: a jolt as it hits the glass, then it rumbles as it skids, dying with the motion
+	// The hit of the wall as the picture comes back after the code screen (the tear's first frame);
+	// going down, a jolt as it hits the glass, then it rumbles as it skids, dying with the motion
+	if (breach_hit(&arena_breach))
+		view_shake(CAMERA_SHAKE_BREACH);
 	if (breach_landed(&arena_breach))
 		view_shake(CAMERA_SHAKE_BREACH);
 	if (breach_rumble(&arena_breach) > 0)
@@ -929,7 +1001,7 @@ static void game_step(unsigned short struck)
 		hidden_loaded = false;
 		corridor_memory_take(); // Work RAM's memory, while the arena's is still in use (scene_memory.h)
 		corridor_open(arena_corridor, &arena_flicker, arena_half());
-		view_shake(CAMERA_SHAKE_BREACH);
+		// No jolt yet: first the screen goes black for the code (breach.h). It comes with the tear
 		return; // the world stops here: from the next step it's the breach's (breach_step)
 	}
 	// A crash terminates the player's process: the terminal screen from the next frame

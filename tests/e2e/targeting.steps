@@ -1,0 +1,32 @@
+# Targeting on foot (game/target.h): booted stood up in the corridor (out 1300, a quarter across,
+# facing out). Z locks the head onto the target nearest the view's middle on the right; the
+# d-pad's left and right then switch target (the body doesn't turn); a run while locked keeps
+# the head on it; X lets go; Y looks up. Each shot is after the head's had time to ease there
+wait_up
+shot tg_00_stood
+press z
+wait 0.6
+shot tg_01_locked_right
+press right
+wait 0.6
+shot tg_02_switched_right
+press left
+wait 0.6
+shot tg_03_back_left
+press left
+wait 0.6
+shot tg_04_further_left
+hold up 0.8
+shot tg_05_ran_locked
+wait 0.6
+shot tg_06_stopped_locked
+press x
+wait 0.6
+shot tg_07_let_go
+press x
+wait 0.6
+shot tg_08_locked_left
+press x
+wait 0.6
+hold y 0.8
+shot tg_09_look_up

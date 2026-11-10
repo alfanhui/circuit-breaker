@@ -469,3 +469,25 @@ with open(out, 'w', encoding='utf-8') as fh:
     fh.write('\n'.join(svg))
 print('\n'.join(report))
 print('->', out)
+
+# --- The game's table ---------------------------------------------------------------------------
+# python tools/work_ram_plan.py --c   prints src/game/city.c's table for the towers built so far
+# (COLUMNS x ROWS from the plan's north-west corner), row by row: paste it in. The game's heights
+# are the plan's, so the moves this script checks are the moves the walker meets
+import sys
+if '--c' in sys.argv:
+    COLUMNS, ROWS = 7, 12
+    print('// tools/work_ram_plan.py --c: columns 0-%d, rows 0-%d, row by row' % (COLUMNS - 1, ROWS - 1))
+    for row in range(ROWS):
+        cells = []
+        for col in range(COLUMNS):
+            t = towers.get((col, row))
+            if t is None:
+                raise SystemExit('a freed block in the built part: the table has no hole for it yet')
+            kind = ('CITY_GUARD' if t.guard else 'CITY_HUB' if t.hub else
+                    'CITY_SEALED' if (col, row) in sealed else 'CITY_ROOF')
+            cells.append('TOWER(%d, %d, %d, %s)' % (col, row, t.h, kind))
+        print('\t' + ', '.join(cells) + ', // row %d%s' % (row, ' (the entry)' if row == entry.row else ''))
+    # And the route to the first hub, for the unit test that walks it
+    r = routes[[k for k, t in towers.items() if t.ch == 'C'][0]]
+    print('// the route to the CD block: ' + ', '.join('{%d, %d}' % k for k in r))

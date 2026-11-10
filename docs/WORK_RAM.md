@@ -120,6 +120,19 @@ corridor the towers are cut to what's seen through the doorway; out in the city,
 insides aren't drawn (seen back through the doorway, they're missing: still to do). Filmed:
 `tests/e2e/city.steps`.
 
+**Built (2026-11-09): the way to the CD block** (`game/city.h`, 84 towers: the plan's columns 0-6,
+rows 0-11). The table is the plan's own (`python tools/work_ram_plan.py --c` prints it), so the
+heights in the game are the heights the plan checks. The way down winds 28 towers: south through
+the entry's blocks, past Backup RAM's hub (its way in gated, for later), east and up column 6, west
+along row 6, then north up column 3, a canyon between guard pages, and west along row 0 to the CD
+block's hub at -1400. Both hubs are lit cyan, and are targets you can lock onto. A unit test walks
+the route against the table's towers: every step a drop, a climb or a street jump the walker makes.
+Drawing 84 towers: the sides end 900 below the eye instead of at the ground (below, the black
+falls away), and the coarse cull groups the city by 2 x 2 blocks. From the doorway: 60 fps, cpu
+55-79%. Deep in, on (3, 6): 55-60 fps, cpu ~100%, VDP1 at its limit when a guard page fills the
+screen. Guard pages as occluders were tried and cost more than they saved (8 faces' planes a frame).
+Still to do: the hubs' lifts and their ways in, the drone, a film down the whole route.
+
 **The way in:** the corridor's far end opens onto a ledge. You walk out onto a rooftop and the
 city falls away below you, further than the arena was across: Mirror's Edge's first rooftop.
 

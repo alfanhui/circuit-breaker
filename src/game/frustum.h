@@ -114,6 +114,17 @@ unsigned frustum_classify_box(const frustum *f, frustum_point centre, frustum_po
  */
 int frustum_clip(const frustum *f, unsigned planes, const frustum_point *in, int n, frustum_point *out);
 
+/*
+ * The view in a mirror (level.c draws the corridor again, reflected, behind the glass you broke
+ * through). A mirror standing across axis 0 (x) or 1 (y) at that coordinate: every point there,
+ * p, is seen where its reflection is, p' (that axis: 2 x mirror - p). Drawing the world reflected is
+ * the same as cutting the world as it is to the view of an eye reflected in the mirror, then
+ * reflecting what's left: so the reflected view is this one with the eye, its directions and every
+ * plane's normal flipped on that axis. The planes are measured from the eye, so their offsets stay.
+ * A point p is inside out's planes exactly as far as its reflection is inside in's: no division
+ */
+void frustum_reflect(const frustum *in, int axis, int mirror, frustum *out);
+
 // Integer square root (rounded down): the planes' lengths
 int frustum_isqrt(unsigned int v);
 

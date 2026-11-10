@@ -30,6 +30,24 @@ void draw_arena_walls(const world_rect *view, const world_point *eye, const wall
 // free_camera: the debug camera (no cuts: everything's drawn)
 void level_view_begin(const corridor *passage, bool free_camera);
 
+/*
+ * The mirror over the hole you broke through (level.c has how). After the frame's corridor is
+ * drawn (and the slave's finished with its meshes), in the world's matrix:
+ *     if (level_mirror_begin(passage, clip, &mirrored))
+ *     {
+ *         push the matrix; level_mirror_matrix();
+ *         level_mirror_draw(passage, &mirrored);
+ *         pop the matrix; level_mirror_end(passage, clip, you, feet, head);
+ *     }
+ * level_mirror_begin returns false when the glass isn't in view from inside the corridor.
+ * level_mirror_end puts the view back, then draws you in the glass (where you stand, your feet's
+ * and head's heights) and the glass's streaks of light over it
+ */
+bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera, wall_clip_camera *mirrored);
+void level_mirror_matrix(void);
+void level_mirror_draw(const corridor *passage, const wall_clip_camera *mirrored);
+void level_mirror_end(const corridor *passage, const wall_clip_camera *camera, world_point you, int feet, int head);
+
 // Call inside view_push_world_matrix(), after the floor and before the walls: the corridor's
 // floor of dark glass hexagons (game/corridor.h), once it's open
 // camera: the 1st person camera (wall_clip.h), to cut only the tiles near it; NULL cuts them all

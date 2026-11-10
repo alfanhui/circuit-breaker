@@ -234,3 +234,26 @@ int frustum_clip(const frustum *f, unsigned planes, const frustum_point *in, int
 		out[k] = from[k];
 	return count;
 }
+
+void frustum_reflect(const frustum *in, int axis, int mirror, frustum *out)
+{
+	*out = *in;
+	if (axis == 0)
+	{
+		out->eye.x = 2 * mirror - in->eye.x;
+		out->forward[0] = -in->forward[0];
+		out->right[0] = -in->right[0];
+		out->up[0] = -in->up[0];
+		for (int i = 0; i < in->count; ++i)
+			out->planes[i].x = -in->planes[i].x;
+	}
+	else
+	{
+		out->eye.y = 2 * mirror - in->eye.y;
+		out->forward[1] = -in->forward[1];
+		out->right[1] = -in->right[1];
+		out->up[1] = -in->up[1];
+		for (int i = 0; i < in->count; ++i)
+			out->planes[i].y = -in->planes[i].y;
+	}
+}

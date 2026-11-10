@@ -335,13 +335,15 @@ const corridor_box corridor_boxes[CORRIDOR_BOXES] = {
 	{3600, 3900, 8, 16, 160},
 	{3900, 4300, 0, 8, 64},  // a clean drop from it, on the left (96): long enough to land a run's jump
 	{4300, 4450, 0, 8, 400}, // a tower beyond: a wall
-	// Last, so the stairs stay first: a crate before them, where you stand up (a quarter across).
-	// Waist-high: walking, your foot meets it; at a run you vault over it (walker.h)
-	{3000, 3060, 2, 6, 40},
-	// The yard, on the right half (walker.h's moves at a run, in the order you meet them):
-	{1600, 1630, 8, 16, 40},	  // a rail, waist-high and thin: vault over it
-	{1900, 1960, 8, 16, 130, 50}, // a duct, its bottom at your chest (50): slide under it
-	{2450, 2650, 8, 12, 90},	  // a ledge over your head (2.1 m): climb it (a run-up after the slide)
+	// Last, so the stairs stay first: a crate before them, across the whole corridor. Waist-high:
+	// walking, your foot meets it; running you vault over it (walker.h)
+	{3000, 3060, 0, 16, 40},
+	// Where you get up (out 1300), you're taught the moves (play-test 2026-11-09): the way on is
+	// over and under, each across the whole corridor, so there's no going round. Spaced so that from
+	// each you see the next, and with room for a run-up (walker.h's WALKER_MOVE_SPEED: ~45)
+	{1650, 1680, 0, 16, 40},	  // a rail, waist-high and thin: vault over it (350 from where you get up)
+	{2050, 2110, 0, 16, 130, 50}, // a duct, its bottom at your chest (50): slide under it
+	{2450, 2650, 8, 12, 90},	  // on the right half, a ledge over your head (2.1 m): climb it if you like
 	{2450, 2650, 12, 16, 140},	  // beside it, one out of reach (3.2 m): a wall
 };
 
@@ -386,4 +388,38 @@ void corridor_walker_area(const corridor *c, walker_area *area)
 			walker_area_add_roof(area, a.x, a.y, b.x, b.y, corridor_boxes[i].height);
 	}
 	city_walker_area_add(c, area); // and beyond the far end, the city's towers
+}
+
+// A point the head can lock onto, at (out, across in sixteenths of the width, height)
+static void add_target(const corridor *c, target_list *list, int out, int sixteenths, int z, target_kind kind)
+{
+	const world_point p = corridor_point(c, out, c->across_min + (((c->across_max - c->across_min) * sixteenths) >> 4));
+
+	target_list_add(list, p.x, p.y, z, kind);
+}
+
+void corridor_targets(const corridor *c, target_list *list)
+{
+	target_list_clear(list);
+	// The yard (right half), in the order you meet them: each move's obstacle, at its top's middle
+	add_target(c, list, 1665, 8, 40, TARGET_SIGHT); // the rail
+	add_target(c, list, 2080, 8, 50, TARGET_SIGHT); // the duct's bottom: where you slide
+	add_target(c, list, 2450, 10, 90, TARGET_SIGHT); // the ledge's lip
+	// The left half: the crate, the top of the stairs, the drop's landing and the tower
+	add_target(c, list, 3030, 4, 40, TARGET_SIGHT);
+	add_target(c, list, 3600, 4, 160, TARGET_SIGHT);
+	add_target(c, list, 4100, 4, 64, TARGET_SIGHT);
+	add_target(c, list, 4300, 4, 300, TARGET_CLUSTER); // its face, high up
+	// The way out: the doorway in the far end's right half, onto the city
+	add_target(c, list, CORRIDOR_LENGTH - 10, 12, 60, TARGET_SIGHT);
+	// The city's hubs (city.h): where you're going, lit. Their roofs' middles
+	for (int i = 0; i < CITY_TOWERS; ++i)
+		if (city_towers[i].kind == CITY_HUB)
+		{
+			const city_tower *t = &city_towers[i];
+			const int middle = (c->across_min + c->across_max) >> 1;
+			const world_point p = corridor_point(c, (t->out_min + t->out_max) >> 1, middle + ((t->across_min + t->across_max) >> 1));
+
+			target_list_add(list, p.x, p.y, t->height, TARGET_SIGHT);
+		}
 }

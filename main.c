@@ -263,10 +263,10 @@ void debug_3d(bool show)
 	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d %c     ", bots[0].bike.position.x, bots[0].bike.position.y,
 			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
 			  "EMH"[bot_skill_now()]);
-	jo_printf(0, 5, "ar%d co%d sd%d tp%d fl%d gr%d bd%d wk%d     ", perf_part_peak[PERF_ARENA],
+	jo_printf(0, 5, "ar%d co%d sd%d tp%d fl%d gr%d bd%d wk%d mi%d     ", perf_part_peak[PERF_ARENA],
 			  perf_part_peak[PERF_CORRIDOR], perf_part_peak[PERF_SIDES], perf_part_peak[PERF_TOPS],
 			  perf_part_peak[PERF_FLOOR], perf_part_peak[PERF_GRID], perf_part_peak[PERF_BANDS],
-			  perf_part_peak[PERF_WALKER]);
+			  perf_part_peak[PERF_WALKER], perf_part_peak[PERF_MIRROR]);
 	// VDP1's own figures (game/vdp1_gauge.h): frames it didn't finish this last second, % of frames
 	// it was still drawing when the CPU was done (high with a low cpu: VDP1 limits the frame
 	// rate), how many commands its list had, and the chip's version
@@ -382,7 +382,42 @@ static bool terminal_now(const char **text, int *count, bool *cursor)
 		*cursor = true;
 		return true;
 	}
+	if (arena_breach.phase == BREACH_CODE)
+	{
+		*text = breach_code[0]; // the code screen's (draw_terminal types all its lines)
+		*count = breach_code_typed(&arena_breach);
+		*cursor = true;
+		return true;
+	}
 	return false;
+}
+
+// The designed crash's code screen (game/breach.h): `count` characters of its lines typed so far,
+// one line to a row, the cursor after the last. Printed again each frame (it only grows)
+static void draw_code(int count)
+{
+	for (int row = 0; row < BREACH_CODE_LINES && count > 0; ++row)
+	{
+		const char *line = breach_code[row];
+		char typed[41];
+		int n = 0;
+
+		while (line[n] != 0 && n < count && n < 40)
+		{
+			typed[n] = line[n];
+			n++;
+		}
+		typed[n] = 0;
+		if (n > 0)
+			jo_printf_with_color(TERMINAL_X, TERMINAL_Y + row, terminal_palette.id, "%s", typed);
+		count -= n;
+		// The cursor after the last character typed: at this line's end if the next isn't begun
+		if (count == 0 || row == BREACH_CODE_LINES - 1)
+			hud_draw_text_cursor(TERMINAL_X + n, TERMINAL_Y + row);
+		if (line[n] != 0)
+			break; // this line's not finished: nothing typed below it yet
+	}
+	jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
 }
 
 // Green terminal text typed out on black, behind a block cursor. Called every frame; returns
@@ -413,6 +448,11 @@ static bool draw_terminal(void)
 		jo_set_displayed_screens(TERMINAL_SCREENS);
 		showing = true;
 		shown = text;
+	}
+	if (arena_breach.phase == BREACH_CODE && text == breach_code[0])
+	{
+		draw_code(count);
+		return true;
 	}
 	// What's typed so far. The text only grows, so the screen needn't be cleared each frame
 	for (int i = 0; i < count && i < 40; ++i)
@@ -788,6 +828,25 @@ void draw_3d(void)
 				draw_cycle(bots[i].bike.position);
 	}
 	slave_draw_end(); // everything handed to the slave is drawn
+	// The mirror over the hole you broke through (level.h): the corridor again, reflected in it.
+	// After the slave's done with the meshes: the second pass fills them again
+	{
+		wall_clip_camera mirrored;
+
+		if (!spectating && clip != JO_NULL && level_mirror_begin(arena_corridor, clip, &mirrored))
+		{
+			const int mirror_frc = jo_time_get_frc(); // the debug line's "mi" (utils/perf.h)
+
+			jo_3d_push_matrix();
+			level_mirror_matrix();
+			slave_draw_begin();
+			level_mirror_draw(arena_corridor, &mirrored);
+			slave_draw_end();
+			jo_3d_pop_matrix();
+			level_mirror_end(arena_corridor, clip, player1.bike.position, foot_feet_height(), foot_head_height());
+			perf_part_add(PERF_MIRROR, mirror_frc);
+		}
+	}
 	jo_3d_pop_matrix();
 
 	draw_loop_break();
@@ -816,6 +875,12 @@ void draw_3d(void)
 				marker_count++;
 			}
 		hud_draw_minimap(player1.bike.position, field_trails, FIELD_TRAIL_COUNT, markers, marker_count);
+	}
+	{
+		int x, y;
+
+		if (!debug_camera && foot_target_on_screen(&x, &y))
+			hud_draw_lock(x, y); // the head's lock (game/target.h)
 	}
 	draw_status(false);
 	draw_breach_bands();

@@ -23,7 +23,7 @@ static void run(walker *w, walker_controls c, const walker_area *area, int frame
 // the entry right at the corridor's far end, filling its right half, level with its floor
 static void the_towers_are_on_the_plans_grid(void)
 {
-	const city_tower *entry = &city_towers[6]; // row 5, column 0
+	const city_tower *entry = city_tower_at(0, CITY_ENTRY_ROW);
 
 	for (int i = 0; i < CITY_TOWERS; ++i)
 	{
@@ -35,10 +35,12 @@ static void the_towers_are_on_the_plans_grid(void)
 	CHECK_EQ(0, entry->across_min);
 	CHECK_EQ(0, entry->height);
 	// Columns 0 and 1 touch; a street before column 2. Rows 5 and 6: a street
-	CHECK_EQ(city_towers[6].out_max, city_towers[7].out_min);
-	CHECK_EQ(CITY_STREET, city_towers[8].out_min - city_towers[7].out_max);
-	CHECK_EQ(CITY_STREET, city_towers[9].across_min - city_towers[6].across_max);
-	CHECK_EQ(city_towers[9].across_max, city_towers[12].across_min); // rows 6 and 7 touch
+	CHECK_EQ(city_tower_at(0, 5)->out_max, city_tower_at(1, 5)->out_min);
+	CHECK_EQ(CITY_STREET, city_tower_at(2, 5)->out_min - city_tower_at(1, 5)->out_max);
+	CHECK_EQ(CITY_STREET, city_tower_at(0, 6)->across_min - city_tower_at(0, 5)->across_max);
+	CHECK_EQ(city_tower_at(0, 6)->across_max, city_tower_at(0, 7)->across_min); // rows 6 and 7 touch
+	CHECK_EQ(CITY_HUB, city_tower_at(1, 0)->kind); // the CD block
+	CHECK_EQ(CITY_HUB, city_tower_at(3, 11)->kind); // Backup RAM
 }
 
 // The corridor's area has room for the city: its floor and walls (5), the grey box (25), the towers
@@ -124,8 +126,8 @@ static void a_drop_off_the_entry_climbs_back(void)
 	CHECK(corridor_out(&c, walker_position(&w)) <= CORRIDOR_LENGTH + CITY_TOWER_SIZE);
 }
 
-// Walking (not running) to the street's edge, you stop at its lip, and pushing on never takes you
-// over: there's nothing below a street to land on
+// Walking (not running: from 30 off, too near to get up to WALKER_MOVE_SPEED) to the street's edge,
+// you stop at its lip, and pushing on never takes you over: there's nothing below a street to land on
 static void a_street_never_lets_you_fall(void)
 {
 	corridor c;
@@ -135,15 +137,78 @@ static void a_street_never_lets_you_fall(void)
 
 	open_round_five(&c);
 	corridor_walker_area(&c, &area);
-	walker_init(&w, corridor_point(&c, CORRIDOR_LENGTH + 250, 400), 0x8000);
+	walker_init(&w, corridor_point(&c, CORRIDOR_LENGTH + 250, 470), 0x8000);
 	run(&w, ahead, &area, 600);
 	CHECK(!w.falling);
 	CHECK_EQ(0, walker_height(&w));
 	CHECK(walker_position(&w).y <= 500);
 }
 
+/*
+ * The way to the CD block (tools/work_ram_plan.py's route, 28 moves): every step is a move the
+ * walker can make in the table's towers. Side by side in a block (they touch): down at most a clean
+ * drop (120), or up at most a climb (100). Across a street (200, a jump: walker.h clears ~225): no
+ * higher than you left, and at most a clean drop down. Never onto a guard page or a sealed roof
+ */
+#define GAP_MAX(a, b) ((a) > (b) ? (a) : (b))
+static void the_way_to_the_cd_block_is_walkable(void)
+{
+	static const signed char route[][2] = {
+		{0, 5}, {1, 5}, {1, 6}, {1, 7}, {1, 8}, {1, 9}, {2, 9}, {2, 10}, {2, 11}, {3, 11}, {4, 11}, {4, 10}, {4, 9}, {4, 8}, {5, 8},
+		{6, 8}, {6, 7}, {6, 6}, {5, 6}, {4, 6}, {3, 6}, {3, 5}, {3, 4}, {3, 3}, {3, 2}, {3, 1}, {3, 0}, {2, 0}, {1, 0}};
+	const int steps = (int)(sizeof(route) / sizeof(route[0]));
+
+	CHECK_EQ(29, steps);
+	CHECK_EQ(CITY_HUB, city_tower_at(route[steps - 1][0], route[steps - 1][1])->kind);
+	for (int i = 1; i < steps; ++i)
+	{
+		const city_tower *a = city_tower_at(route[i - 1][0], route[i - 1][1]);
+		const city_tower *b = city_tower_at(route[i][0], route[i][1]);
+		// The gap between them, along whichever way they're side by side (the other overlaps)
+		// Each way: how far apart their facing edges are (0: they touch; negative: they overlap)
+		const int gap_out = GAP_MAX(b->out_min - a->out_max, a->out_min - b->out_max);
+		const int gap_across = GAP_MAX(b->across_min - a->across_max, a->across_min - b->across_max);
+		const int gap = gap_out > gap_across ? gap_out : gap_across;
+		const int up = b->height - a->height;
+
+		CHECK(b->kind == CITY_ROOF || b->kind == CITY_HUB);
+		CHECK(gap == 0 || gap == CITY_STREET);
+		if (gap == 0)
+			CHECK(up >= -120 && up <= WALKER_CLIMB);
+		else
+			CHECK(up <= 0 && up >= -120);
+	}
+}
+
+// In the new part, a street jumped as the walker does it: on (2, 9), -310, running south (across +:
+// a half turn) off its edge, over the street onto (2, 10), 50 lower: clean
+static void a_run_jumps_onto_backup_rams_block(void)
+{
+	corridor c;
+	walker_area area;
+	walker w;
+	const walker_controls ahead = {0, 1, 0, 0, 0};
+	const city_tower *from = city_tower_at(2, 9);
+	const int middle_out = (from->out_min + from->out_max) >> 1;
+	int frames;
+
+	open_round_five(&c);
+	corridor_walker_area(&c, &area);
+	walker_init_at(&w, corridor_point(&c, middle_out, from->across_min + 20), from->height, 0x8000);
+	for (frames = 0; frames < 400 && !w.falling; ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK(w.falling);
+	for (frames = 0; frames < 200 && w.falling; ++frames)
+		walker_update(&w, ahead, &area);
+	CHECK(!w.falling);
+	CHECK_EQ(city_tower_at(2, 10)->height, walker_height(&w));
+	CHECK_EQ(0, w.stagger);
+}
+
 void run_city_tests(void)
 {
+	RUN(the_way_to_the_cd_block_is_walkable);
+	RUN(a_run_jumps_onto_backup_rams_block);
 	RUN(the_towers_are_on_the_plans_grid);
 	RUN(the_corridor_has_room_for_the_city);
 	RUN(out_of_the_corridor_onto_the_entry);

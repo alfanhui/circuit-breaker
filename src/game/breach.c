@@ -32,7 +32,54 @@ void breach_init(breach *b)
 void breach_start(breach *b)
 {
 	breach_init(b);
-	b->phase = BREACH_TEAR;
+	b->phase = BREACH_CODE;
+}
+
+/*
+ * The code screen: the on-foot code, as it is in walker.c and target.c, cut down to fit 38
+ * columns. It's the game showing its own workings as it breaks: what you'll be doing next
+ */
+const char *const breach_code[BREACH_CODE_LINES] = {
+	"/* walker.c */",
+	"void walker_update(walker *w,",
+	"    walker_controls c, walker_area *a)",
+	"{",
+	"  w->yaw = (w->yaw+w->turn) & 0xFFFF;",
+	"  want = c.move > 0 ? WALK : 0;",
+	"  if (c.move > 0 && w->forward>=WALK)",
+	"    want = WALKER_RUN_SPEED;",
+	"  w->forward = approach(w->forward,",
+	"                        want);",
+	"  if (fast && head_on &&",
+	"      kicked_run_on(w, a, along, d))",
+	"    return; /* vault, slide, climb */",
+	"  walk(w, dx, dy, a, pushing);",
+	"}",
+	"",
+	"/* target.c */",
+	"int target_press_side(target_lock *l,",
+	"  target_list *t, target_eye *e,int s)",
+	"{",
+	"  if (enemy_about(t, e)) only_enemy();",
+	"  l->locked = nearest_in_view(t,e,s);",
+};
+
+int breach_code_typed(const breach *b)
+{
+	int total = 0;
+
+	if (b->phase != BREACH_CODE)
+		return 0;
+	// Every line's characters (counted here: the Saturn build has no C library's strlen)
+	for (int i = 0; i < BREACH_CODE_LINES; ++i)
+		for (const char *c = breach_code[i]; *c != 0; ++c)
+			total++;
+	return b->frames * BREACH_CODE_CHARS < total ? b->frames * BREACH_CODE_CHARS : total;
+}
+
+int breach_hit(const breach *b)
+{
+	return b->phase == BREACH_TEAR && b->frames == 1;
 }
 
 // A glitched frame: the picture's jump (smaller when calm), a tint, and 0 to 3 bands
@@ -90,6 +137,9 @@ void breach_update(breach *b)
 	b->frames++;
 	switch (b->phase)
 	{
+	case BREACH_CODE:
+		next_after(b, BREACH_CODE_FRAMES, BREACH_TEAR); // no glitches: a black screen and code
+		break;
 	case BREACH_TEAR:
 	{
 		// Worse and worse: a quarter of the frames glitch at first, then half, then three in four

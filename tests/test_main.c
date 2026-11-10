@@ -36,6 +36,7 @@ void run_walker_tests(void);
 void run_frustum_tests(void);
 void run_occluder_tests(void);
 void run_vdp1_gauge_tests(void);
+void run_target_tests(void);
 
 int main(void)
 {
@@ -72,6 +73,7 @@ int main(void)
 	run_frustum_tests();
 	run_occluder_tests();
 	run_vdp1_gauge_tests();
+	run_target_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

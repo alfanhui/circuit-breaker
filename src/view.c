@@ -500,6 +500,43 @@ void view_on_foot(int yaw, int look_x, int look_y, int bob)
 	foot_bob = bob;
 }
 
+void view_head_aim(int head_yaw, int head_pitch)
+{
+	// The view's pitch is + down, the target's + up. As far as a head turns: a target further
+	// round is looked at as far as it goes (target.h lets go of it past TARGET_REACH)
+	const int yaw = head_yaw > LOOK_ANGLE ? LOOK_ANGLE : head_yaw < -LOOK_ANGLE ? -LOOK_ANGLE : head_yaw;
+	int pitch = -head_pitch;
+
+	pitch = pitch < -LOOK_UP_ANGLE ? -LOOK_UP_ANGLE : pitch > LOOK_DOWN_ANGLE ? LOOK_DOWN_ANGLE : pitch;
+	look_target = yaw;
+	// A head turned aside dips a little (LOOK_PITCH_X256, added as the frame's drawn): taken off
+	// here, so once it's eased there the pitch is the target's. Easing, the two move together
+	look_pitch_target = pitch - (((yaw < 0 ? -yaw : yaw) * LOOK_PITCH_X256) >> 8);
+}
+
+int view_look_yaw(void)
+{
+	return look_now;
+}
+
+bool view_aim_on_screen(int head_yaw, int head_pitch, int *screen_x, int *screen_y)
+{
+	// How far the view still has to turn to it, each way: across, and down (the view's pitch now
+	// is the turned head's dip and the look's pitch, as the frame's drawn)
+	const int across = head_yaw - look_now;
+	const int down = -head_pitch - ((((look_now < 0 ? -look_now : look_now) * LOOK_PITCH_X256) >> 8) + look_pitch_now);
+	jo_fixed focal;
+
+	if (across >= (fov_now >> 1) || across <= -(fov_now >> 1) || down >= 0x2000 || down <= -0x2000)
+		return false; // off the screen (or nearly: no bracket)
+	// The screen's half width over tan of half the field of view: pixels for a tan of 1. Then
+	// each way's tan of it. Three divisions (angle_tan's), once a frame for the one target
+	focal = jo_fixed_div(jo_int2fixed(JO_TV_WIDTH_2), angle_tan((jo_angle)(fov_now >> 1)));
+	*screen_x = jo_fixed_mult_to_int(angle_tan((jo_angle)across), focal);
+	*screen_y = jo_fixed_mult_to_int(angle_tan((jo_angle)down), focal);
+	return true;
+}
+
 bool view_is_on_foot(void)
 {
 	return on_foot;

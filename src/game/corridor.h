@@ -4,6 +4,7 @@
 #include "world.h"
 #include "wall_flicker.h"
 #include "walker.h"
+#include "target.h"
 
 /*
  * The corridor behind the flicker (docs/STORY.md: the designed crash). Pure C, unit-tested on
@@ -97,11 +98,12 @@ int corridor_clip(const world_point *poly, int n, const world_point quad[4], wor
  *   - past it, on the left, a lower roof at 64: a clean drop (96), long enough to land a run's jump
  *   - on the right, the floor: a long drop (160), a stagger
  *   - beyond the lower roof, a tower too tall to climb: a wall
- *   - before the stairs, a crate waist-high (40: 92 cm): a wall walking, a vault over at a run
- *   - before that, on the right half (across 8 .. 16, which is on your left as you face out: the
- *     halves go by across, not by your view), a yard to try the run's moves on (walker.h), each a wall
- *     walking: a rail to vault over, a duct to slide under, a ledge to climb (90) beside one too
- *     high to (140). The left half's left clear: the way to the stairs
+ *   - before the stairs, a crate waist-high (40: 92 cm) across the whole corridor: a wall
+ *     walking, a vault over running
+ *   - before that, from where you get up, the run's moves taught (walker.h): a rail to vault
+ *     over and a duct to slide under, each across the whole corridor (no way round), then on the
+ *     right half (across 8 .. 16, which is on your left as you face out: the halves go by across,
+ *     not by your view) a ledge to climb (90) beside one too high to (140)
  */
 #define CORRIDOR_BOXES 29
 
@@ -122,5 +124,9 @@ void corridor_box_corners(const corridor *c, const corridor_box *box, world_poin
 // left half, and the hole behind you: you can't step back into the arena, its trails stand there),
 // the grey box's roofs on it, and past the far end's right half the city's towers (city.h)
 void corridor_walker_area(const corridor *c, walker_area *area);
+
+// What the head can lock onto on foot (target.h): the yard's rail, duct and ledge, the crate, the
+// top of the stairs, the drop's landing, the tower and the doorway out. No enemy yet (the drone)
+void corridor_targets(const corridor *c, target_list *list);
 
 #endif

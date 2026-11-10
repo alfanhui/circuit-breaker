@@ -276,8 +276,44 @@ static void a_polygon_behind_you_is_dropped(void)
 	CHECK_EQ(0, frustum_clip(&f, FRUSTUM_SCREEN, behind, 4, out));
 }
 
+// In a mirror across x = 300: a point's as far inside the reflected view's planes as its
+// reflection is inside the view's own, for every plane, and the eye's reflected
+static void a_mirror_reflects_the_view(void)
+{
+	frustum f, m;
+	static const frustum_point points[4] = {{0, -500, 35}, {200, -300, 80}, {-400, -900, 0}, {900, -100, 300}};
+
+	level_camera(&f);
+	frustum_reflect(&f, 0, 300, &m);
+	CHECK_EQ(600, m.eye.x);
+	CHECK_EQ(EYE.y, m.eye.y);
+	CHECK_EQ(-NORTH[0], m.forward[0]);
+	CHECK_EQ(-EAST[0], m.right[0]); // the mirror swaps left and right
+	for (int k = 0; k < 4; ++k)
+	{
+		const frustum_point p = points[k];
+		const frustum_point r = {600 - p.x, p.y, p.z};
+
+		for (int i = 0; i < f.count; ++i)
+			CHECK_EQ(frustum_distance(&f, i, p), frustum_distance(&m, i, r));
+	}
+	// Across y, the same
+	frustum_reflect(&f, 1, -1000, &m);
+	CHECK_EQ(-2000, m.eye.y);
+	CHECK_EQ(-NORTH[1], m.forward[1]);
+	for (int k = 0; k < 4; ++k)
+	{
+		const frustum_point p = points[k];
+		const frustum_point r = {p.x, -2000 - p.y, p.z};
+
+		for (int i = 0; i < f.count; ++i)
+			CHECK_EQ(frustum_distance(&f, i, p), frustum_distance(&m, i, r));
+	}
+}
+
 void run_frustum_tests(void)
 {
+	RUN(a_mirror_reflects_the_view);
 	RUN(square_roots_round_down);
 	RUN(distances_are_in_world_units);
 	RUN(what_the_camera_sees);

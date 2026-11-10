@@ -1049,6 +1049,11 @@ static void cap_band_bottoms(block_band *band, int first, const wall_clip_camera
 #define GREY_SIDE_X_ALT JO_COLOR_RGB(116, 116, 130)
 #define GREY_SIDE_Y_ALT JO_COLOR_RGB(88, 88, 102)
 #define GREY_UNDERSIDE JO_COLOR_RGB(48, 48, 60) // a bar's, seen from below: in its own shadow
+// A hub's tower (city.h, CITY_HUB): lit cyan the full height of it, a landmark to find your way
+// back to from anywhere you can see it (docs/WORK_RAM.md, "Hubs and lifts")
+#define HUB_SIDE_X JO_COLOR_RGB(40, 190, 225)
+#define HUB_SIDE_Y JO_COLOR_RGB(28, 140, 180)
+#define HUB_TOP JO_COLOR_RGB(150, 240, 255)
 
 /*
  * The boxes as the world has them, worked out once when the corridor's open (and again only if
@@ -1072,6 +1077,7 @@ typedef struct
 	short middle; // halfway up, from its floor to its top
 	short bottom[4];
 	short height, floor;
+	bool lit; // a hub's tower: drawn lit (HUB_SIDE_X ...)
 } grey_box;
 /*
  * The boxes in groups that stand together, each with a box round them all: tested first, as one
@@ -1081,14 +1087,22 @@ typedef struct
  * lists them a row at a time). Tested one by one, every box every frame was a sixth of the frame
  */
 #define GREY_STAIRS 20
-#define GREY_CITY_ROW 3
-#define GREY_GROUPS (2 + CITY_TOWERS / GREY_CITY_ROW)
+/*
+ * The city's in groups of a block, 2 x 2 towers (the last column's blocks 1 x 2): its boxes are
+ * put in the grey box's list a block at a time (grey_boxes_work_out), so a block is a run of them.
+ * A row of the plan as one group (7 towers across) was almost never wholly out of view, and with 84
+ * towers every one was tested every frame: 83% of a frame (play-test 2026-11-09)
+ */
+#define GREY_BLOCK_COLUMNS ((CITY_COLUMNS + 1) >> 1)
+#define GREY_BLOCK_ROWS (CITY_ROWS >> 1)
+#define GREY_GROUPS (2 + GREY_BLOCK_COLUMNS * GREY_BLOCK_ROWS)
 typedef struct
 {
 	unsigned char first, last; // its boxes, first to last
 	frustum_point middle, half; // the box round them all: its middle, and half its size each way
 } grey_group;
 static world_rect grey_corridor_floor; // the corridor's floor, for grey_side_bottom
+static unsigned char grey_city_order[CITY_TOWERS]; // the city's towers (city.h's index) in block order
 static int grey_boxes_for = -1; // the corridor they're for: its wall and side (-1: none yet)
 
 /*
@@ -1096,8 +1110,8 @@ static int grey_boxes_for = -1; // the corridor they're for: its wall and side (
  * breach starts, given back when the arena starts again. NULL meanwhile: nothing's drawn
  */
 // The boxes' faces, sides and tops, each cut to the view: most a quad, some up to 7 (draw_corridor_boxes)
-#define GREY_POINTS_MAX 640
-#define GREY_QUADS_MAX 288
+#define GREY_POINTS_MAX 1000 // 640 and 288 with the city's first 21 towers; it's 84 now (city.h)
+#define GREY_QUADS_MAX 448
 typedef struct
 {
 	jo_pos3D_fixed points[CORRIDOR_POINTS_MAX]; // the glass floor's
@@ -1108,6 +1122,7 @@ typedef struct
 	jo_3d_polygon_attribute grey_attributes[GREY_QUADS_MAX];
 	grey_box boxes[GREY_BOXES];
 	grey_group groups[GREY_GROUPS];
+	unsigned char block_first[GREY_GROUPS]; // each group's first box (the city's: by block)
 	frustum_point stairs_ramp[4], stairs_side[4]; // the stairs far off: grey_stairs_ramp
 	short stairs_open_line, stairs_open_out; // their open side: its line (x or y), and outside it, +1 or -1
 	bool stairs_open_along_x;				 // the open side runs along x (it's at y = line)
@@ -1122,6 +1137,7 @@ static corridor_memory *corridor_meshes = JO_NULL;
 #define grey_mesh_attributes (corridor_meshes->grey_attributes)
 #define grey_boxes (corridor_meshes->boxes)
 #define grey_groups (corridor_meshes->groups)
+#define grey_block_first (corridor_meshes->block_first)
 #define grey_stairs_ramp_corners (corridor_meshes->stairs_ramp)
 #define grey_stairs_side_corners (corridor_meshes->stairs_side)
 #define grey_stairs_open_line (corridor_meshes->stairs_open_line)
@@ -1207,6 +1223,21 @@ static void grey_boxes_work_out(const corridor *passage)
 		grey_corridor_floor.y_min = JO_MIN(a.y, b.y);
 		grey_corridor_floor.y_max = JO_MAX(a.y, b.y);
 	}
+	// The city's towers a block at a time (2 x 2), each block's first box noted: a group each
+	{
+		int i = CORRIDOR_BOXES, g = 2;
+
+		grey_block_first[0] = 0;
+		grey_block_first[1] = GREY_STAIRS;
+		for (int block_row = 0; block_row < GREY_BLOCK_ROWS; ++block_row)
+			for (int block_column = 0; block_column < GREY_BLOCK_COLUMNS; ++block_column)
+			{
+				grey_block_first[g++] = (unsigned char)i;
+				for (int row = block_row * 2; row < block_row * 2 + 2; ++row)
+					for (int column = block_column * 2; column < block_column * 2 + 2 && column < CITY_COLUMNS; ++column)
+						grey_city_order[i++ - CORRIDOR_BOXES] = (unsigned char)(row * CITY_COLUMNS + column);
+			}
+	}
 	for (int i = 0; i < GREY_BOXES; ++i)
 	{
 		world_point a, b;
@@ -1217,12 +1248,16 @@ static void grey_boxes_work_out(const corridor *passage)
 			corridor_box_corners(passage, &corridor_boxes[i], &a, &b);
 			grey_boxes[i].height = corridor_boxes[i].height;
 			grey_boxes[i].floor = corridor_boxes[i].floor; // a bar's above the floor
+			grey_boxes[i].lit = false;
 		}
 		else
 		{
-			city_tower_corners(passage, &city_towers[i - CORRIDOR_BOXES], &a, &b);
-			grey_boxes[i].height = city_towers[i - CORRIDOR_BOXES].height;
+			const city_tower *t = &city_towers[grey_city_order[i - CORRIDOR_BOXES]];
+
+			city_tower_corners(passage, t, &a, &b);
+			grey_boxes[i].height = t->height;
 			grey_boxes[i].floor = CITY_GROUND;
+			grey_boxes[i].lit = t->kind == CITY_HUB;
 		}
 		r->x_min = JO_MIN(a.x, b.x);
 		r->x_max = JO_MAX(a.x, b.x);
@@ -1263,8 +1298,8 @@ static void grey_boxes_work_out(const corridor *passage)
 		grey_group *group = &grey_groups[g];
 		int x_min = 32000, x_max = -32000, y_min = 32000, y_max = -32000, z_min = 32000, z_max = -32000;
 
-		group->first = (unsigned char)(g == 0 ? 0 : g == 1 ? GREY_STAIRS : CORRIDOR_BOXES + (g - 2) * GREY_CITY_ROW);
-		group->last = (unsigned char)(g == 0 ? GREY_STAIRS - 1 : g == 1 ? CORRIDOR_BOXES - 1 : group->first + GREY_CITY_ROW - 1);
+		group->first = grey_block_first[g];
+		group->last = (unsigned char)((g + 1 < GREY_GROUPS ? grey_block_first[g + 1] : GREY_BOXES) - 1);
 		for (int i = group->first; i <= group->last; ++i)
 		{
 			const grey_box *b = &grey_boxes[i];
@@ -1386,16 +1421,210 @@ static void grey_portal_set(const corridor *passage)
 		portal.floor_planes &= ~right_plane;
 }
 
+/*
+ * The mirror (play-test 2026-11-09): looking back from the corridor, the hole you broke through is a
+ * mirror, and you see yourself in it: as a person now, where riding you were only energy (the
+ * cube). It's the standard way: the corridor drawn a second time, reflected in the glass's plane.
+ *   - Drawing the world reflected is the same as cutting the world as it is to the view of your eye
+ *     reflected in the glass, then reflecting what's left (game/frustum.h, frustum_reflect). So
+ *     the second pass is the first's code (the floor, the boxes, the walls) run with level_view
+ *     reflected, inside a matrix that reflects the world (level_mirror_matrix)
+ *   - It's cut to the glass: its outline's four edges, seen from the reflected eye, take the place
+ *     of the screen's four edges (planes 1 .. 4). Everything that's cut by the screen is then cut
+ *     by the glass instead, with no change to the code that draws it. The guard band stays
+ *   - Everything reflected is beyond the glass, further than anything in front of it: VDP1 draws
+ *     far to near, so the reflection lands behind what's this side of it, with no depth buffer
+ *   - It's tinted darker and cooler (mirror_colour: no cost to VDP1), so it reads as glass
+ * Only from inside the corridor, with the glass in view: from the city it's far and small, and
+ * the dark glass (add_corridor_glass) stands in for it. The arena's inside is already hidden below
+ * the glass's top (arena_culling_begin), so nothing of it is drawn where the reflection goes
+ */
+#define MIRROR_SHADE 3 // 3 of a channel's 31 steps darker (blue: none): the corridor's already dark,
+					   // and a darker glass hid it (5 was near black)
+#define MIRROR_NEAR 20 // nearer the glass than this, no reflection (you're at the glass)
+// How far out from the glass the reflection's drawn: the start, its rail and duct (corridor.c), and
+// no further. Beyond, a near-black wall across the corridor (mirror_far_wall), as if the glass
+// darkened with depth. All of it, the stairs, the tower and the city through the far doorway, took
+// 41% of a frame near the glass (cpu 104%, 57 fps)
+#define MIRROR_DEPTH 2300
+static bool mirror_on = false; // this frame: the glass is in view from the corridor
+static int mirror_axis;		   // 0: the corridor runs out along x, 1: along y
+static int mirror_at;		   // the glass's plane: that coordinate
+static int mirror_shade = 0;   // drawing the reflection: how much darker (0: not)
+static frustum mirror_saved;   // level_view, while the reflection's drawn
+static grey_portal mirror_saved_portal;
+static int mirror_across_min, mirror_across_max; // the corridor's width, while the mirror's on
+
+// The glass's four corners in order round it (floor to the corridor's walls' top, at out 0), and
+// a point inside it
+static void mirror_pane(const corridor *passage, frustum_point *pane, frustum_point *centre)
+{
+	const world_point a = corridor_point(passage, 0, passage->across_min);
+	const world_point b = corridor_point(passage, 0, passage->across_max);
+
+	pane[0] = grey_point(a, WALL_BOTTOM_Z);
+	pane[1] = grey_point(b, WALL_BOTTOM_Z);
+	pane[2] = grey_point(b, CORRIDOR_TOP_ON_FOOT);
+	pane[3] = grey_point(a, CORRIDOR_TOP_ON_FOOT);
+	centre->x = (a.x + b.x) >> 1;
+	centre->y = (a.y + b.y) >> 1;
+	centre->z = CORRIDOR_TOP_ON_FOOT >> 1;
+}
+
+// A flat colour as the glass shows it: red and green MIRROR_SHADE darker, blue as it is:
+// darker and cooler (RGB555: red in bits 0 .. 4, green 5 .. 9, blue 10 .. 14)
+static jo_color mirror_colour(jo_color colour)
+{
+	int r, g, b;
+
+	if (mirror_shade == 0)
+		return colour;
+	r = (colour & 31) - mirror_shade;
+	g = ((colour >> 5) & 31) - mirror_shade;
+	b = (colour >> 10) & 31;
+	r = r < 0 ? 0 : r;
+	g = g < 0 ? 0 : g;
+	b = b < 1 ? 1 : b; // never all 0 with bit 15: still not see-through
+	return (jo_color)(0x8000 | (b << 10) | (g << 5) | r);
+}
+
+static void mirror_decide(const corridor *passage)
+{
+	const world_point origin = corridor_point(passage, 0, 0);
+	frustum_point pane[4], centre;
+	world_point eye;
+	int out;
+
+	mirror_on = false;
+	if (!level_view_on || !view_is_on_foot())
+		return;
+	eye.x = (short)level_view.eye.x;
+	eye.y = (short)level_view.eye.y;
+	out = corridor_out(passage, eye);
+	if (out < MIRROR_NEAR || out > CORRIDOR_LENGTH)
+		return; // not in the corridor
+	mirror_axis = corridor_point(passage, 1, 0).x != origin.x ? 0 : 1;
+	mirror_at = mirror_axis == 0 ? origin.x : origin.y;
+	mirror_across_min = passage->across_min;
+	mirror_across_max = passage->across_max;
+	mirror_pane(passage, pane, &centre);
+	mirror_on = frustum_classify(&level_view, pane, 4, FRUSTUM_SCREEN) != FRUSTUM_OUTSIDE;
+}
+
+/*
+ * Whether a piece of the arena's wall, column a to b, stands in the glass: in its plane, and wholly
+ * within the corridor's width. With the mirror drawn there it isn't drawn: the shattered glass was
+ * 1 nearer and hid it, but the mirror's reflection is beyond the plane, and a slice of the wall at
+ * the hole's edge showed in front of it, a striped post (play-test 2026-11-09). Wholly within, not
+ * touching: arena_piece_hidden's runs are halved on the rule that a part of a hidden box is hidden
+ */
+
+static bool mirror_in_the_glass(world_point a, world_point b)
+{
+	const int along_a = mirror_axis == 0 ? a.x : a.y, along_b = mirror_axis == 0 ? b.x : b.y;
+	const int across_a = mirror_axis == 0 ? a.y : a.x, across_b = mirror_axis == 0 ? b.y : b.x;
+	const int low = across_a < across_b ? across_a : across_b, high = across_a < across_b ? across_b : across_a;
+
+	return mirror_on && along_a == mirror_at && along_b == mirror_at && low >= mirror_across_min - 2 &&
+		   high <= mirror_across_max + 2;
+}
+
 void level_view_begin(const corridor *passage, bool free_camera)
 {
 	level_view_on = view_frustum(free_camera, &level_view);
 	portal.inside = portal.outside = false;
 	portal.planes = 0;
+	mirror_on = false;
 	if (passage == JO_NULL || !passage->open || corridor_meshes == JO_NULL)
 		return;
 	grey_boxes_work_out(passage);
 	grey_portal_set(passage);
+	mirror_decide(passage);
 }
+
+bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera, wall_clip_camera *mirrored)
+{
+	frustum m;
+	frustum_plane guard[4];
+	frustum_point pane[4], centre;
+
+	if (!mirror_on || camera == JO_NULL)
+		return false;
+	frustum_reflect(&level_view, mirror_axis, mirror_at, &m);
+	// The glass's edges in place of the screen's (1 .. 4), the guard band's (5 .. 8) kept. The
+	// doorway's planes (from 9) were the real eye's: grey_portal_set adds the reflected eye's
+	for (int k = 0; k < 4; ++k)
+		guard[k] = m.planes[5 + k];
+	m.count = 1;
+	mirror_pane(passage, pane, &centre);
+	for (int k = 0; k < 4; ++k)
+		if (frustum_add_edge(&m, pane[k], pane[(k + 1) & 3], centre) == 0)
+			return false; // the reflected eye's on an edge's line: no reflection this frame
+	for (int k = 0; k < 4; ++k)
+		m.planes[5 + k] = guard[k];
+	m.count = FRUSTUM_PORTAL_FIRST;
+	// The near plane's no use to the reflected eye (everything's well in front of it): in its place,
+	// the reflection's depth, out up to MIRROR_DEPTH. Every cut has the near plane (planes 0 ..), so
+	// everything's cut to it with no change to the code. Its normal points back down the corridor
+	// (-dir along the axis, dir the way out goes); it's 0 at out = MIRROR_DEPTH, measured from the eye
+	{
+		const world_point origin = corridor_point(passage, 0, 0), one = corridor_point(passage, 1, 0);
+		const int dir = mirror_axis == 0 ? one.x - origin.x : one.y - origin.y; // 1 or -1
+		const int limit = mirror_at + dir * MIRROR_DEPTH;
+		const int eye = mirror_axis == 0 ? m.eye.x : m.eye.y;
+
+		m.planes[FRUSTUM_NEAR].x = mirror_axis == 0 ? -dir * FRUSTUM_ONE : 0;
+		m.planes[FRUSTUM_NEAR].y = mirror_axis == 1 ? -dir * FRUSTUM_ONE : 0;
+		m.planes[FRUSTUM_NEAR].z = 0;
+		m.planes[FRUSTUM_NEAR].offset = -dir * FRUSTUM_ONE * (limit - eye);
+	}
+	mirror_saved = level_view;
+	mirror_saved_portal = portal;
+	level_view = m;
+	grey_portal_set(passage);
+	*mirrored = *camera;
+	if (mirror_axis == 0)
+	{
+		mirrored->eye.x = (short)(2 * mirror_at - camera->eye.x);
+		mirrored->forward_x = -camera->forward_x;
+	}
+	else
+	{
+		mirrored->eye.y = (short)(2 * mirror_at - camera->eye.y);
+		mirrored->forward_y = -camera->forward_y;
+	}
+	if (object_fog_enabled)
+		object_fog_set_camera(mirrored->eye, mirrored->forward_x, mirrored->forward_y);
+	mirror_shade = MIRROR_SHADE;
+	return true;
+}
+
+static void mirror_far_wall(const corridor *passage); // below
+
+void level_mirror_draw(const corridor *passage, const wall_clip_camera *mirrored)
+{
+	draw_corridor_floor(passage, mirrored);
+	draw_corridor_boxes(passage, mirrored);
+	mirror_far_wall(passage);
+}
+
+void level_mirror_matrix(void)
+{
+	// A point p goes to 2 x mirror_at - p on the axis: moved so the glass is at 0, flipped, moved back
+	if (mirror_axis == 0)
+	{
+		jo_3d_translate_matrix(mirror_at, 0, 0);
+		matrix_scale(-JO_FIXED_1, JO_FIXED_1, JO_FIXED_1);
+		jo_3d_translate_matrix(-mirror_at, 0, 0);
+	}
+	else
+	{
+		jo_3d_translate_matrix(0, mirror_at, 0);
+		matrix_scale(JO_FIXED_1, -JO_FIXED_1, JO_FIXED_1);
+		jo_3d_translate_matrix(0, -mirror_at, 0);
+	}
+}
+
 
 /*
  * The broken glass over the hole you came through (tools/make_glass.py): looking back from the
@@ -1407,6 +1636,7 @@ void level_view_begin(const corridor *passage, bool free_camera)
 #define GLASS_PIECES 4
 static jo_3d_polygon_attribute glass_attributes[GLASS_PIECES];
 static bool glass_loaded = false;
+static jo_3d_polygon_attribute figure_attribute; // you, in the mirror (tools/make_figure.py)
 
 void load_corridor_glass(void)
 {
@@ -1428,6 +1658,17 @@ void load_corridor_glass(void)
 		glass_attributes[k].plane = JO_3D_DUAL_PLANE;
 		jo_3d_set_mesh_polygon_texture(&setter, id, 0);
 	}
+	{
+		// Magenta round the figure: see-through
+		const int id = jo_sprite_add_tga(JO_ROOT_DIR, "FIGURE.TGA", JO_COLOR_RGB(255, 0, 255));
+
+		setter.data.attributes = &figure_attribute;
+		JO_ZERO(figure_attribute.sort);
+		JO_ZERO(figure_attribute.draw_mode);
+		JO_ZERO(figure_attribute.gouraud_table);
+		figure_attribute.plane = JO_3D_DUAL_PLANE;
+		jo_3d_set_mesh_polygon_texture(&setter, id, 0);
+	}
 	glass_loaded = true;
 }
 
@@ -1441,8 +1682,9 @@ static void add_corridor_glass(const corridor *passage, const world_point *eye, 
 	const int first_texture = (GLASS_PIECES - pieces) >> 1;
 	world_point columns[GLASS_PIECES + 1];
 
-	if (!glass_loaded || corridor_out(passage, *eye) <= 0)
-		return; // not loaded yet, or you're not in the corridor: nothing to look back at
+	if (!glass_loaded || corridor_out(passage, *eye) <= 0 || mirror_on)
+		return; // not loaded yet, or you're not in the corridor: nothing to look back at. Or the
+				// mirror's drawn there instead (level_mirror_begin)
 	for (int k = 0; k <= pieces; ++k)
 		columns[k] = corridor_point(passage, 1, passage->across_min + 250 * k);
 	for (int k = 0; k < pieces; ++k)
@@ -1642,6 +1884,8 @@ static bool arena_piece_hidden(world_point a, world_point b, int z_bottom, int z
 
 	if (!arena_culling)
 		return false;
+	if (mirror_in_the_glass(a, b))
+		return true;
 	centre.x = (a.x + b.x) >> 1;
 	centre.y = (a.y + b.y) >> 1;
 	centre.z = (z_bottom + z_top) >> 1;
@@ -1821,6 +2065,7 @@ static int glass_tile_place(const wall_clip_camera *camera, world_point centre, 
 #define GLASS_FOG_CORNERS (-1)
 static bool add_glass(const world_point *corners, int n, jo_color colour, int fog, bool on_top, int *points, int *quads)
 {
+	colour = mirror_colour(colour);
 	unsigned char fog_levels[CORRIDOR_CLIP_MAX];
 
 	if (*points + n > CORRIDOR_POINTS_MAX || *quads + (n - 1) / 2 > CORRIDOR_QUADS_MAX)
@@ -1904,6 +2149,7 @@ static void level_mesh_begin(level_mesh *m, jo_pos3D_fixed *points, jo_3d_polygo
 static bool level_face_add(level_mesh *m, const frustum_point *corners, int n, unsigned planes, jo_color colour, int fog,
 						   int sort, bool lie)
 {
+	colour = mirror_colour(colour); // unchanged but in the mirror
 	frustum_point cut[FRUSTUM_POLY_MAX];
 	frustum_point turned[4];
 	unsigned char levels[FRUSTUM_POLY_MAX];
@@ -2040,16 +2286,31 @@ static bool grey_stairs_profiled(int i, bool along_x, int line); // below
 
 // One side of box i: from what hides its foot (bottom: grey_side_bottom) to its top. test: the
 // planes to test it against (0: its box is wholly in view, so it is too)
+/*
+ * A city tower's sides end CITY_SIDE_DEPTH below the eye, not at the ground 3000 down: below that
+ * the background's black (the VDP2 floor's off on foot), so the towers drop away into the dark, as
+ * the plan has it ("the drop feels endless"). With 84 towers, sides to the ground nearly all reached
+ * past the screen's bottom and were cut there, in 3D, two divisions each: the boxes took 83% of a
+ * frame from the entry (play-test 2026-11-09). Ending higher, most stay inside the screen and its
+ * guard band, uncut, and VDP1 has less to fill
+ */
+#define CITY_SIDE_DEPTH 900
+
 static void grey_side_add(int i, int which, bool along_x, int line, int from, int to, unsigned test)
 {
 	const grey_box *b = &grey_boxes[i];
 	frustum_point c[4];
 	jo_color colour;
+	int bottom = b->bottom[which];
 
-	if (b->bottom[which] >= b->height || grey_stairs_profiled(i, along_x, line))
-		return; // hidden all the way up, or the stairs' profile stands in for it
-	level_side_corners(along_x, line, from, to, b->bottom[which], b->height, c);
-	if (i & 1)
+	if (b->floor == CITY_GROUND && level_view_on && bottom < level_view.eye.z - CITY_SIDE_DEPTH)
+		bottom = level_view.eye.z - CITY_SIDE_DEPTH;
+	if (bottom >= b->height || grey_stairs_profiled(i, along_x, line))
+		return; // hidden all the way up (or below the depth they're drawn to), or the stairs' profile
+	level_side_corners(along_x, line, from, to, bottom, b->height, c);
+	if (b->lit)
+		colour = along_x ? HUB_SIDE_Y : HUB_SIDE_X;
+	else if (i & 1)
 		colour = along_x ? GREY_SIDE_Y_ALT : GREY_SIDE_X_ALT;
 	else
 		colour = along_x ? GREY_SIDE_Y : GREY_SIDE_X;
@@ -2222,6 +2483,7 @@ static void grey_boxes_add(void)
 				if (test == FRUSTUM_OUTSIDE)
 					continue; // none of it can be seen from here
 			}
+
 			if (e->x < r->x_min || !level_view_on)
 				grey_side_add(i, GREY_X_MIN, false, r->x_min, r->y_min, r->y_max, test);
 			if (e->x > r->x_max || !level_view_on)
@@ -2238,7 +2500,7 @@ static void grey_boxes_add(void)
 											  {r->x_min, r->y_max, b->height}};
 
 				level_face_add(&grey_out, top, 4, test != 0 ? level_planes_rect(&top[0], &top[2], test) : 0,
-							   grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
+							   b->lit ? HUB_TOP : grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
 			}
 			// A bar (its floor above the corridor's): its underside, from below it
 			if (b->floor > 0 && -view_z < b->floor)
@@ -2478,6 +2740,7 @@ static jo_color glass_seam_colour(int level)
 // a line (JO_VDP1_LINE: from its first corner to its second), on the points given, chained (JO_3D_SORT_PREVIOUS)
 static void glass_line_add(level_mesh *m, int p0, int p1, int p2, int p3, unsigned int kind, jo_color colour)
 {
+	colour = mirror_colour(colour);
 	jo_3d_polygon *q;
 	jo_3d_polygon_attribute *a;
 
@@ -2727,4 +2990,146 @@ void draw_corridor_floor(const corridor *passage, const wall_clip_camera *camera
 	corridor_mesh.data.point_count = (unsigned short)points;
 	corridor_mesh.data.polygon_count = (unsigned short)quads;
 	slave_draw_mesh(&corridor_mesh); // the slave draws it (slave_draw.h)
+}
+
+/*
+ * In the mirror, you: a faceless figure (tools/make_figure.py), stood where your reflection is.
+ * You stand at the same across as your eye, so the line from your eye to your reflection runs
+ * straight along the corridor: a flat figure across the corridor faces you head on, always, with no
+ * turning worked out. As tall as you are now (crouched in a slide, lower). Drawn at its true depth:
+ * the reflected floor's chain is keyed at its deepest (glass_anchor), so it's never drawn over it.
+ *
+ * And the glass itself: two streaks of light across it, half-transparent (VDP1 reads the pixel
+ * behind each of theirs: 6 times a plain pixel's cost, but they're thin), just this side of it, so
+ * they're drawn over the reflection: it reads as a pane, solid, not a way through
+ */
+#define FIGURE_HALF_WIDTH 12 // 24 across: the texture's 32 texels at ~0.8 units each
+#define GLINT_POINTS 24
+#define GLINT_QUADS 12
+static jo_pos3D_fixed figure_points[4];
+static jo_3d_polygon figure_polygon;
+static jo_3d_mesh figure_mesh;
+static jo_pos3D_fixed glint_points[GLINT_POINTS];
+static jo_3d_polygon glint_polygons[GLINT_QUADS];
+static jo_3d_polygon_attribute glint_attributes[GLINT_QUADS];
+static jo_3d_mesh glint_mesh;
+
+static void mirror_figure(const corridor *passage, world_point you, int feet, int head)
+{
+	const int out = corridor_out(passage, you);
+	// The reflection's across: you, as the eye sees it (corridor_point's across is x or y, the axis
+	// the glass doesn't flip)
+	const int across = mirror_axis == 0 ? you.y : you.x;
+	const world_point a = corridor_point(passage, -out, across - FIGURE_HALF_WIDTH);
+	const world_point b = corridor_point(passage, -out, across + FIGURE_HALF_WIDTH);
+	frustum_point corners[4];
+
+	corners[0] = grey_point(a, head); // as the texture: top left, top right, bottom right, bottom left
+	corners[1] = grey_point(b, head);
+	corners[2] = grey_point(b, feet);
+	corners[3] = grey_point(a, feet);
+	// Only wholly in front of the eye (a corner behind it would be drawn wrapped round the screen)
+	if (frustum_classify(&level_view, corners, 4, 1u << FRUSTUM_NEAR) != 0)
+		return;
+	for (int k = 0; k < 4; ++k)
+	{
+		figure_points[k].x = jo_int2fixed(corners[k].x);
+		figure_points[k].y = jo_int2fixed(corners[k].y);
+		figure_points[k].z = jo_int2fixed(corners[k].z);
+	}
+	figure_polygon.normal.x = figure_polygon.normal.y = JO_FIXED_0;
+	figure_polygon.normal.z = JO_FIXED_1;
+	for (int k = 0; k < 4; ++k)
+		figure_polygon.vertices[k] = (unsigned short)k;
+	figure_mesh.data.points = figure_points;
+	figure_mesh.data.polygons = &figure_polygon;
+	figure_mesh.data.attributes = &figure_attribute;
+	figure_mesh.data.point_count = 4;
+	figure_mesh.data.polygon_count = 1;
+	jo_3d_mesh_draw(&figure_mesh);
+}
+
+static void mirror_glints(const corridor *passage)
+{
+	// Each streak: a slanting band up the glass, from (bottom across, top across) in sixteenths of
+	// its width: a sixteenth of it wide (the first), half that (the second)
+	static const unsigned char streaks[2][2] = {{3, 7}, {9, 12}};
+	const int width = passage->across_max - passage->across_min;
+	const int band = width >> 4; // a sixteenth across: the wider streak
+	level_mesh m;
+
+	level_mesh_begin(&m, glint_points, glint_polygons, glint_attributes, GLINT_POINTS, GLINT_QUADS);
+	for (int k = 0; k < 2; ++k)
+	{
+		const int bottom = passage->across_min + ((width * streaks[k][0]) >> 4);
+		const int top = passage->across_min + ((width * streaks[k][1]) >> 4);
+		const int wide = k == 0 ? band : band >> 1;
+		frustum_point corners[4];
+		const int first = m.quad_count;
+
+		corners[0] = grey_point(corridor_point(passage, 1, bottom), WALL_BOTTOM_Z);
+		corners[1] = grey_point(corridor_point(passage, 1, bottom + wide), WALL_BOTTOM_Z);
+		corners[2] = grey_point(corridor_point(passage, 1, top + wide), CORRIDOR_TOP_ON_FOOT);
+		corners[3] = grey_point(corridor_point(passage, 1, top), CORRIDOR_TOP_ON_FOOT);
+		if (!level_face_add(&m, corners, 4, FRUSTUM_GUARD, JO_COLOR_RGB(70, 100, 150), LEVEL_FOG_NONE,
+							JO_3D_SORT_CENTER, false))
+			continue;
+		for (int q = first; q < m.quad_count; ++q)
+			glint_attributes[q].draw_mode =
+				(unsigned short)((glint_attributes[q].draw_mode & ~7) | JO_VDP1_COLOR_CALC_HALF_TRANSPARENT);
+	}
+	if (m.quad_count == 0)
+		return;
+	glint_mesh.data.points = glint_points;
+	glint_mesh.data.polygons = glint_polygons;
+	glint_mesh.data.attributes = glint_attributes;
+	glint_mesh.data.point_count = (unsigned short)m.point_count;
+	glint_mesh.data.polygon_count = (unsigned short)m.quad_count;
+	jo_3d_mesh_draw(&glint_mesh);
+}
+
+void level_mirror_end(const corridor *passage, const wall_clip_camera *camera, world_point you, int feet, int head)
+{
+	level_view = mirror_saved;
+	portal = mirror_saved_portal;
+	if (object_fog_enabled && camera != JO_NULL)
+		object_fog_set_camera(camera->eye, camera->forward_x, camera->forward_y);
+	mirror_shade = 0;
+	// In the world's own matrix again: you in the glass, then the glass's streaks over it all
+	if (glass_loaded)
+		mirror_figure(passage, you, feet, head);
+	mirror_glints(passage);
+}
+
+// The end of the reflection: a wall across the corridor at MIRROR_DEPTH, near black, behind
+// everything else reflected (sorted by its furthest corner). Drawn in the mirror's matrix, cut by
+// the reflected view as the rest is
+#define FAR_POINTS 16
+#define FAR_QUADS 8
+static jo_pos3D_fixed far_points[FAR_POINTS];
+static jo_3d_polygon far_polygons[FAR_QUADS];
+static jo_3d_polygon_attribute far_attributes[FAR_QUADS];
+static jo_3d_mesh far_mesh;
+
+static void mirror_far_wall(const corridor *passage)
+{
+	const world_point a = corridor_point(passage, MIRROR_DEPTH, passage->across_min);
+	const world_point b = corridor_point(passage, MIRROR_DEPTH, passage->across_max);
+	frustum_point corners[4];
+	level_mesh m;
+
+	level_mesh_begin(&m, far_points, far_polygons, far_attributes, FAR_POINTS, FAR_QUADS);
+	corners[0] = grey_point(a, CORRIDOR_TOP_ON_FOOT);
+	corners[1] = grey_point(b, CORRIDOR_TOP_ON_FOOT);
+	corners[2] = grey_point(b, WALL_BOTTOM_Z);
+	corners[3] = grey_point(a, WALL_BOTTOM_Z);
+	if (!level_face_add(&m, corners, 4, FRUSTUM_SCREEN | FRUSTUM_GUARD, JO_COLOR_RGB(16, 16, 32), LEVEL_FOG_NONE,
+						JO_3D_SORT_MAX, false))
+		return;
+	far_mesh.data.points = far_points;
+	far_mesh.data.polygons = far_polygons;
+	far_mesh.data.attributes = far_attributes;
+	far_mesh.data.point_count = (unsigned short)m.point_count;
+	far_mesh.data.polygon_count = (unsigned short)m.quad_count;
+	jo_3d_mesh_draw(&far_mesh);
 }

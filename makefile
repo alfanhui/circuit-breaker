@@ -1,3 +1,10 @@
+# The disc's header (IP.BIN), which a Saturn's CD player and emulators show: jo-engine 2026 writes it
+# from these (Compiler/COMMON/jo_engine_makefile has the defaults and what each field holds). The
+# maker ID stays jo's own, JO-ENGINE: the game is built on it. Peripherals J: the control pad only
+JO_GAME_TITLE = CIRCUITBREAKER
+JO_GAME_VERSION = V0.100
+JO_GAME_RELEASE_DATE = 20261109
+JO_GAME_PERIPHERALS = J
 JO_COMPILE_WITH_VIDEO_MODULE = 0
 JO_COMPILE_WITH_BACKUP_MODULE = 0
 JO_COMPILE_WITH_TGA_MODULE = 1
@@ -64,6 +71,7 @@ SRCS=main.c \
 	src/game/vdp1_gauge.c \
 	src/game/occluder.c \
 	src/game/walker.c \
+	src/game/target.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \

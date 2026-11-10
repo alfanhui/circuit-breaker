@@ -58,5 +58,12 @@ int arena_wall_rise(void);
 void init_players(void);
 void debug_pad1(void);
 void gamepad_input(void);
+// On foot with the head locked onto a target (game/target.h): where it is on the screen, in pixels
+// from the centre (+y down). False if nothing's locked, or it's off the screen
+bool foot_target_on_screen(int *screen_x, int *screen_y);
+// On foot: how high your feet are (the roof you're on) and the top of your head (lower crouched in a
+// slide): for you in the mirror (level.h)
+int foot_feet_height(void);
+int foot_head_height(void);
 
 #endif

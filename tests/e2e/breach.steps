@@ -12,7 +12,15 @@ wait 0.5
 # Left: face west. C x6: cruise 7 -> 13
 press left
 press c 6
-wait 5
+# Riding in. The hit comes at about 8 s: first 3.5 s of black, the on-foot code typing out in green
+# (BREACH_CODE: breach_00 .. breach_16), then the tear (from breach_18), and on as before
+wait 4.2
+shot breach_ride_0
+wait 1
+shot breach_ride_1
+wait 1
+shot breach_ride_2
+wait 2.0
 shot breach_00
 wait 0.25
 shot breach_01

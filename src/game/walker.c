@@ -124,17 +124,6 @@ void walker_init_at(walker *w, world_point at, int z, int yaw)
 	w->stride = 0;
 }
 
-void walker_look_from_buttons(int a, int b, int c, int x, int y, int z, signed char *look_x, signed char *look_y)
-{
-	// The left column looks left, the right column right; the top row up, the bottom row down.
-	// Both ways at once cancel out
-	const int left = a | x, right = c | z;
-	const int up = x | y | z, down = a | b | c;
-
-	*look_x = (signed char)(right - left);
-	*look_y = (signed char)(up - down);
-}
-
 // One frame of a speed towards the speed wanted: slowing down (towards 0) by WALKER_SLOW_DOWN,
 // speeding up (away from 0) by WALKER_SPEED_UP, landing exactly. Turning about (forwards to
 // backwards) is a slow down to 0, then a speed up: you stop before you go back
@@ -300,8 +289,8 @@ static void lag_by(walker *w, int rise)
  * One axis of a step on the roofs (x or y: the other's left as it is): 0 blocked, 1 moved, 2 at a
  * lip, 3 vaulted up. Where you'd be:
  *   - within WALKER_RADIUS of a roof more than `rise` above your feet: a wall, blocked. The rise
- *     is a kerb (WALKER_STEP_UP), or at a full run your waist: a vault up onto something that
- *     low is a step that big, and you're carried on, WALKER_FOOT, onto its top (walk). Left with
+ *     is a kerb (WALKER_STEP_UP), or running (WALKER_MOVE_SPEED) your waist: a vault up onto
+ *     something that low is a step that big, and you're carried on, WALKER_FOOT, onto its top (walk). Left with
  *     your middle still over the ground, the next step was a lip: you jumped straight off
  *   - your middle on a roof no more than a kerb up or down: moved
  *   - otherwise (lower, or nothing): a lip. You can stand right at a roof's edge, to look over
@@ -612,8 +601,8 @@ static int slide_under(walker *w, const walker_area *area, int x, int y)
 }
 
 /*
- * Blocked head on at a full run, going `d` (x256) along an axis: the moves that carry you on, in
- * order: slide under a bar, vault over something low and thin, vault up onto something low, climb
+ * Blocked head on running (WALKER_MOVE_SPEED), going `d` (x256) along an axis: the moves that
+ * carry you on, in order: slide under a bar, vault over something low and thin, vault up onto something low, climb
  * a ledge. Returns whether one did
  */
 static int run_on(walker *w, const walker_area *area, int along_x, int d)
@@ -646,14 +635,56 @@ static int run_on(walker *w, const walker_area *area, int along_x, int d)
 }
 
 /*
+ * The moves start from WALKER_MOVE_SPEED, not a full run, but each one is taken at a full run: as
+ * a move starts you're kicked up to WALKER_RUN_SPEED (the last strides of a run-up). So a jump's
+ * as long, a slide as far and a vault over as high whether you came at 4.5 a frame or 6: the same
+ * move every time, as walker.h promises. The flight goes the way you were moving (air_dx, air_dy,
+ * strafing too), worked out again at the new speed. Tried on the kicked walker; not taken, you're
+ * put back as you were
+ */
+static void kick_to_a_run(walker *w)
+{
+	const int forward_x = -walker_sin(w->yaw);
+	const int forward_y = -walker_cos(w->yaw);
+
+	if (w->forward >= WALKER_RUN_SPEED)
+		return;
+	w->forward = WALKER_RUN_SPEED;
+	w->air_dx = (forward_x * w->forward + forward_y * w->side) >> 10; // as walker_update's dx, dy
+	w->air_dy = (forward_y * w->forward - forward_x * w->side) >> 10;
+}
+
+static int kicked_run_on(walker *w, const walker_area *area, int along_x, int d)
+{
+	const walker before = *w;
+
+	kick_to_a_run(w);
+	if (run_on(w, area, along_x, d))
+		return 1;
+	*w = before;
+	return 0;
+}
+
+static int kicked_vault_off(walker *w, const walker_area *area)
+{
+	const walker before = *w;
+
+	kick_to_a_run(w);
+	if (vault_off(w, area))
+		return 1;
+	*w = before;
+	return 0;
+}
+
+/*
  * On a roof: each axis on its own (one that's blocked is left out, and you slide along the edge
- * on the other). At a lip you stop, unless you're at a full run and the jump off it lands clean
- * (vault_off), or you've pushed into it long enough (step_off): then you go on over it. Stopped
+ * on the other). At a lip you stop, unless you're running (WALKER_MOVE_SPEED) and the jump off
+ * it lands clean (vault_off, kicked to a run), or you've pushed into it long enough (step_off): then you go on over it. Stopped
  * head on (the blocked axis most of the way you're going: not sliding along a wall), a run's lost
  */
 static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing)
 {
-	const int full_run = w->forward >= WALKER_RUN_SPEED;
+	const int fast = w->forward >= WALKER_MOVE_SPEED; // quick enough for the moves: not a full run
 	const int ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
 	int lip = 0, head_on = 0;
 
@@ -666,12 +697,12 @@ static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing
 		else
 		{
 			head_on = 2 * ax >= ay;
-			if (sx == 0 && full_run && head_on && run_on(w, area, 1, dx))
+			if (sx == 0 && fast && head_on && kicked_run_on(w, area, 1, dx))
 				return;
 			if (sx == 2)
 			{
 				lip = 1;
-				if (full_run && head_on && vault_off(w, area))
+				if (fast && head_on && kicked_vault_off(w, area))
 					return; // up and away: the flight starts next frame, as vault_off flew it
 				if (step_off(w, area, 1, dx > 0 ? 1 : -1, pushing))
 				{
@@ -691,12 +722,12 @@ static void walk(walker *w, int dx, int dy, const walker_area *area, int pushing
 		else
 		{
 			head_on |= 2 * ay >= ax;
-			if (sy == 0 && full_run && 2 * ay >= ax && run_on(w, area, 0, dy))
+			if (sy == 0 && fast && 2 * ay >= ax && kicked_run_on(w, area, 0, dy))
 				return;
 			if (sy == 2 && !lip)
 			{
 				lip = 1;
-				if (full_run && 2 * ay >= ax && vault_off(w, area))
+				if (fast && 2 * ay >= ax && kicked_vault_off(w, area))
 					return;
 				if (step_off(w, area, 0, dy > 0 ? 1 : -1, pushing))
 				{
@@ -766,15 +797,10 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 	}
 	w->yaw = (w->yaw + w->turn_speed) & 0xFFFF;
 
-	// The speeds wanted, then a frame towards them. Walking and strafing at once, each's cut to
-	// 1 / sqrt 2 of itself (x 181 >> 8), so going diagonally isn't the quickest way about
+	// The speeds wanted, then a frame towards them. Walking and strafing at once keep both: a
+	// sidestep costs nothing going forwards (walker.h)
 	forward_wanted = controls.move > 0 ? WALKER_FORWARD_SPEED : controls.move < 0 ? -WALKER_BACK_SPEED : 0;
 	side_wanted = controls.strafe * WALKER_STRAFE_SPEED;
-	if (forward_wanted != 0 && side_wanted != 0)
-	{
-		forward_wanted = (forward_wanted * WALKER_DIAGONAL_X256) >> 8;
-		side_wanted = (side_wanted * WALKER_DIAGONAL_X256) >> 8;
-	}
 	if (w->stagger > 0)
 	{
 		// A long drop's stagger: a creep at most, any way
@@ -782,10 +808,9 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 		side_wanted = clamp_speed(side_wanted, WALKER_CREEP_SPEED);
 		w->stagger--;
 	}
-	// Running: walking straight on, at walking speed already, you want more. Not strafing, not
-	// staggering (the creep's clamp above), and not turning hard: a turn held up to its full speed
-	if (controls.move > 0 && controls.strafe == 0 && w->stagger == 0 && w->forward >= WALKER_FORWARD_SPEED &&
-		w->turn_speed < WALKER_TURN_MAX && w->turn_speed > -WALKER_TURN_MAX)
+	// Running: holding forward, at walking speed already, you want more. Strafing and turning
+	// keep it (you line up on the way); staggering doesn't (the creep's clamp above)
+	if (controls.move > 0 && w->stagger == 0 && w->forward >= WALKER_FORWARD_SPEED)
 		forward_wanted = WALKER_RUN_SPEED;
 	// In the air there's nothing to push off: the speeds stay as you left the roof
 	if (!w->falling)

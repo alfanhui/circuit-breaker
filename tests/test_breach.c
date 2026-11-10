@@ -1,3 +1,4 @@
+#include <string.h>
 #include "test.h"
 #include "../src/game/breach.h"
 
@@ -12,6 +13,50 @@ static int run_frames(breach *b, int frames)
 static int glitched(const breach_glitch *g)
 {
 	return (g->shift_x | g->shift_y | g->red | g->green | g->blue | g->band_count | g->reset_shows) != 0;
+}
+
+// The crash starts with the code screen; the old tests start where it hands over, at the tear
+static void start_at_the_tear(breach *b)
+{
+	breach_start(b);
+	for (int i = 0; i < BREACH_CODE_FRAMES; ++i)
+		breach_update(b);
+}
+
+// First a black screen of code typing out: no glitch, no movement, the camera still. Then the tear,
+// its first frame the hit
+static void the_code_screen_comes_first(void)
+{
+	breach b;
+	int last = 0, total = 0;
+
+	for (int i = 0; i < BREACH_CODE_LINES; ++i)
+	{
+		CHECK(strlen(breach_code[i]) <= 38); // TERMINAL_X 1: 38 more columns of the screen's 40
+		total += (int)strlen(breach_code[i]);
+	}
+	breach_start(&b);
+	CHECK_EQ(BREACH_CODE, b.phase);
+	CHECK_EQ(0, breach_code_typed(&b));
+	for (int i = 0; i < BREACH_CODE_FRAMES - 1; ++i)
+	{
+		breach_update(&b);
+		CHECK_EQ(BREACH_CODE, b.phase);
+		CHECK(breach_code_typed(&b) >= last); // it only grows
+		last = breach_code_typed(&b);
+		CHECK_EQ(0, b.glitch.shift_x | b.glitch.shift_y | b.glitch.band_count | b.glitch.reset_shows);
+		CHECK_EQ(0, breach_distance(&b, 13));
+		CHECK_EQ(0, breach_roll(&b) | breach_dip(&b) | breach_drop(&b));
+		CHECK(!breach_hit(&b));
+	}
+	CHECK_EQ(total, last); // all of it typed before it ends
+	breach_update(&b);
+	CHECK_EQ(BREACH_TEAR, b.phase);
+	CHECK_EQ(0, breach_code_typed(&b));
+	breach_update(&b);
+	CHECK(breach_hit(&b));
+	breach_update(&b);
+	CHECK(!breach_hit(&b));
 }
 
 static void nothing_until_it_starts(void)
@@ -32,7 +77,7 @@ static void the_parts_follow_on(void)
 {
 	breach b;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	CHECK_EQ(BREACH_TEAR, run_frames(&b, BREACH_TEAR_FRAMES - 1));
 	CHECK_EQ(BREACH_THROUGH, run_frames(&b, 1));
 	CHECK_EQ(BREACH_THROUGH, run_frames(&b, BREACH_THROUGH_FRAMES - 1));
@@ -64,7 +109,7 @@ static void you_get_up_only_once_lying_still(void)
 	breach_init(&b);
 	breach_get_up(&b);
 	CHECK_EQ(BREACH_NONE, b.phase);
-	breach_start(&b);
+	start_at_the_tear(&b);
 	for (int i = 0; i < BREACH_TEAR_FRAMES + BREACH_THROUGH_FRAMES + BREACH_FALL_FRAMES + BREACH_SKID_FRAMES - 1; ++i)
 	{
 		breach_get_up(&b);
@@ -84,7 +129,7 @@ static void you_get_up_only_once_lying_still(void)
 	CHECK_EQ(BREACH_RISE, b.phase);
 
 	// Lain there long enough: up at once
-	breach_start(&b);
+	start_at_the_tear(&b);
 	while (b.phase != BREACH_STOPPED)
 		breach_update(&b);
 	run_frames(&b, BREACH_LIE_FRAMES);
@@ -99,7 +144,7 @@ static void getting_up_levels_out(void)
 	breach b;
 	int roll = BREACH_REST_ROLL, dip = BREACH_REST_DIP, drop = BREACH_DROP;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	while (b.phase != BREACH_STOPPED)
 		breach_update(&b);
 	run_frames(&b, BREACH_LIE_FRAMES);
@@ -135,7 +180,7 @@ static void the_tear_gets_worse(void)
 	breach b;
 	int first = 0, last = 0;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	breach_update(&b);
 	CHECK(glitched(&b.glitch));
 	for (int i = 1; i < BREACH_TEAR_FRAMES; ++i)
@@ -157,7 +202,7 @@ static void glitches_stay_in_range(void)
 	breach b;
 	int resets = 0;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	for (int i = 0; i < BREACH_TEAR_FRAMES + BREACH_THROUGH_FRAMES + BREACH_FALL_FRAMES + BREACH_SKID_FRAMES + 60;
 		 ++i)
 	{
@@ -189,7 +234,7 @@ static void the_reset_never_finishes(void)
 {
 	breach b;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	run_frames(&b, BREACH_TEAR_FRAMES - 1);
 	CHECK_EQ(BREACH_RESET_CHARS_MAX, breach_typed_chars(&b));
 	CHECK(breach_typed_chars(&b) < (int)sizeof("SH-2 process terminated...") - 1);
@@ -202,7 +247,7 @@ static void it_rides_on_then_skids_to_a_stop(void)
 	breach b;
 	int last;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	breach_update(&b);
 	CHECK_EQ(0, breach_distance(&b, 7));
 	run_frames(&b, BREACH_TEAR_FRAMES);
@@ -233,7 +278,7 @@ static void the_camera_goes_down_and_settles(void)
 	breach b;
 	int last_dip = 0, last_rumble;
 
-	breach_start(&b);
+	start_at_the_tear(&b);
 	run_frames(&b, BREACH_TEAR_FRAMES + BREACH_THROUGH_FRAMES);
 	CHECK_EQ(0, breach_dip(&b));
 	for (int i = 0; i < BREACH_FALL_FRAMES - 1; ++i)
@@ -270,8 +315,8 @@ static void the_same_every_time(void)
 {
 	breach a, b;
 
-	breach_start(&a);
-	breach_start(&b);
+	start_at_the_tear(&a);
+	start_at_the_tear(&b);
 	for (int i = 0; i < BREACH_TEAR_FRAMES; ++i)
 	{
 		breach_update(&a);
@@ -284,6 +329,7 @@ static void the_same_every_time(void)
 
 void run_breach_tests(void)
 {
+	RUN(the_code_screen_comes_first);
 	RUN(nothing_until_it_starts);
 	RUN(the_parts_follow_on);
 	RUN(the_tear_gets_worse);
