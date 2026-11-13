@@ -50,6 +50,8 @@
 #define CITY_ROWS 12
 #define CITY_TOWERS (CITY_COLUMNS * CITY_ROWS)
 #define CITY_ENTRY_ROW 5 // the entry's at column 0 of this row
+#define CITY_HUB_COLUMN 1 // the CD block's hub: the end of the way down
+#define CITY_HUB_ROW 0
 #define CITY_TOWER_SIZE 500
 #define CITY_STREET 200 // between blocks: a jump at a full run (walker.h: one clears ~225)
 #define CITY_GROUND (-3000) // far below the lowest roof (the plan's goes to -2400): the towers' feet
@@ -75,6 +77,72 @@ const city_tower *city_tower_at(int column, int row);
 
 // A tower's two opposite corners, in the world's x and y
 void city_tower_corners(const corridor *c, const city_tower *t, world_point *a, world_point *b);
+
+/*
+ * The CD block itself: a disc in the sky, over the city (docs/STORY.md: "the CD block as a vast
+ * disc"; the areas are seen from the hub long before they're reached). 7000 across: from the
+ * arena it stands over the wall the corridor opens in, from the city it's most of the sky.
+ *
+ * Under it, the drive's works: the spindle under the hole in its middle, and the laser's pickup
+ * on its rail, reading the disc from below. The pickup is over the hub: so the disc's middle is
+ * CITY_DISC_OFFSET across from the hub's (a pickup reads the tracks, not the hole). The hub's lift
+ * (game/lift.h) goes up to the pickup's underside from a pad at the middle of the hub's roof: the
+ * way into the CD block, when it's built, is in through the pickup
+ */
+#define CITY_DISC_HEIGHT 4000 // above the corridor's floor: 5400 over the hub's roof
+#define CITY_DISC_RADIUS 3500 // across its corners (an octagon)
+#define CITY_DISC_HOLE 500	  // the hole in its middle, the spindle's
+#define CITY_DISC_OFFSET 1500 // its middle from the hub's, across (south, over the city)
+#define CITY_PICKUP_HALF 300  // the pickup: a box 600 square, hung under the disc over the hub
+#define CITY_PICKUP_BOTTOM 3300
+#define CITY_PICKUP_TOP 3650
+#define CITY_LIFT_TOP (CITY_PICKUP_BOTTOM - 110) // where the lift stops: your eye 75 under the pickup
+#define CITY_LIFT_PAD 60 // half the pad's width
+
+// A point from the middle of the hub's roof (out and across from it), for a corridor behind
+// `side`'s wall, `wall` from the arena's middle, whose middle line is `middle` across: so the hub
+// and what's over it can be placed from the arena too, before the corridor's open
+world_point city_hub_point(int side, int wall, int middle, int out, int across);
+// The middle of the hub's roof itself (the lift's pad)
+world_point city_hub_middle(int side, int wall, int middle);
+
+/*
+ * What's seen from each roof: worked out ahead (tools/make_city_seen.py writes city_seen.c; it
+ * has the rule), not every frame. VDP1 has no depth buffer, so a tower hidden behind another is
+ * still filled, and deep in the city most are hidden. What hides what depends only on where you
+ * stand, and the city doesn't change: so for each roof, cut into CITY_SEEN_PATCHES each way (a
+ * whole roof is too wide for one answer), there's a bit for every tower that can be seen from
+ * somewhere on that patch, with the eye up to CITY_SEEN_EYE over the roof. 3.7 KB.
+ * level.c leaves out the towers a patch can't see with one bit test each, and only picks hiders
+ * for the rest (game/skyline.h). Off a roof (in the air, on the lift) there's no table: all 84
+ */
+#define CITY_SEEN_PATCHES 2
+#define CITY_SEEN_EYE 200
+#define CITY_SEEN_BYTES ((CITY_TOWERS + 7) >> 3)
+extern const unsigned char city_seen[CITY_TOWERS][CITY_SEEN_PATCHES * CITY_SEEN_PATCHES][CITY_SEEN_BYTES];
+
+/*
+ * And from inside the corridor: which towers can be seen through its doorway (city_seen_doorway,
+ * in city_seen.c too). Every line of sight from in there to the city passes through the doorway
+ * (level.c cuts the city to its two sides), so a tower that one hider hides from every point of
+ * the doorway is hidden from everywhere inside. The places a hider hides a tower from are convex
+ * (make_city_seen.py has why), so the doorway's two ends are enough, as a patch's four corners
+ * are. The doorway's the far end's right half, from the middle line across, as wide as the hole
+ * in the arena's wall: at most CITY_DOORWAY_WIDE (wall_flicker.h: 4 pieces of 250, halved), and a
+ * narrower one sees no more. The eye: up to CITY_DOORWAY_EYE (the platform's top, 160, and
+ * CITY_SEEN_EYE). Worked out in the game it was ~60 ms of the SH-2, at the breach
+ */
+#define CITY_DOORWAY_WIDE 500
+#define CITY_DOORWAY_EYE (160 + CITY_SEEN_EYE)
+extern const unsigned char city_seen_doorway[CITY_SEEN_BYTES];
+
+// Which of a roof's patches a point on it is in (out and across as the tower's own)
+int city_seen_patch(const city_tower *roof, int out, int across);
+// Whether `tower` can be seen from patch `patch` of roof `from` (both as city_towers' index)
+int city_sees(int from, int patch, int tower);
+// The roof you're stood on at (out, across) with your eye at z, as city_towers' index: -1 if
+// you're not on one, or higher over it than the table allows for (a jump's fine, the lift's not)
+int city_roof_under(int out, int across, int z);
 
 // Adds the towers' roofs to where you can stand. Returns false if there wasn't room for them all
 int city_walker_area_add(const corridor *c, walker_area *area);

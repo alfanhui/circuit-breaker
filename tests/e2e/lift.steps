@@ -1,0 +1,40 @@
+# The CD block hub lift (game/lift.h; BOOT_AT_HUB 1 in src/input.c: stood 150 short of the pad).
+# A look up at the disc and the drive under it from the roof, then onto the pad: it takes you up
+# the beam to the pickup hatch, holds, and brings you back. Turning on the way up: the landmarks
+wait_up
+wait 1.0
+keydown y
+wait 1.2
+shot lift_00_up_from_the_roof
+keyup y
+wait 0.8
+hold up 0.45
+wait 0.3
+shot lift_01_on_the_pad
+wait 4.0
+shot lift_02_rising
+hold right 0.75
+wait 0.3
+shot lift_03_turned
+hold right 0.75
+wait 0.3
+shot lift_04_turned
+hold right 0.75
+wait 0.3
+shot lift_05_turned
+wait 1.0
+shot lift_06_at_the_top
+keydown y
+wait 1.2
+shot lift_07_the_hatch
+keyup y
+wait 0.6
+keydown b
+wait 1.2
+shot lift_08_looking_down
+keyup b
+wait 9.5
+shot lift_09_back
+hold up 1.0
+wait 0.5
+shot lift_10_stepped_off

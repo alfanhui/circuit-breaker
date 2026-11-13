@@ -32,6 +32,23 @@ void slave_draw_begin(void);
 // Hand a built mesh to the slave, to draw with the matrix slave_draw_begin was given
 void slave_draw_mesh(const jo_3d_mesh *mesh);
 
+/*
+ * Hand the slave a job: building a mesh, not only drawing it. The master's at 100% in the
+ * corridor while the slave idles 4-10 ms a frame (the debug line's `sidle`, 2026-11-13): drawing
+ * is only part of a mesh's cost, working out what to put in it is the rest. The job runs on the
+ * slave in turn with the meshes handed over, and draws what it built with slave_draw_mesh_here.
+ * Up to SLAVE_JOBS_MAX jobs a pass (slave_draw_begin to slave_draw_end), run in the order given.
+ * What the job reads must not change until slave_draw_end, as a mesh's arrays (above), and it
+ * must write nothing the master uses meanwhile: both CPUs run at once, with their own caches.
+ * Without the dual CPU module, or outside a pass, it runs at once on the master
+ */
+#define SLAVE_JOBS_MAX 4
+typedef void (*slave_draw_job_fn)(void);
+void slave_draw_job(slave_draw_job_fn job);
+
+// From inside a job: draw the mesh on the CPU running the job
+void slave_draw_mesh_here(const jo_3d_mesh *mesh);
+
 // Wait for the slave to finish everything handed to it this frame
 void slave_draw_end(void);
 

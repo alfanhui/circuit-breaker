@@ -70,6 +70,11 @@ SRCS=main.c \
 	src/game/frustum.c \
 	src/game/vdp1_gauge.c \
 	src/game/occluder.c \
+	src/game/skyline.c \
+	src/game/lift.c \
+	src/game/landmarks.c \
+	src/game/city_seen.c \
+	src/game/board.c \
 	src/game/walker.c \
 	src/game/target.c \
 	src/game/body.c \

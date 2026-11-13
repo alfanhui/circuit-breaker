@@ -1,0 +1,31 @@
+# The arena's pyramid from the CD block hub's lift (BOOT_AT_HUB 1 in src/input.c: stood facing
+# west, 150 short of the pad). Onto the pad, then a half turn as it rises, to face east, the
+# arena's way: the pyramid must stand on the board all the way up, its foot never cut off in the
+# air (the user, 2026-11-13: "the pyramid bottom clips when viewed from elevator": level.c,
+# arena_pyramid_add)
+wait_up
+wait 1.0
+hold up 0.45
+wait 0.3
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+shot lp_01_rising
+wait 1.0
+shot lp_02_rising
+wait 1.0
+shot lp_03_rising
+wait 1.5
+shot lp_04_high
+keydown b
+wait 0.6
+keyup b
+wait 0.5
+shot lp_05_looking_down
+wait 2.0
+shot lp_06_at_the_top

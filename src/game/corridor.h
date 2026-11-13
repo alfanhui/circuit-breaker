@@ -68,6 +68,8 @@ void corridor_open(corridor *c, const wall_flicker *f, int half);
 
 // A point in the corridor, (out, across), in the world's x and y
 world_point corridor_point(const corridor *c, int out, int across);
+// The same for a corridor that isn't open yet: behind `side`'s wall, `wall` from the middle
+world_point corridor_point_behind(int side, int wall, int out, int across);
 
 // How far out a point in the world is: out from the arena's wall, along the corridor (negative:
 // still inside the arena)

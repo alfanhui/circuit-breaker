@@ -6,6 +6,8 @@
 #include "game/walker.h"
 #include "game/target.h"
 #include "game/body.h"
+#include "game/city.h"
+#include "game/lift.h"
 #include "level.h"
 #include "scene_memory.h"
 #include "sound.h"
@@ -22,6 +24,9 @@
 // Films don't depend on it: tests/e2e/run_e2e.ps1 builds with whichever a film needs (wait_boot:
 // the arena, 0; wait_up: the corridor, 1) and puts it back afterwards
 #define BOOT_ON_FOOT 0
+// With BOOT_ON_FOOT: 1 stands you on the CD block's hub instead, the far end of the way down
+// through the city (game/city.h), for working there without the 28-tower walk. 0 to commit
+#define BOOT_AT_HUB 0
 
 rider player1;
 rider bots[BOT_COUNT_MAX];
@@ -727,8 +732,38 @@ static target_lock feet_lock;
 
 // Getting up: stood where the cycle came to rest, facing the way it was going, on the corridor's
 // floor and the grey box's roofs (corridor_walker_area)
+// The CD block's lift (game/lift.h), on its hub's roof
+static lift cd_lift;
+
+bool foot_cd_hub(int *side, int *wall, int *middle, bool *in_lift)
+{
+	*in_lift = false;
+	if (arena_corridor != JO_NULL && arena_corridor->open)
+	{
+		*side = arena_corridor->side;
+		*wall = arena_corridor->wall;
+		*middle = (arena_corridor->across_min + arena_corridor->across_max) >> 1;
+		*in_lift = arena_breach.phase == BREACH_ON_FOOT && lift_carries(&cd_lift);
+		return true;
+	}
+	// Not open yet: where it will be, behind the last round's flicker, the arena as wide as it is
+	// now (in round 5 the walls close in, and the corridor opens wherever they've got to)
+	{
+		wall_flicker last;
+
+		wall_flicker_set_round(&last, ROUND_COUNT - 1);
+		if (last.count == 0)
+			return false;
+		*side = last.side;
+		*wall = arena_half();
+		*middle = (last.along_min + wall_flicker_along_max(&last)) >> 1;
+	}
+	return true;
+}
+
 static void stand_up(void)
 {
+	lift_init(&cd_lift, city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height, CITY_LIFT_TOP);
 	walker_init(&player_feet, player1.bike.position, player1.bike.heading * 0x4000);
 	corridor_walker_area(arena_corridor, &feet_area);
 	corridor_targets(arena_corridor, &feet_targets);
@@ -786,7 +821,52 @@ static void walk_step(unsigned short struck)
 	controls.strafe = (signed char)(r - l);
 	controls.look_x = 0;
 	controls.look_y = (signed char)(((held & DIGI_Y) != 0) - ((held & DIGI_B) != 0));
-	walker_update(&player_feet, controls, &feet_area);
+	/*
+	 * The CD block's lift: stood on the pad in the middle of its hub's roof, it takes you (no
+	 * button: game/lift.h). While it has you, you're kept on the pad at its height, and the pad is
+	 * the only floor there is: you can turn and look, not walk. The one-roof area is the feet's
+	 * own, its first roof swapped for the pad for this one update and put back (a second area
+	 * would be 1.5 KB for one rectangle)
+	 */
+	{
+		const city_tower *hub = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW);
+		const world_point pad = city_hub_middle(arena_corridor->side, arena_corridor->wall,
+												(arena_corridor->across_min + arena_corridor->across_max) >> 1);
+		const world_point at = walker_position(&player_feet);
+		const bool on_pad = at.x >= pad.x - CITY_LIFT_PAD && at.x <= pad.x + CITY_LIFT_PAD && at.y >= pad.y - CITY_LIFT_PAD &&
+							at.y <= pad.y + CITY_LIFT_PAD && walker_height(&player_feet) == hub->height;
+
+		lift_update(&cd_lift, on_pad);
+		if (lift_carries(&cd_lift))
+		{
+			const unsigned char count = feet_area.count;
+			const world_rect rect = feet_area.rects[0];
+			const short height = feet_area.heights[0], bottom = feet_area.bottoms[0];
+			const int up_now = lift_height(&cd_lift);
+
+			feet_area.count = 1;
+			feet_area.rects[0].x_min = (short)(pad.x - CITY_LIFT_PAD);
+			feet_area.rects[0].x_max = (short)(pad.x + CITY_LIFT_PAD);
+			feet_area.rects[0].y_min = (short)(pad.y - CITY_LIFT_PAD);
+			feet_area.rects[0].y_max = (short)(pad.y + CITY_LIFT_PAD);
+			feet_area.heights[0] = (short)up_now;
+			feet_area.bottoms[0] = WALKER_NO_FLOOR;
+			controls.move = 0;
+			controls.strafe = 0;
+			player_feet.z = up_now << 8; // (x256) stood on the pad as it rises
+			player_feet.fall_speed = 0;
+			player_feet.falling = 0;
+			player_feet.forward = 0;
+			player_feet.side = 0;
+			walker_update(&player_feet, controls, &feet_area);
+			feet_area.count = count;
+			feet_area.rects[0] = rect;
+			feet_area.heights[0] = height;
+			feet_area.bottoms[0] = bottom;
+		}
+		else
+			walker_update(&player_feet, controls, &feet_area);
+	}
 	// The cycle's position stands in for yours: the camera, culling and the walls all go by it.
 	// Its heading is the quarter turn nearest your facing, for anything that only knows those
 	player1.bike.position = walker_position(&player_feet);
@@ -1193,6 +1273,17 @@ static void boot_on_foot(void)
 										   arena_corridor->across_min + ((arena_corridor->across_max - arena_corridor->across_min) >> 2));
 	player1.bike.heading = arena_corridor->side;
 	stand_up();
+	if (BOOT_AT_HUB)
+	{
+		// On the hub's roof, 150 short of its middle (the lift's pad: stood on it, it would take
+		// you at once), facing as you came: out along the corridor, the pad straight ahead
+		const city_tower *hub = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW);
+		const world_point at = corridor_point(arena_corridor, ((hub->out_min + hub->out_max) >> 1) - 150,
+											  ((arena_corridor->across_min + arena_corridor->across_max) >> 1) +
+												  ((hub->across_min + hub->across_max) >> 1));
+
+		walker_init_at(&player_feet, at, hub->height, player1.bike.heading * 0x4000);
+	}
 	player_feet.eye = WALKER_EYE; // up already
 	// The round's title, typing on as round 5's entered: the breach stops the status line, so it
 	// would stay, cursor and all

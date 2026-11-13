@@ -55,6 +55,8 @@ void frustum_set_camera(frustum *f, frustum_point eye, const int forward[3], con
 						int tan_side, int tan_up, int near)
 {
 	f->eye = eye;
+	f->tan_side = tan_side;
+	f->tan_up = tan_up;
 	for (int k = 0; k < 3; ++k)
 	{
 		f->forward[k] = forward[k];
@@ -233,6 +235,39 @@ int frustum_clip(const frustum *f, unsigned planes, const frustum_point *in, int
 	for (int k = 0; k < count; ++k)
 		out[k] = from[k];
 	return count;
+}
+
+void frustum_slopes(const frustum *f, int *up, int *down)
+{
+	int most = 0, least = 0;
+
+	for (int a = -1; a <= 1; ++a)
+		for (int b = -1; b <= 1; ++b)
+		{
+			int d[3], along, slope;
+
+			if (a == 0 && b == 0)
+				continue; // the screen's middle: never the steepest
+			// The ray through that point of the screen's edge: forward, and aside and up by the
+			// edges' tans. x1024 (the directions) x1024 (the tans), back down to x1024
+			for (int k = 0; k < 3; ++k)
+				d[k] = f->forward[k] + ((a * f->tan_side * f->right[k] + b * f->tan_up * f->up[k]) >> 10);
+			along = frustum_isqrt((unsigned int)(d[0] * d[0] + d[1] * d[1])); // along the floor
+			// Steeper than 16 in 1 (86 degrees): as good as straight up, and no division by ~0
+			if (along * 16 <= (d[2] < 0 ? -d[2] : d[2]))
+				slope = d[2] < 0 ? -FRUSTUM_STEEP : FRUSTUM_STEEP;
+			else
+				slope = (d[2] * FRUSTUM_SLOPE_ONE) / along; // once a frame for each of 8 rays
+			if (slope > most)
+				most = slope;
+			if (slope < least)
+				least = slope;
+		}
+	// An eighth more: between those rays the edge can be a little steeper (a rolled camera)
+	most += (most >> 3) + 1;
+	least -= (-least >> 3) + 1;
+	*up = most >= FRUSTUM_STEEP ? FRUSTUM_STEEP : most;
+	*down = least <= -FRUSTUM_STEEP ? -FRUSTUM_STEEP : least;
 }
 
 void frustum_reflect(const frustum *in, int axis, int mirror, frustum *out)

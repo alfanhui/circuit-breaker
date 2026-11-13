@@ -1,0 +1,38 @@
+# The mirror over the hole, from where you get up (BOOT_ON_FOOT: you face out, so a half turn
+# first: 1.6 s of left, as corridor_still.steps), walking up to it and
+# looking up: over the reflected corridor the glass shows the CD block's disc (what's behind you),
+# not the landmarks behind the arena. And the tunnel the corridor comes out of the pyramid by: its
+# sloped ceiling and cheeks over the walls. Then back out under the duct: the mirror's gone
+wait_up
+wait 1.0
+# (four presses with pauses: one 1.6 s hold turned a quarter too far once the corridor ran at
+# 60 fps, the turn easing in each press)
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.8
+shot ms_00_from_the_start
+keydown up
+wait 1.2
+shot ms_01_nearer
+wait 1.2
+shot ms_02_nearer
+wait 1.2
+keyup up
+wait 0.5
+shot ms_03_at_the_glass
+keydown y
+wait 1.0
+shot ms_04_looking_up
+keyup y
+wait 0.8
+hold left 0.8
+wait 0.5
+shot ms_05_side
+hold left 0.8
+wait 0.5
+shot ms_06_out_again

@@ -13,24 +13,29 @@ void corridor_init(corridor *c)
 	c->tile_count = 0;
 }
 
-world_point corridor_point(const corridor *c, int out, int across)
+world_point corridor_point_behind(int side, int wall, int out, int across)
 {
 	// The sides are numbered as the headings (wall_flicker.h): riding into the side's wall is
 	// riding out, so the heading's step is the way out (north is -y, east is -x: world.h)
-	const int from_middle = c->wall + out;
+	const int from_middle = wall + out;
 	world_point p;
 
-	if (runs_along_x(c->side))
+	if (runs_along_x(side))
 	{
 		p.x = (short)across;
-		p.y = (short)(WORLD_HEADING_DY(c->side) * from_middle);
+		p.y = (short)(WORLD_HEADING_DY(side) * from_middle);
 	}
 	else
 	{
-		p.x = (short)(WORLD_HEADING_DX(c->side) * from_middle);
+		p.x = (short)(WORLD_HEADING_DX(side) * from_middle);
 		p.y = (short)across;
 	}
 	return p;
+}
+
+world_point corridor_point(const corridor *c, int out, int across)
+{
+	return corridor_point_behind(c->side, c->wall, out, across);
 }
 
 int corridor_out(const corridor *c, world_point p)

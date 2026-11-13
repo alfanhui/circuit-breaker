@@ -214,6 +214,7 @@ The slave SH-2 draws the corridor's glass floor and boxes while the master draws
 | The floor and boxes are whole and steady | On foot, walk the corridor and the yard, turn | Tiles or box faces from the frame before, flickering or missing for a frame: the slave read stale data (its cache) |
 | No crash after a few minutes on foot | Walk about for 5 minutes | A freeze: the two CPUs waiting on each other |
 | The debug line's "vdp1 over" stays 0 | On foot, the busiest views (the ledge, the platform lip) | Over 0: frames shown unfinished (the HUD flickers) |
+| The floor's tiles, and your body in the mirror, worked out by the slave (since 2026-11-13: `slave_draw_job`) | Walk up the corridor to the stairs, and stand at the mirror looking at the reflected floor and yourself | Tiles or outlines torn, from the wrong place, or flickering: the slave read the view or the fog half-written. The far glass (the master's) whole while the tiles go wrong points here |
 
 ## 4. Walls, trails and the 3D (VDP1)
 

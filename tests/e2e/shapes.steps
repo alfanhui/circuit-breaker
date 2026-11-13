@@ -1,0 +1,26 @@
+# The three cycle shapes (main.c, CYCLE_SHAPE): in iso, riding each way, and a turn caught just
+# after the press
+wait_boot
+skip_prologue
+wait 1.0
+press start
+press z
+press start
+press down
+wait 0.6
+shot shape_north
+wait 0.1
+shot shape_north_2
+wait 0.1
+shot shape_north_3
+press right
+wait 0.05
+shot shape_turning
+wait 0.5
+shot shape_east
+press right
+wait 0.5
+shot shape_south
+press right
+wait 0.5
+shot shape_west

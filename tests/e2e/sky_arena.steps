@@ -1,0 +1,15 @@
+# The landmarks on the horizon (game/landmarks.h) and the CD block disc (level.c, level_sky_draw)
+# from the arena: a look each way from the start, west (the city, the disc) first
+wait_boot
+skip_prologue
+wait 1.0
+shot sky_arena_1_north
+press left
+wait 0.8
+shot sky_arena_2_west
+press left
+wait 0.8
+shot sky_arena_3_south
+press left
+wait 0.8
+shot sky_arena_4_east

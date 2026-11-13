@@ -35,6 +35,8 @@
 #include "src/sound.h"
 #include "src/slave_draw.h"
 #include "src/game/intro_flight.h"
+#include "src/game/landmarks.h"
+#include "src/game/board.h"
 #include "src/game/arrival_flight.h"
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
@@ -92,10 +94,14 @@
 // repeats across, so a few steps a frame, and no division (CLAUDE.md)
 static int floor_wrap(int v)
 {
-	while (v >= FLOOR_WRAP)
-		v -= FLOOR_WRAP;
+	// Drawn larger than 16 times (view_floor_shift over 4: the board under the city), one tile's
+	// wider than FLOOR_WRAP: the repeat's a whole tile then, or the floor would jump
+	const int wrap = view_floor_shift > 4 ? FLOOR_WRAP << (view_floor_shift - 4) : FLOOR_WRAP;
+
+	while (v >= wrap)
+		v -= wrap;
 	while (v < 0)
-		v += FLOOR_WRAP;
+		v += wrap;
 	return v;
 }
 // (Spectating, it's drawn larger: view_floor_shift, view.c)
@@ -183,6 +189,29 @@ static jo_pos3D_fixed ribbon_points[RIBBON_POINTS];
 static jo_3d_polygon ribbon_polygons[RIBBON_PARTS + 1];
 static jo_3d_polygon_attribute ribbon_attributes[RIBBON_PARTS + 1];
 static jo_3d_mesh ribbon;
+/*
+ * Which shape a cycle is. Three to choose from while we decide (docs/BACKLOG.md): set CYCLE_SHAPE
+ * and build. It's a constant, so the compiler drops the two that aren't picked, code and tables
+ */
+#define CYCLE_RIBBON 0 // a ribbon twisting from level into the trail's upright edge
+#define CYCLE_TOKEN 1  // a diamond spinning on its point
+#define CYCLE_CURSOR 2 // a terminal's block cursor, blinking
+#define CYCLE_LINKED 3 // the token, joined to its trail by a still ribbon
+#define CYCLE_SHAPE CYCLE_LINKED
+// The token: 6 points (its foot, four round the middle, its top), 8 three-cornered faces
+#define TOKEN_POINTS 6
+#define TOKEN_FACES 8
+static jo_pos3D_fixed token_points[TOKEN_POINTS];
+static jo_3d_polygon token_polygons[TOKEN_FACES];
+static jo_3d_polygon_attribute token_attributes[TOKEN_FACES];
+static jo_3d_mesh token;
+// The cursor: a slab leaning forwards, 8 points, 5 faces (no underside)
+#define CURSOR_POINTS 8
+#define CURSOR_FACES 5
+static jo_pos3D_fixed cursor_points[CURSOR_POINTS];
+static jo_3d_polygon cursor_polygons[CURSOR_FACES];
+static jo_3d_polygon_attribute cursor_attributes[CURSOR_FACES];
+static jo_3d_mesh cursor_block;
 
 void initCamera(jo_camera *curCam)
 {
@@ -269,6 +298,7 @@ void debug_3d(bool show)
 	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d %c     ", bots[0].bike.position.x, bots[0].bike.position.y,
 			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
 			  "EMH"[bot_skill_now()]);
+	jo_printf(0, 8, "mwait %d sidle %d   ", jo_core_master_wait_time(), jo_core_slave_idle_time());
 	jo_printf(0, 5, "ar%d co%d sd%d tp%d fl%d gr%d bd%d wk%d mi%d     ", perf_part_peak[PERF_ARENA],
 			  perf_part_peak[PERF_CORRIDOR], perf_part_peak[PERF_SIDES], perf_part_peak[PERF_TOPS],
 			  perf_part_peak[PERF_FLOOR], perf_part_peak[PERF_GRID], perf_part_peak[PERF_BANDS],
@@ -492,12 +522,42 @@ static bool draw_terminal(void)
  * see is VDP1's (level.c), as the 3D Saturn games that look stable do it
  */
 #define FLOOR_BLACK 2
+/*
+ * ...but out in the city (level_in_city), the circuit board the towers stand on (game/board.h):
+ * the same tile as the grid, the palette swapped for the board's (FLOOR.TGA holds both), drawn 32
+ * times larger (view.c, BOARD_FLOOR_SHIFT) at the towers' feet. Its pulses move on a phase every
+ * BOARD_STEP_FRAMES frames: the board's 180 colours written again then, ~1% of a frame's bus
+ * time at most, and nothing redrawn. Without it, what's under the skyline was black: the city
+ * floated
+ */
+#define FLOOR_BOARD 3
+// What the board fades into far off: black, as the fog everywhere else. It was a deep
+// blue-violet haze (10, 12, 34) at first, so below the skyline read as distance; the user wanted
+// the black back (2026-11-13: "make the fog on foot black again, not this purple"). Kept as its
+// own colour, so a tint is one line if it's wanted again
+#define BOARD_HAZE JO_COLOR_Black
 
 static void set_floor_colours(int colours)
 {
 	static int now = FLOOR_AS_LOADED;
+	static unsigned int board_frames = 0;
 
-	if (colours == now || floor_pal.data == JO_NULL)
+	if (floor_pal.data == JO_NULL)
+		return;
+	if (colours == FLOOR_BOARD)
+	{
+		// The pulse's step: a phase on every BOARD_STEP_FRAMES (a power of two: a shift). Written on
+		// the first frame of each step, and on the frame the board comes in
+		const unsigned int step = board_frames >> BOARD_STEP_SHIFT;
+		const bool new_step = (board_frames & (BOARD_STEP_FRAMES - 1)) == 0;
+
+		++board_frames;
+		if (now != FLOOR_BOARD || new_step)
+			board_palette(floor_pal.data, step);
+		now = colours;
+		return;
+	}
+	if (colours == now)
 		return;
 	now = colours;
 	for (int i = 0; i < FLOOR_COLOURS; ++i)
@@ -640,9 +700,12 @@ static void draw_loop_break(void)
 void draw_3d(void)
 {
 	apply_breach_glitch();
-	set_floor_colours(view_is_on_foot()					 ? FLOOR_BLACK
+	set_floor_colours(view_is_on_foot()					 ? (level_in_city() ? FLOOR_BOARD : FLOOR_BLACK)
 					  : arena_breach.phase != BREACH_NONE ? FLOOR_WHITE
 														  : FLOOR_AS_LOADED);
+	// The far floor fades to BOARD_HAZE over the board (black now), black anywhere else: a black
+	// board fogged in a tint would be a tinted floor in the corridor (floor_fade_vdp2.h)
+	floor_fade_set_colour(view_is_on_foot() && level_in_city() ? BOARD_HAZE : JO_COLOR_Black);
 	// Terminated (or the designed crash's reset, outside): only the terminal text. The world
 	// isn't drawn at all
 	if (draw_terminal())
@@ -751,7 +814,8 @@ void draw_3d(void)
 			// it, and the floor's grid is only seen inside. It rises with the walls, from the
 			// break's flash (flat on the floor till then, hiding the grid outside). Between rounds,
 			// once it's sunk flat, it goes: the grid runs on for ever, as in the loop
-			if (arena_rounds.phase != ROUND_OPEN)
+			// (Not on foot: from out there the arena's a pyramid, level.c's arena_pyramid_add)
+			if (arena_rounds.phase != ROUND_OPEN && !view_is_on_foot())
 				draw_arena_surround(arena_wall_rise(), !first_person && !debug_camera);
 		}
 
@@ -828,10 +892,23 @@ void draw_3d(void)
 		}
 		// 1st person: only if it's wholly in front of the camera (SGL would put one behind the
 		// camera on screen anyway, as if in front) and not wholly off to one side
+		// Not on foot: they're back in the arena, behind its walls and the mirror over the hole,
+		// and VDP1 has no depth: one drawn showed through the city's towers (seen in play, 2026-11-13)
 		for (int i = 0; i < BOT_COUNT_MAX; ++i)
-			if (bots[i].alive &&
+			if (bots[i].alive && !view_is_on_foot() &&
 				(!clip || wall_clip_object_visible(clip, bots[i].bike.position, CYCLE_RADIUS, TRAIL_MIN_FORWARD)))
 				draw_cycle(bots[i].bike.position, bots[i].bike.heading, bot_trail_colours[i], true);
+	}
+	// The landmarks on the horizon and the CD block's disc over the city (level.h): in play and
+	// on foot, each from everywhere but its own place
+	if (!spectating)
+	{
+		static unsigned int sky_frame = 0;
+		int side, wall, middle;
+		bool in_lift;
+
+		if (foot_cd_hub(&side, &wall, &middle, &in_lift))
+			level_sky_draw(side, wall, middle, sky_frame++, view_is_on_foot() ? PLACE_WORK_RAM : PLACE_ARENA, in_lift);
 	}
 	// Your body (game/body.h), once you have one (from the crash on): posed once here, then drawn
 	// from your own eyes, and again in the mirror below
@@ -868,8 +945,10 @@ void draw_3d(void)
 			jo_3d_push_matrix();
 			level_mirror_matrix();
 			slave_draw_begin();
+			// You, in the glass (the same joints your own eyes see): first, so the slave works it out
+			// while this CPU does the reflected corridor (level.h)
+			level_body_draw(false);
 			level_mirror_draw(arena_corridor, &mirrored);
-			level_body_draw(false); // you, in the glass: the same joints your own eyes see
 			slave_draw_end();
 			jo_3d_pop_matrix();
 			level_mirror_end(arena_corridor, clip);
@@ -940,18 +1019,33 @@ void draw_3d(void)
  */
 #define RIBBON_MIDDLE (TRAIL_HEIGHT / 2)
 // The wave: the leading edge's height above (or below) the middle, a sine of 16 steps, one step
-// for every 8 units ridden: a whole rise and fall every 128, about 3 a second at cruise and 6 at
-// a full boost (every 64 was a flutter: film 2026-11-10). +-12 of
+// for every 16 units ridden: a whole rise and fall every 256, about 1.5 a second at cruise and 3
+// at a full boost (every 64 was a flutter, every 128 still looked funny: 2026-11-11). +-12 of
 // the trail's 60. The next cross-section back moves half as far, so the twist stays smooth, and
 // the rest stay put: the back edge must meet the trail
 #define WAVE_STEPS 16
-#define WAVE_STEP_SHIFT 3
+#define WAVE_STEP_SHIFT 4
 #define RIBBON_SECOND_UP 9 // the second cross-section's ends: sin(22.5 degrees) x its half length, 26
 static const signed char wave[WAVE_STEPS] = {0, 5, 8, 11, 12, 11, 8, 5, 0, -5, -8, -11, -12, -11, -8, -5};
 
-static void ribbon_flat(jo_3d_polygon_attribute *a, unsigned int kind)
+/*
+ * One flat, unlit polygon of a cycle's model: its four corners (a three-cornered face names its
+ * last corner twice), what VDP1 draws it as (JO_VDP1_POLYGON, JO_VDP1_LINE) and whether it's seen
+ * from both sides (JO_3D_DUAL_PLANE: a surface, the ribbon) or only from outside
+ * (JO_3D_SINGLE_PLANE: a solid's face. jo tells the outside by the corners going clockwise on
+ * screen, and skips the faces turned away: half a solid's polygons never reach VDP1)
+ */
+static void cycle_polygon(jo_3d_polygon *q, jo_3d_polygon_attribute *a, int p0, int p1, int p2, int p3, unsigned int kind,
+						  unsigned char plane)
 {
-	a->plane = JO_3D_DUAL_PLANE; // seen from both sides: it's a surface, not a solid
+	q->normal.x = JO_FIXED_0; // unlit
+	q->normal.y = JO_FIXED_0;
+	q->normal.z = JO_FIXED_1;
+	q->vertices[0] = (unsigned short)p0;
+	q->vertices[1] = (unsigned short)p1;
+	q->vertices[2] = (unsigned short)p2;
+	q->vertices[3] = (unsigned short)p3;
+	a->plane = plane;
 	a->sort = JO_3D_SORT_CENTER | ((kind >> 16) & 0x1c) | JO_3D_NO_OPTION;
 	a->texture_id = JO_3D_NO_TEXTURE;
 	a->draw_mode = (unsigned short)((JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((kind >> 24) & 0xc0));
@@ -960,51 +1054,138 @@ static void ribbon_flat(jo_3d_polygon_attribute *a, unsigned int kind)
 	a->direction = (unsigned short)(kind & 0x3f);
 }
 
-static void ribbon_polygon(int index, int p0, int p1, int p2, int p3, unsigned int kind)
+static void cycle_point(jo_pos3D_fixed *p, int x, int y, int z)
 {
-	jo_3d_polygon *q = &ribbon_polygons[index];
+	p->x = jo_int2fixed(x);
+	p->y = jo_int2fixed(y);
+	p->z = jo_int2fixed(z);
+}
 
-	q->normal.x = JO_FIXED_0; // unlit
-	q->normal.y = JO_FIXED_0;
-	q->normal.z = JO_FIXED_1;
-	q->vertices[0] = (unsigned short)p0;
-	q->vertices[1] = (unsigned short)p1;
-	q->vertices[2] = (unsigned short)p2;
-	q->vertices[3] = (unsigned short)p3;
-	ribbon_flat(&ribbon_attributes[index], kind);
+/*
+ * The token: a process as a packet of data, a diamond standing on its point. Two four-sided
+ * pyramids base to base: as wide as the cycle round the middle (what hits a wall), as tall as the
+ * trail, which is its upright axis left behind. It spins about that axis as it rides (draw_cycle:
+ * the matrix does it, nothing's written), one face white, so a flash comes round each turn. And it
+ * looks the same after a quarter turn, so turning 90 degrees shows no snap.
+ * In its own space: the foot at the origin, the four middle corners out along x and y.
+ * It leans forwards as it rides (TOKEN_LEAN, about the foot): going somewhere
+ */
+#define TOKEN_LEAN 0x0e00 // about 20 degrees (0x10000 a whole turn)
+// Where that lean puts the token's middle (CYCLE_LINKED's ribbon starts there): ahead of the
+// cycle's place, and up. And the ribbon's length from there back to the trail's start
+#define LINK_FRONT 10
+#define LINK_MIDDLE 28
+#define LINK_LENGTH (LINK_FRONT + PLAYER_HALF + 1) // 36: divides by 4
+static void load_token(void)
+{
+	static const signed char corner[4][2] = {{PLAYER_HALF, 0}, {0, PLAYER_HALF}, {-PLAYER_HALF, 0}, {0, -PLAYER_HALF}};
+
+	cycle_point(&token_points[0], 0, 0, 0);
+	for (int k = 0; k < 4; ++k)
+		cycle_point(&token_points[1 + k], corner[k][0], corner[k][1], TRAIL_HEIGHT / 2);
+	cycle_point(&token_points[5], 0, 0, TRAIL_HEIGHT);
+	for (int k = 0; k < 4; ++k)
+	{
+		const int here = 1 + k, next = 1 + ((k + 1) & 3);
+
+		// The upper face and the lower one between the same two middle corners, each wound so its
+		// outside is clockwise on screen
+		cycle_polygon(&token_polygons[k], &token_attributes[k], 5, here, next, next, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE);
+		cycle_polygon(&token_polygons[4 + k], &token_attributes[4 + k], 0, next, here, here, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE);
+	}
+	token.data.points = token_points;
+	token.data.polygons = token_polygons;
+	token.data.attributes = token_attributes;
+	token.data.point_count = TOKEN_POINTS;
+	token.data.polygon_count = TOKEN_FACES;
+}
+
+/*
+ * The cursor: a terminal's block cursor, the thing that writes. The trail is the line already
+ * written, and the block at its head blinks white (draw_cycle), by distance ridden. A slab as wide
+ * as the cycle and as tall as the trail, CURSOR_DEEP thick, sheared forwards: its top CURSOR_LEAN
+ * ahead of its foot (about 20 degrees), italic, in a hurry. The lean is in the points, so it costs
+ * nothing. No underside: nobody's below the floor
+ */
+#define CURSOR_DEEP 16
+#define CURSOR_LEAN 22
+static void load_cursor(void)
+{
+	// Back and front, at the foot and at the top; left (-x) then right of each
+	for (int k = 0; k < 4; ++k)
+	{
+		const int y = (k & 1 ? -CURSOR_DEEP / 2 : CURSOR_DEEP / 2) - (k & 2 ? CURSOR_LEAN : 0);
+		const int z = k & 2 ? TRAIL_HEIGHT : 0;
+
+		cycle_point(&cursor_points[k * 2], -PLAYER_HALF, y, z);
+		cycle_point(&cursor_points[k * 2 + 1], PLAYER_HALF, y, z);
+	}
+	// 0 1: back foot, 2 3: front foot, 4 5: back top, 6 7: front top
+	cycle_polygon(&cursor_polygons[0], &cursor_attributes[0], 2, 3, 7, 6, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE); // front
+	cycle_polygon(&cursor_polygons[1], &cursor_attributes[1], 1, 0, 4, 5, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE); // back
+	cycle_polygon(&cursor_polygons[2], &cursor_attributes[2], 6, 7, 5, 4, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE); // top
+	cycle_polygon(&cursor_polygons[3], &cursor_attributes[3], 0, 2, 6, 4, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE); // left
+	cycle_polygon(&cursor_polygons[4], &cursor_attributes[4], 3, 1, 5, 7, JO_VDP1_POLYGON, JO_3D_SINGLE_PLANE); // right
+	cursor_block.data.points = cursor_points;
+	cursor_block.data.polygons = cursor_polygons;
+	cursor_block.data.attributes = cursor_attributes;
+	cursor_block.data.point_count = CURSOR_POINTS;
+	cursor_block.data.polygon_count = CURSOR_FACES;
 }
 
 void load_player_model(void)
 {
+	/*
+	 * CYCLE_LINKED: the token alone looked detached from its trail, so a ribbon joins them. It
+	 * doesn't move (no wave). The token leans forwards about its foot, so its middle isn't over
+	 * the cycle's place: it's LINK_FRONT ahead and a little lower (30 up the axis, leant 20
+	 * degrees: 30 sin = 10 ahead, 30 cos = 28 up). The ribbon starts there, level, inside the
+	 * token (narrower than the token's middle, so it comes out of it whichever way that's spun),
+	 * and twists and widens back to the upright edge the trail starts from
+	 */
+	const bool linked = CYCLE_SHAPE == CYCLE_LINKED;
 	// Each cross-section's turn from level: cos and sin x1024 (0, 22.5, 45, 67.5, 90 degrees), and
 	// half its length: half the cycle's width at the front, half the trail's height at the back
 	static const short turn[RIBBON_PARTS + 1][2] = {{1024, 0}, {946, 392}, {724, 724}, {392, 946}, {0, 1024}};
 	static const signed char half[RIBBON_PARTS + 1] = {PLAYER_HALF, 26, 28, 29, TRAIL_HEIGHT / 2};
+	static const signed char half_linked[RIBBON_PARTS + 1] = {16, 20, 25, 28, TRAIL_HEIGHT / 2};
 
+	if (CYCLE_SHAPE == CYCLE_TOKEN || linked)
+		load_token();
+	if (CYCLE_SHAPE == CYCLE_TOKEN)
+		return;
+	if (CYCLE_SHAPE == CYCLE_CURSOR)
+	{
+		load_cursor();
+		return;
+	}
 	for (int k = 0; k <= RIBBON_PARTS; ++k)
 	{
-		const int y = -PLAYER_HALF + ((2 * PLAYER_HALF * k) >> 2); // RIBBON_PARTS is 4: a shift
-		const int across = (turn[k][0] * half[k]) >> 10, up = (turn[k][1] * half[k]) >> 10;
+		// From the front to the back, in quarters (RIBBON_PARTS is 4: a shift). Alone: the whole
+		// cycle's length. Linked: from the token's middle (LINK_FRONT ahead), 36 long
+		const int y = linked ? -LINK_FRONT + ((LINK_LENGTH * k) >> 2) : -PLAYER_HALF + ((2 * PLAYER_HALF * k) >> 2);
+		const int size = linked ? half_linked[k] : half[k];
+		// Linked: rising the 2 from the token's middle to the trail's as it goes back
+		const int middle = linked ? LINK_MIDDLE + (k >> 1) : RIBBON_MIDDLE;
+		const int across = (turn[k][0] * size) >> 10, up = (turn[k][1] * size) >> 10;
 
 		for (int end = 0; end < 2; ++end)
 		{
-			jo_pos3D_fixed *p = &ribbon_points[k * 2 + end];
 			const int sign = end == 0 ? -1 : 1;
 
-			p->x = jo_int2fixed(sign * across);
-			p->y = jo_int2fixed(y);
-			p->z = jo_int2fixed(RIBBON_MIDDLE + sign * up);
+			cycle_point(&ribbon_points[k * 2 + end], sign * across, y, middle + sign * up);
 		}
 	}
 	for (int k = 0; k < RIBBON_PARTS; ++k)
-		ribbon_polygon(k, k * 2, k * 2 + 1, k * 2 + 3, k * 2 + 2, JO_VDP1_POLYGON);
+		cycle_polygon(&ribbon_polygons[k], &ribbon_attributes[k], k * 2, k * 2 + 1, k * 2 + 3, k * 2 + 2, JO_VDP1_POLYGON, JO_3D_DUAL_PLANE);
 	// The leading edge: a line of light along the front (a VDP1 line: its first two corners)
-	ribbon_polygon(RIBBON_EDGE, 0, 1, 1, 0, JO_VDP1_LINE);
+	cycle_polygon(&ribbon_polygons[RIBBON_EDGE], &ribbon_attributes[RIBBON_EDGE], 0, 1, 1, 0, JO_VDP1_LINE, JO_3D_DUAL_PLANE);
 	ribbon.data.points = ribbon_points;
 	ribbon.data.polygons = ribbon_polygons;
 	ribbon.data.attributes = ribbon_attributes;
 	ribbon.data.point_count = RIBBON_POINTS;
-	ribbon.data.polygon_count = RIBBON_PARTS + 1;
+	// Linked: no line of light along the front (it's inside the token): just the four strips
+	ribbon.data.polygon_count = linked ? RIBBON_PARTS : RIBBON_PARTS + 1;
 }
 
 // A rider's colour, a share of the way to white (0 .. 4 quarters): per channel, RGB555, no division
@@ -1027,7 +1208,62 @@ void draw_cycle(world_point position, int heading, jo_color colour, bool running
 {
 	const int along = heading == HEADING_NORTH || heading == HEADING_SOUTH ? position.y : position.x;
 	const int lift = running ? wave[(along >> WAVE_STEP_SHIFT) & (WAVE_STEPS - 1)] : 0;
+	// How far it's ridden, for the token's spin and the cursor's blink: x + y, which (unlike along)
+	// doesn't jump at a turn. It runs backwards heading two of the four ways: the spin's the other
+	// way round there, and nobody can tell
+	const int ridden = position.x + position.y;
 
+	if (CYCLE_SHAPE == CYCLE_TOKEN || CYCLE_SHAPE == CYCLE_LINKED)
+	{
+		// The faces: a light and a deeper shade turn about, one upper face white (the flash that
+		// comes round). A terminated process has no flash (and doesn't spin: it isn't moving)
+		for (int k = 0; k < 4; ++k)
+		{
+			token_attributes[k].color = lighter(colour, k & 1 ? 1 : 2);
+			token_attributes[4 + k].color = lighter(colour, k & 1 ? 0 : 1);
+		}
+		if (running)
+			token_attributes[0].color = JO_COLOR_White;
+		jo_3d_push_matrix();
+		{
+			jo_3d_translate_matrix(position.x, position.y, 0);
+			angle_rotate_z((jo_angle)(heading * RIBBON_QUARTER_TURN));
+			if (CYCLE_SHAPE == CYCLE_LINKED)
+			{
+				// The ribbon from the token's middle back to the trail: turned with the cycle,
+				// but not leant or spun. Lightest inside the token, the trail's own colour behind
+				for (int k = 0; k < RIBBON_PARTS; ++k)
+					ribbon_attributes[k].color = lighter(colour, 2 - k < 0 ? 0 : 2 - k);
+				jo_3d_mesh_draw(&ribbon);
+			}
+			angle_rotate_x((jo_angle)TOKEN_LEAN); // forwards, about its foot
+			// A whole turn every 256 units ridden (a shift: 256 x 256 is the angle's 0x10000):
+			// about 1.5 a second at cruise
+			angle_rotate_z((jo_angle)(ridden << 8));
+			jo_3d_mesh_draw(&token);
+		}
+		jo_3d_pop_matrix();
+		return;
+	}
+	if (CYCLE_SHAPE == CYCLE_CURSOR)
+	{
+		// The blink: white for 128 units ridden, the rider's colour for the next 128 (about 3 a
+		// second at cruise). The sides and top a shade apart so it reads as a block. Terminated:
+		// its colour, steady
+		const int lit = running && ((ridden >> 7) & 1) ? 2 : 0;
+
+		cursor_attributes[0].color = cursor_attributes[1].color = lit ? JO_COLOR_White : lighter(colour, 1);
+		cursor_attributes[2].color = lighter(colour, 2 + lit);
+		cursor_attributes[3].color = cursor_attributes[4].color = lighter(colour, lit);
+		jo_3d_push_matrix();
+		{
+			jo_3d_translate_matrix(position.x, position.y, 0);
+			angle_rotate_z((jo_angle)(heading * RIBBON_QUARTER_TURN));
+			jo_3d_mesh_draw(&cursor_block);
+		}
+		jo_3d_pop_matrix();
+		return;
+	}
 	for (int k = 0; k < RIBBON_PARTS; ++k)
 		ribbon_attributes[k].color = lighter(colour, 2 - k < 0 ? 0 : 2 - k);
 	ribbon_attributes[RIBBON_EDGE].color = JO_COLOR_White;

@@ -39,6 +39,11 @@ world_rect view_visible_rect(const cycle *c, bool free_camera, int range);
 // sixteenth wider than the screen. The corridor and the city are cut to them (level.c).
 // Returns false (nothing written) in other views, or with the debug camera
 bool view_frustum(bool free_camera, frustum *out);
+// The same on the flight down into the cycle (false at any other time): view_frustum has none
+// then, as nothing that's cut to the view is in play yet. But the sky's furniture is drawn through
+// the flight (level_sky_draw), so the skyline and the landmarks are there from the start of the
+// descent, not popped in as you land
+bool view_arrival_frustum(frustum *out);
 
 // The 1st person camera on the floor, for keeping wall corners in front of it.
 // Returns false (nothing written) in other views.

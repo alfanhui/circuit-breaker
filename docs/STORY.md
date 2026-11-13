@@ -251,6 +251,11 @@ just level 2. From it you can see where you're going:
 - **The chips are landmarks on the horizon,** placed where they really sit on the Saturn's
   circuit board: the CD block as a vast disc, the sound chip pulsing with music, VDP2's planes as
   the sky, the main CPU as a control tower.
+- **Built (2026-11-12), a first pass** (`game/landmarks.h`): a dull cutout on the horizon for
+  each place, each moving a little by what its chip does, none drawn from its own place. The CD
+  block is the disc over Work RAM's city with its drive under it; the main CPU is a control
+  tower at the arena's middle; the video output is a glowing screen opposite the city. Where
+  each stands is a proposal, not yet the board's real layout.
 - **You see a place long before you reach it,** and come back through the hub between levels.
   The Watchdog patrols it.
 - **The arena is visible too.** Once you escape, you can look back at it: a small fenced box in

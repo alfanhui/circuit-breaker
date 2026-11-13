@@ -311,8 +311,40 @@ static void a_mirror_reflects_the_view(void)
 	}
 }
 
+// How steeply the view sees up and down (frustum_slopes): nothing on the screen is above or below
+// those slopes, a level camera's are about its top and bottom edges' (0.75), and looking down 45
+// degrees it sees steeply down and nothing above the eye at all
+static void the_view_s_slopes_hold_everything_on_screen(void)
+{
+	frustum f;
+	int up, down;
+	const int down_north[3] = {0, -724, -724};
+	const int up_north[3] = {0, -724, 724};
+
+	level_camera(&f);
+	frustum_slopes(&f, &up, &down);
+	CHECK(up >= 192 && up <= 230); // 0.75 x 256, and the eighth over
+	CHECK_EQ(-up, down);
+	// Every point on the screen, 1000 in front: no steeper than the slopes from the eye
+	for (int x = -990; x <= 990; x += 198)
+		for (int z = -740; z <= 740; z += 185)
+		{
+			const frustum_point p[1] = {{x, -1000, 35 + z}};
+			const int along = frustum_isqrt((unsigned int)(x * x + 1000 * 1000));
+
+			CHECK_EQ(0, frustum_classify(&f, p, 1, FRUSTUM_SCREEN));
+			CHECK(z * FRUSTUM_SLOPE_ONE <= up * along);
+			CHECK(z * FRUSTUM_SLOPE_ONE >= down * along);
+		}
+	frustum_set_camera(&f, EYE, down_north, EAST, up_north, FRUSTUM_ONE, 768, 10);
+	frustum_slopes(&f, &up, &down);
+	CHECK(down < -6 * FRUSTUM_SLOPE_ONE); // its bottom edge is 82 degrees down: 7 in 1
+	CHECK(up >= 0 && up < 8);		// its top edge is below level: nothing above the eye
+}
+
 void run_frustum_tests(void)
 {
+	RUN(the_view_s_slopes_hold_everything_on_screen);
 	RUN(a_mirror_reflects_the_view);
 	RUN(square_roots_round_down);
 	RUN(distances_are_in_world_units);

@@ -241,6 +241,19 @@ void floor_fade_vblank(void)
 		arm_dma(&dma_table[MAX_BLANK_ROWS + (row < JO_TV_HEIGHT ? row : 0)]);
 }
 
+void floor_fade_set_colour(jo_color colour)
+{
+	// One colour RAM write, and only when it changes (kept here: reading colour RAM back waits on
+	// VDP2): the line colour table names this entry on every row, so the whole fog turns at once
+	static jo_color now = JO_COLOR_RGB(FOG_R, FOG_G, FOG_B);
+
+	if (line_table != JO_NULL && colour != now)
+	{
+		now = colour;
+		fog_palette.data[0] = colour;
+	}
+}
+
 void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
 {
 	const floor_fade_view *view = views[view_index];

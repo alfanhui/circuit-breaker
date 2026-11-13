@@ -39,6 +39,45 @@ void city_tower_corners(const corridor *c, const city_tower *t, world_point *a, 
 	*b = corridor_point(c, t->out_max, middle + t->across_max);
 }
 
+world_point city_hub_point(int side, int wall, int middle, int out, int across)
+{
+	const city_tower *hub = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW);
+
+	return corridor_point_behind(side, wall, ((hub->out_min + hub->out_max) >> 1) + out,
+								 middle + ((hub->across_min + hub->across_max) >> 1) + across);
+}
+
+world_point city_hub_middle(int side, int wall, int middle)
+{
+	return city_hub_point(side, wall, middle, 0, 0);
+}
+
+int city_seen_patch(const city_tower *roof, int out, int across)
+{
+	// Its quarters: 250 each way (CITY_TOWER_SIZE / CITY_SEEN_PATCHES). An edge between two
+	// belongs to the further one: both saw it, in the table
+	const int half = CITY_TOWER_SIZE / CITY_SEEN_PATCHES;
+
+	return (out - roof->out_min >= half ? 1 : 0) + (across - roof->across_min >= half ? CITY_SEEN_PATCHES : 0);
+}
+
+int city_sees(int from, int patch, int tower)
+{
+	return (city_seen[from][patch][tower >> 3] >> (tower & 7)) & 1;
+}
+
+int city_roof_under(int out, int across, int z)
+{
+	for (int i = 0; i < CITY_TOWERS; ++i)
+	{
+		const city_tower *t = &city_towers[i];
+
+		if (out >= t->out_min && out <= t->out_max && across >= t->across_min && across <= t->across_max)
+			return z >= t->height && z <= t->height + CITY_SEEN_EYE ? i : -1;
+	}
+	return -1;
+}
+
 int city_walker_area_add(const corridor *c, walker_area *area)
 {
 	for (int i = 0; i < CITY_TOWERS; ++i)

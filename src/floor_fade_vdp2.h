@@ -32,6 +32,10 @@ void floor_fade_set_first_person_tilt(int tilt);
 // out every row with a division, so call it every few frames, not every frame
 void floor_fade_set_camera(int tilt, int eye_height, int focal, int fade_start, int fade_end);
 
+// The colour the far floor fades into (black as it starts): the board under the city fades into a
+// blue haze instead (main.c)
+void floor_fade_set_colour(jo_color colour);
+
 // Where the floor's fade begins and where it's full, along the floor, for a view: so the walls
 // and trails (object_fog_vdp1.h) fade over the same distances as the floor they stand on.
 // Works whether or not the floor fog is on.

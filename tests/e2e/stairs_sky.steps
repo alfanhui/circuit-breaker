@@ -1,0 +1,24 @@
+# From where you get up (BOOT_ON_FOOT: facing out), on up the corridor to the stairs and up them:
+# the skyline over the far end must stand on black down to the horizon all the way, with none of
+# the sky's pink under it (it used to show from the stairs until you stepped out into the city)
+wait_up
+wait 1.0
+shot ss_00_start
+keydown up
+wait 1.2
+shot ss_01
+wait 1.2
+shot ss_02
+wait 1.2
+shot ss_03_stairs
+wait 0.6
+shot ss_04
+wait 0.6
+shot ss_05
+wait 0.6
+shot ss_06
+wait 0.6
+shot ss_07
+keyup up
+wait 0.5
+shot ss_08_stopped

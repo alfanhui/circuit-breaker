@@ -133,6 +133,60 @@ falls away), and the coarse cull groups the city by 2 x 2 blocks. From the doorw
 screen. Guard pages as occluders were tried and cost more than they saved (8 faces' planes a frame).
 Still to do: the hubs' lifts and their ways in, the drone, a film down the whole route.
 
+**Built (2026-11-12): the CD block's lift, the disc and its drive.** Over the city, 4000 up, a
+disc 7000 across lies in the sky (an octagon ring in dull slates, the sector at the laser paler,
+stepping round): seen from the city and from the arena, before you know what it is. Under it the
+drive's works: the spindle, a rail, and on the rail over the CD block's hub the laser's pickup,
+a red beam from it up to the disc. A beam of light runs from the hub's roof up to the pickup's
+underside, the hatch. Stand on the pad at the roof's middle for three quarters of a second and
+the lift takes you up it (`game/lift.h`: no button, 8.5 s, eased) to the hatch, holds, and brings
+you back: the level through the hatch isn't built. On the way up the other places come into
+sight over the towers (`game/landmarks.h`: one cutout on the horizon for each place in the story). Down at the hub nearly every tower stands
+over you, and VDP1 couldn't fill them all: towers wholly behind a nearer, taller one aren't drawn
+now (`game/skyline.h`), and far sides end where the screen does.
+
+**Built (2026-11-12): the city all round.** Work RAM has no landmark of its own on the horizon:
+it *is* the horizon. A ring of skyline stands round you every way you look (level.c,
+`skyline_add`; `tools/make_skyline.py`): near-black monoliths with sharp tops, three rows deep in
+one picture, a thin rim or trace of cyan light on a few, the far row fading into violet haze; no
+windows (a first pass with warm lit windows read as a cartoon of an old European city). It
+follows you three quarters of the way, so it seems four times as far as it is and slides against
+the towers and landmarks as you move: parallax, as in Akira's Neo-Tokyo. (Three rings at three
+depths were tried first: three times the polygons for little the eye could tell.) In the arena it
+stands on the floor, black at its foot; in the city it's nearer and towers over you. The other
+landmarks are drawn nearer and bigger than they are in the city (the user's trick): they only
+change while they're out of sight.
+
+## Crossing the city: the highways, and hiding the loads (proposal, 2026-11-12)
+
+The city can't all be in memory at once: the Saturn has 2 MB of Work RAM, and the city slice
+already built (84 towers, the corridor) is one district of many. So the city is **districts**, and
+between two districts is a **highway**: the ride across is when the next district comes off the
+disc. No loading screen, as long as the ride is longer than the load.
+
+- **What a highway is, in lore: a bus.** The SH-2s and the other chips talk over buses; data
+  crosses the machine on them. A highway is a bus line between two memory regions: a long,
+  straight, elevated lane of light over the dark between districts, the skyline sliding past on
+  both sides (the three rings: the parallax does the work of speed).
+- **How you ride it (the choice to make):**
+  1. *Your cycle comes back.* Shh is a process; on a bus it's data in transit, and it moves the
+     way it did in the arena. The racing controls return for the ride, a trail behind you, the
+     Watchdog's drones chasing along the bus. The game's two halves meet, and the ride is play,
+     not a wait.
+  2. *A transfer you stand on,* like the CD block's lift (`game/lift.h`): a packet carrier that
+     takes you along the bus while you turn and look. Simpler, a breather between districts.
+  3. Both: carriers on the minor buses, the cycle on the main bus.
+- **The numbers:** the CD reads ~300 KB a second (double speed), plus a seek of up to ~0.3 s. A
+  district (its tower table, textures, sounds) at 150-300 KB loads in about a second; a ride of
+  6-10 s covers it with room to spare, even with music streaming. jo can read a file in the
+  background (`JO_MAX_FS_BACKGROUND_JOBS`, set to 1 in the makefile).
+- **If the disc is late (a scratched disc, an emulator): the loading screen is in the story.** The
+  bus goes into a wait state: the picture freezes and the code screen takes over (the terminal
+  we already have: green text on black, "DMA transfer to Work RAM-H ...") until the load's done.
+  The breach's hidden load (input.c, `hidden_load`) is the same thing done once already.
+- **Memory:** one district in Work RAM at a time, the next loading into a second buffer during
+  the ride (two districts' worth of the free zone), the one behind you freed as you arrive.
+
 **The way in:** the corridor's far end opens onto a ledge. You walk out onto a rooftop and the
 city falls away below you, further than the arena was across: Mirror's Edge's first rooftop.
 

@@ -73,4 +73,21 @@ void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera
 // iso cutaway, as low as the near walls' base behind them. Only drawn where the camera's above it
 void draw_arena_surround(int rise, bool cutaway);
 
+/*
+ * What stands in the sky and on the horizon (level.c has how): the landmarks, one for every place
+ * in the story (game/landmarks.h), and the CD block's disc over the city with the drive's works
+ * under it and the lift's beam up to them (game/city.h).
+ * side, wall, middle: the corridor's wall, how far it is from the arena's middle, and its middle
+ * line across (input.h, foot_cd_hub: known before the corridor's open). frame: counts up, for
+ * what moves. place: where you are (PLACE_...): that place's own landmark isn't drawn. in_lift:
+ * the lift has you, so its beam's left out (you're in it).
+ * Only in the views that look out (1st person, on the cycle or on foot); between
+ * slave_draw_begin and slave_draw_end, in the world's matrix
+ */
+void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift);
+
+// Whether you're on foot out past the corridor's doorway, in the city (as of the frame last
+// drawn): the floor's the circuit board there (main.c), and the towers stand on it
+bool level_in_city(void);
+
 #endif

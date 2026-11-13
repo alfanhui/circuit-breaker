@@ -1,0 +1,50 @@
+# Running about on the city's roofs (BOOT_AT_HUB 1 in src/input.c; for another roof, change the
+# tower it boots on there): the roofs underfoot must stay whole as you run and turn. Watch the
+# debug line's "vdp1 over": a frame VDP1 doesn't finish is shown with the nearest things, the
+# roof you're on, part drawn
+wait_up
+wait 1.5
+shot cr_00
+keydown up
+wait 0.5
+shot cr_01
+keydown right
+wait 0.25
+shot cr_02
+wait 0.25
+shot cr_03
+keyup right
+wait 0.4
+shot cr_04
+keydown left
+wait 0.3
+shot cr_05
+wait 0.3
+shot cr_06
+wait 0.3
+shot cr_07
+keyup left
+wait 0.4
+shot cr_08
+keydown right
+wait 0.3
+shot cr_09
+wait 0.3
+shot cr_10
+keyup right
+wait 0.4
+shot cr_11
+keyup up
+wait 0.3
+keydown b
+wait 0.8
+shot cr_12_down
+keyup b
+hold left 0.6
+keydown up
+wait 0.5
+shot cr_13
+wait 0.5
+shot cr_14
+keyup up
+shot cr_15

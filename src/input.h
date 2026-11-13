@@ -65,6 +65,11 @@ bool foot_target_on_screen(int *screen_x, int *screen_y);
 // On foot: how high your feet are (the roof you're on) and the top of your head (lower crouched in a
 // slide): for you in the mirror (level.h)
 int foot_feet_height(void);
+// Where the corridor is, for what stands in the sky (level.h, level_sky_draw): its wall's side,
+// how far that is from the arena's middle, and its middle line across. From the corridor once it's
+// open; before that, from where round 5's flicker will open it. *in_lift: the CD block's lift has
+// you. false: nowhere yet
+bool foot_cd_hub(int *side, int *wall, int *middle, bool *in_lift);
 bool foot_body_state(body_state *s, int *yaw, int *feet); // your body: input.c has what
 
 #endif

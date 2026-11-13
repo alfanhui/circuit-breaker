@@ -39,6 +39,7 @@
  */
 #define FRUSTUM_SCREEN 0x1F	   // the near plane and the screen's edges: planes 0 .. 4
 #define FRUSTUM_GUARD 0x1E1	   // the near plane and the guard band's edges: planes 0, 5 .. 8
+#define FRUSTUM_TOP_BOTTOM 0x18 // of the screen's edges, its top and bottom: planes 3 and 4
 #define FRUSTUM_PORTAL_FIRST 9 // a portal's planes from here (frustum_add_edge)
 #define FRUSTUM_GUARD_X16 32   // the guard band: twice the screen's reach (~320 pixels past its sides)
 // A polygon gains at most one corner for each plane it's cut by
@@ -61,6 +62,7 @@ typedef struct
 {
 	frustum_point eye;
 	int forward[3], right[3], up[3]; // the camera's directions, as given (x1024)
+	int tan_side, tan_up;			 // the screen's edges, as given (frustum_slopes)
 	int count;
 	frustum_plane planes[FRUSTUM_PLANES_MAX];
 } frustum;
@@ -124,6 +126,21 @@ int frustum_clip(const frustum *f, unsigned planes, const frustum_point *in, int
  * A point p is inside out's planes exactly as far as its reflection is inside in's: no division
  */
 void frustum_reflect(const frustum *in, int axis, int mirror, frustum *out);
+
+/*
+ * How steeply anything on the screen can be above or below the eye: the most a ray through the
+ * screen climbs (up, 0 or more) and dives (down, 0 or less) per unit it goes along the floor,
+ * x FRUSTUM_SLOPE_ONE. So a point D along the floor from the eye (or nearer) can only be seen
+ * between eye.z + D x down and eye.z + D x up: level.c ends a far tower's sides there, with one
+ * multiply, where cutting each by the screen's top and bottom in 3D took a division or two a
+ * side. Taken at the screen's corners and its edges' middles (a level camera's steepest ray is its
+ * top edge's middle), an eighth added for what's between them. FRUSTUM_STEEP (and its negative)
+ * when the view reaches nearly straight up (or down): no limit that way.
+ * Eight divisions and square roots, once a frame
+ */
+#define FRUSTUM_SLOPE_ONE 256
+#define FRUSTUM_STEEP (16 * FRUSTUM_SLOPE_ONE)
+void frustum_slopes(const frustum *f, int *up, int *down);
 
 // Integer square root (rounded down): the planes' lengths
 int frustum_isqrt(unsigned int v);

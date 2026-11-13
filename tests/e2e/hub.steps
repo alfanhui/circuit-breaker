@@ -1,0 +1,31 @@
+# The CD block hub, the end of the way down through the city (BOOT_AT_HUB 1 in src/input.c):
+# a look each way round from its roof, and down
+wait_up
+wait 1.5
+shot hub_00_out
+hold left 0.75
+wait 0.4
+shot hub_01
+hold left 0.75
+wait 0.4
+shot hub_02
+hold left 0.75
+wait 0.4
+shot hub_03
+hold left 0.75
+wait 0.4
+shot hub_04
+keydown b
+wait 1.0
+shot hub_05_down
+keyup b
+keydown y
+wait 1.2
+shot hub_06_up
+keyup y
+keydown up
+wait 1.0
+shot hub_07_walk
+wait 1.0
+shot hub_08_walk
+keyup up

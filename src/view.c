@@ -167,6 +167,26 @@ static int heading_current = 0;
 static int look_target = 0;
 static int look_now = 0;
 static int fog_tilt = 0; // the floor fog's tilt (tan x 1000) as last built
+/*
+ * On foot the floor's the circuit board under the city (main.c, game/board.h), CITY_GROUND down:
+ * the fog's built for the eye's real height over it, not the cycle's 35, and again whenever that's
+ * changed by BOARD_FOG_HEIGHT_STEP (a stair, the lift; not the step's bob). -1: not built for it
+ * yet. Its fade, along the board: clear at your feet, haze from BOARD_FADE_START, all haze from
+ * BOARD_FADE_END (well before the skyline ring, 10000 off: what's under it is haze)
+ */
+static int fog_height = -1;
+#define BOARD_FOG_HEIGHT_STEP 64
+#define BOARD_FADE_START 3000
+#define BOARD_FADE_END 14000
+#define BOARD_FOG_HEIGHT_MAX 8000 // the fog's sums stay in 32 bits up to here (floor_fade.c)
+#define ON_FOOT_FOCAL 208		  // (320 / 2) / tan(ON_FOOT_FOV / 2): 160 / 0.767
+/*
+ * And it's drawn 32 times larger (view_floor_shift): a tile 4000 units across, its traces ~170
+ * wide. As the grid, a texel would be a tenth of a pixel from up there, and shimmer; at 16 times
+ * the traces were 1 or 2 pixels from the CD block's hub, a speckle (2026-11-13). main.c's
+ * floor_wrap repeats in whole tiles past 16 times
+ */
+#define BOARD_FLOOR_SHIFT 5
 
 // On foot (view_on_foot): whether, the head's look up or down (jo_angle, + down) wanted and now, and
 // how far the eye's down for the step
@@ -304,6 +324,7 @@ static void apply_view(const cycle *c)
 		heading_current = heading_target;
 		look_now = look_target;
 		fog_tilt = 0; // floor_fade_set_view (below) builds it level
+		fog_height = -1; // and for the cycle's eye: on foot it's built again
 		floor_view = FLOOR_VIEW_FIRST_PERSON;
 	}
 	else
@@ -416,14 +437,14 @@ bool view_wall_clip_camera(const cycle *c, bool free_camera, wall_clip_camera *o
 // right up to is cut open (you'd be inside it: the walker keeps WALKER_RADIUS off every wall)
 #define VIEW_NEAR 8
 
-bool view_frustum(bool free_camera, frustum *out)
+// The view of the camera as it is now, through a field of view of `fov` (a jo_angle): the 1st
+// person's, and the flight down into the cycle's, which is the same camera on its way there
+static void frustum_now(frustum *out, int fov)
 {
 	frustum_point eye;
 	int forward[3], right[3], up[3];
 	int tan_side, tan_up;
 
-	if (free_camera || spectating || !first_person || arrival_frame >= 0)
-		return false;
 	{
 		// The camera's three directions, x1024 (as view_push_world_matrix turns the world: the
 		// heading view_rz, then the pitch: view_rx under FIRST_PERSON_RX looks down by the
@@ -445,7 +466,7 @@ bool view_frustum(bool free_camera, frustum *out)
 	}
 	// The screen's edges, a sixteenth wider: tan(half the FOV), and 240 / 320 of it up and down
 	// (jo_3d_window: the projection's 320 x 240, its middle at 160, 120)
-	tan_side = ((angle_tan((jo_angle)(fov_now >> 1)) >> 6) * 17) >> 4;
+	tan_side = ((angle_tan((jo_angle)(fov >> 1)) >> 6) * 17) >> 4;
 	tan_up = (tan_side * 3) >> 2;
 	// Leant (the designed crash rolls the camera up to 11 degrees), the screen's corners turn out
 	// past the level edges: both reach as far as a corner does (its diagonal: 1.25 x the side's)
@@ -455,6 +476,22 @@ bool view_frustum(bool free_camera, frustum *out)
 	eye.y = view_y;
 	eye.z = -view_z; // view_z moves the world: the eye's height is -view_z
 	frustum_set_camera(out, eye, forward, right, up, tan_side, tan_up, VIEW_NEAR);
+}
+
+bool view_frustum(bool free_camera, frustum *out)
+{
+	if (free_camera || spectating || !first_person || arrival_frame >= 0)
+		return false;
+	frustum_now(out, fov_now);
+	return true;
+}
+
+bool view_arrival_frustum(frustum *out)
+{
+	// Only on the way down into the cycle, once the flight's set its field of view
+	if (spectating || arrival_frame < 0 || arrival_fov <= 0)
+		return false;
+	frustum_now(out, arrival_fov);
 	return true;
 }
 
@@ -493,6 +530,7 @@ void view_look(int direction)
 void view_on_foot(int yaw, int look_x, int look_y, int bob)
 {
 	on_foot = true;
+	view_floor_shift = BOARD_FLOOR_SHIFT; // the board's tiles (view_init puts it back)
 	heading_target = yaw;
 	heading_current = yaw; // no easing after it: the walker's turn is already eased
 	look_target = look_x * LOOK_ANGLE;
@@ -881,7 +919,13 @@ int view_sky_rise(void)
 	// and the sky with it
 	const int tilt = FIRST_PERSON_RX - view_rx;
 
-	if (!first_person || spectating || arrival_frame >= 0)
+	if (!first_person || spectating)
+		return 0;
+	// Coming down into the cycle too, once the camera's within 60 degrees of level (steeper, the
+	// tan runs away, and the sky's off the top of the screen anyway): the sky's horizon comes
+	// down the screen with the floor's as the camera levels out, and is where it will be as you
+	// land. Left at 0 through the flight, the sky stood still and the skyline slid over it
+	if (arrival_frame >= 0 && (tilt > JO_DEG_TO_ANGLE(60) || tilt < -JO_DEG_TO_ANGLE(60)))
 		return 0;
 	return -((angle_tan((jo_angle)tilt) * 100) >> 16);
 }
@@ -1012,8 +1056,23 @@ void view_follow(const cycle *c)
 			view_z = FIRST_PERSON_Z + breach_drop + foot_bob; // view_z moves the world: + lowers the eye
 			int change = tilt > fog_tilt ? tilt - fog_tilt : fog_tilt - tilt;
 
+			if (on_foot)
+			{
+				// Over the board: the eye's height above it, now (view_z moves the world)
+				int height = -view_z - CITY_GROUND;
+				const int climb = height > fog_height ? height - fog_height : fog_height - height;
+
+				height = height > BOARD_FOG_HEIGHT_MAX ? BOARD_FOG_HEIGHT_MAX : height;
+				if (fog_height < 0 || change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0) ||
+					climb > BOARD_FOG_HEIGHT_STEP)
+				{
+					fog_tilt = tilt;
+					fog_height = height;
+					floor_fade_set_camera(tilt, height, ON_FOOT_FOCAL, BOARD_FADE_START, BOARD_FADE_END);
+				}
+			}
 			// Rebuilt in steps, and once more on landing level, so it ends exactly right
-			if (change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0))
+			else if (change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0))
 			{
 				fog_tilt = tilt;
 				floor_fade_set_first_person_tilt(tilt);

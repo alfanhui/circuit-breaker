@@ -1,0 +1,22 @@
+# The corridor, stood still where you get up (BOOT_ON_FOOT), looking round: for measuring what the
+# sky (level.c, level_sky_draw) costs there, run with it and without it
+wait_up
+wait 2.0
+shot cs_0_out
+hold left 0.4
+wait 1.5
+shot cs_1
+hold left 0.4
+wait 1.5
+shot cs_2
+hold left 0.8
+wait 1.5
+shot cs_3_back
+hold left 0.8
+wait 1.5
+shot cs_4
+keydown y
+wait 1.0
+keyup y
+wait 1.5
+shot cs_5_up

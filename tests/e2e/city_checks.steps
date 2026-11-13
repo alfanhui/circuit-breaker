@@ -1,0 +1,60 @@
+# What went wrong in the city in play (2026-11-13), from the CD block's hub (BOOT_AT_HUB 1 in
+# src/input.c): the skyline ring's strips going as you turn, the sky's pink horizon showing after a
+# look up, and the floor as you walk about. Small turns, a look up and what follows letting go,
+# then a walk: every shot should have the skyline all across and the board under it
+wait_up
+wait 1.5
+shot cc_00_start
+hold right 0.12
+shot cc_01_turn
+hold right 0.12
+shot cc_02_turn
+hold right 0.12
+shot cc_03_turn
+hold right 0.12
+shot cc_04_turn
+hold right 0.12
+shot cc_05_turn
+hold right 0.12
+shot cc_06_turn
+hold right 0.12
+shot cc_07_turn
+hold right 0.12
+shot cc_08_turn
+keydown y
+wait 0.3
+shot cc_09_looking_up
+wait 0.7
+shot cc_10_looked_up
+keyup y
+wait 0.08
+shot cc_11_let_go
+wait 0.08
+shot cc_12_let_go
+wait 0.08
+shot cc_13_let_go
+wait 0.15
+shot cc_14_let_go
+wait 0.4
+shot cc_15_level
+keydown up
+wait 0.3
+shot cc_16_walk
+wait 0.3
+shot cc_17_walk
+wait 0.3
+shot cc_18_walk
+wait 0.3
+shot cc_19_walk
+keyup up
+hold left 0.5
+keydown up
+wait 0.4
+shot cc_20_walk
+wait 0.4
+shot cc_21_walk
+wait 0.4
+shot cc_22_walk
+keyup up
+wait 0.3
+shot cc_23_end
