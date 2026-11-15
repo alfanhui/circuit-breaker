@@ -1,0 +1,22 @@
+boot_at 0650
+# Falling off (walker_fell_off) terminates you, and the level starts again where you got up. A
+# street's never a fall you can make on purpose, so this film needs a build where any drop over 40
+# counts (walker.c, WALKER_LOST_DROP and the "no roof" test, for the film only): booted on 0650,
+# the run west drops 50 onto 0640. Shots: the run, the terminal screen typing, and back at the start
+wait_up
+wait 0.5
+shot fr_00_on_0650
+keydown up
+wait 1.2
+shot fr_01
+wait 0.3
+shot fr_02
+keyup up
+wait 0.5
+shot fr_03_terminal
+wait 1.0
+shot fr_04_terminal
+wait 2.5
+shot fr_05_back_at_the_start
+wait 1.0
+shot fr_06

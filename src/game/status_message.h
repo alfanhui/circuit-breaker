@@ -18,6 +18,7 @@
 #define STATUS_HOLD_FRAMES 120	 // 2 s once typed, then it goes
 #define STATUS_BLINK_SHIFT 4	 // the cursor shows for 16 frames, hides for 16: quicker than the terminal's
 #define STATUS_ENEMY_ELIMINATED "Enemy process eliminated"
+#define STATUS_ENEMY_RESTARTED "Watchdog: process restarted" // the last round's rival, back (rounds.h)
 
 typedef struct
 {

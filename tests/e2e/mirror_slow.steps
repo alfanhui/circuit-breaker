@@ -1,0 +1,89 @@
+# Walking slowly at the mirror (the user, 2026-11-14: "artefacts so bad as you walk slowly towards
+# the mirror in the yard, in some cases the whole screen glitches out"). Booted stood up, turned
+# round to face the glass, then a short step at a time, a shot after each, right up to it
+wait_up
+wait 1.0
+hold left 0.6
+wait 0.3
+hold left 0.6
+wait 0.3
+wait 0.5
+shot ms_00_facing
+hold up 0.3
+wait 0.2
+shot ms_01
+hold up 0.3
+wait 0.2
+shot ms_02
+hold up 0.3
+wait 0.2
+shot ms_03
+hold up 0.3
+wait 0.2
+shot ms_04
+hold up 0.3
+wait 0.2
+shot ms_05
+hold up 0.3
+wait 0.2
+shot ms_06
+hold up 0.3
+wait 0.2
+shot ms_07
+hold up 0.3
+wait 0.2
+shot ms_08
+hold up 0.3
+wait 0.2
+shot ms_09
+hold up 0.3
+wait 0.2
+shot ms_10
+hold up 0.3
+wait 0.2
+shot ms_11
+hold up 0.3
+wait 0.2
+shot ms_12
+hold up 0.3
+wait 0.2
+shot ms_13
+hold up 0.3
+wait 0.2
+shot ms_14
+hold up 0.3
+wait 0.2
+shot ms_15
+hold up 0.3
+wait 0.2
+shot ms_16
+hold up 0.3
+wait 0.2
+shot ms_17
+hold up 0.3
+wait 0.2
+shot ms_18
+hold up 0.3
+wait 0.2
+shot ms_19
+hold up 0.3
+wait 0.2
+shot ms_20
+hold up 0.3
+wait 0.2
+shot ms_21
+hold up 0.3
+wait 0.2
+shot ms_22
+hold up 0.3
+wait 0.2
+shot ms_23
+hold up 0.3
+wait 0.2
+shot ms_24
+hold up 0.3
+wait 0.2
+shot ms_25
+hold up 0.3
+wait 0.2
+shot ms_26

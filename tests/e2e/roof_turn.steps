@@ -1,0 +1,102 @@
+# The city's far polygons going missing stood on a roof (the user, 2026-11-15, after the draw budget
+# and floor_hides): stood on 0B40, turning slowly all the way round, a shot every quarter second. Look
+# for the landmarks, the arena and far towers coming and going, and the debug line's bg
+boot_at 0B40
+wait_up
+wait 2.0
+hold left 0.12
+wait 0.13
+shot rt_00
+hold left 0.12
+wait 0.13
+shot rt_01
+hold left 0.12
+wait 0.13
+shot rt_02
+hold left 0.12
+wait 0.13
+shot rt_03
+hold left 0.12
+wait 0.13
+shot rt_04
+hold left 0.12
+wait 0.13
+shot rt_05
+hold left 0.12
+wait 0.13
+shot rt_06
+hold left 0.12
+wait 0.13
+shot rt_07
+hold left 0.12
+wait 0.13
+shot rt_08
+hold left 0.12
+wait 0.13
+shot rt_09
+hold left 0.12
+wait 0.13
+shot rt_10
+hold left 0.12
+wait 0.13
+shot rt_11
+hold left 0.12
+wait 0.13
+shot rt_12
+hold left 0.12
+wait 0.13
+shot rt_13
+hold left 0.12
+wait 0.13
+shot rt_14
+hold left 0.12
+wait 0.13
+shot rt_15
+hold left 0.12
+wait 0.13
+shot rt_16
+hold left 0.12
+wait 0.13
+shot rt_17
+hold left 0.12
+wait 0.13
+shot rt_18
+hold left 0.12
+wait 0.13
+shot rt_19
+hold left 0.12
+wait 0.13
+shot rt_20
+hold left 0.12
+wait 0.13
+shot rt_21
+hold left 0.12
+wait 0.13
+shot rt_22
+hold left 0.12
+wait 0.13
+shot rt_23
+hold left 0.12
+wait 0.13
+shot rt_24
+hold left 0.12
+wait 0.13
+shot rt_25
+hold left 0.12
+wait 0.13
+shot rt_26
+hold left 0.12
+wait 0.13
+shot rt_27
+hold left 0.12
+wait 0.13
+shot rt_28
+hold left 0.12
+wait 0.13
+shot rt_29
+hold left 0.12
+wait 0.13
+shot rt_30
+hold left 0.12
+wait 0.13
+shot rt_31

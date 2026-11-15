@@ -1,0 +1,9 @@
+# The benchmark (docs/BACKLOG.md, SG-5; src/game/bench.h): built with BENCH 1 (the "bench" line),
+# it boots on foot and goes round its views with no pad, counting the frames each misses, then
+# turns the screen green (pass) or red (fail) with a line a view. The film just waits for that:
+# run_e2e.ps1 exits 0 on a pass, 2 on a fail, 3 if no verdict came (bench_verdict.png has the lines)
+bench
+wait_up
+wait 5
+shot bench_00_running
+wait_verdict 420

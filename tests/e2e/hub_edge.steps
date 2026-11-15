@@ -1,0 +1,45 @@
+# From the CD block hub's lift to the roof's edge nearest the arena's pyramid (BOOT_AT_HUB 1 in
+# src/input.c: stood facing west): a half turn to face east, then walking to the edge, a shot
+# every third of a second, and a look up and down there. The pyramid's walls and the skyline must
+# stay (the user, 2026-11-13: "When up close to edge nearest to pyramid from the elevator, the
+# pyramid walls and sky city clips out")
+wait_up
+wait 1.0
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.8
+shot he_00_east
+keydown up
+wait 0.33
+shot he_01
+wait 0.33
+shot he_02
+wait 0.33
+shot he_03
+wait 0.33
+shot he_04
+wait 0.33
+shot he_05
+wait 0.33
+shot he_06
+wait 0.33
+shot he_07
+wait 0.33
+shot he_08
+keyup up
+wait 0.5
+shot he_09_stopped
+keydown y
+wait 0.8
+shot he_10_up
+keyup y
+wait 0.6
+keydown b
+wait 0.8
+shot he_11_down
+keyup b

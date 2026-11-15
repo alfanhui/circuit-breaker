@@ -43,6 +43,11 @@ void run_board_tests(void);
 void run_vdp1_gauge_tests(void);
 void run_target_tests(void);
 void run_body_tests(void);
+void run_settings_tests(void);
+void run_drone_tests(void);
+void run_bench_tests(void);
+void run_draw_budget_tests(void);
+void run_floor_hides_tests(void);
 
 int main(void)
 {
@@ -86,6 +91,11 @@ int main(void)
 	run_vdp1_gauge_tests();
 	run_target_tests();
 	run_body_tests();
+	run_settings_tests();
+	run_drone_tests();
+	run_bench_tests();
+	run_draw_budget_tests();
+	run_floor_hides_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);
 	return test_failures == 0 ? 0 : 1;

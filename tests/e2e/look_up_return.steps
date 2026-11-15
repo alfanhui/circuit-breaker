@@ -1,0 +1,33 @@
+# Looking up and back down in the city (BOOT_AT_HUB 1 in src/input.c): the user saw the sky's
+# pink horizon seep through the skyline's black as the view came back down (2026-11-13). Shots
+# while the look eases back, from two headings
+wait_up
+wait 1.5
+shot lu_00_out
+keydown y
+wait 1.2
+shot lu_01_up
+keyup y
+wait 0.1
+shot lu_02_back
+wait 0.1
+shot lu_03_back
+wait 0.15
+shot lu_04_back
+wait 0.3
+shot lu_05_level
+wait 0.8
+shot lu_06_level
+hold left 0.75
+wait 0.4
+keydown y
+wait 1.2
+keyup y
+wait 0.1
+shot lu_07_back
+wait 0.1
+shot lu_08_back
+wait 0.15
+shot lu_09_back
+wait 1.0
+shot lu_10_level

@@ -11,22 +11,14 @@
 #include "level.h"
 #include "scene_memory.h"
 #include "sound.h"
+#include "features.h" // BOOT_SCENE, BOOT_ROUND, BOOT_ON_FOOT, BOOT_AT_HUB
+#include "game/settings.h" // the pause menu's switches
 #include "utils/perf.h"
+#include "game/bench.h" // BENCH: the views, and their counts
 
 #define PLAYER1_START_X 0 // the arena centre is the world origin
 #define PLAYER1_START_Y 0
 #define DEBUG_CAMERA_SPEED 8
-// The round play starts in, from 0 (game/rounds.h). Like BOOT_SCENE (below): to work on a later
-// round, set it and build, so its bots and layout are there from the start
-#define BOOT_ROUND 0
-// 1: the game boots stood up in the corridor behind round 5's flicker, as if you'd just got up
-// after the designed crash (boot_on_foot): for working on Work RAM without riding there first.
-// Films don't depend on it: tests/e2e/run_e2e.ps1 builds with whichever a film needs (wait_boot:
-// the arena, 0; wait_up: the corridor, 1) and puts it back afterwards
-#define BOOT_ON_FOOT 0
-// With BOOT_ON_FOOT: 1 stands you on the CD block's hub instead, the far end of the way down
-// through the city (game/city.h), for working there without the 28-tower walk. 0 to commit
-#define BOOT_AT_HUB 0
 
 rider player1;
 rider bots[BOT_COUNT_MAX];
@@ -371,9 +363,8 @@ static unsigned short hit_the_loop(unsigned short struck)
 	return (unsigned short)(struck & ~DIRECTIONS); // spent on the hit: it starts riding straight
 }
 
-bool debug_camera = false; // START: freeze the cycle and fly the camera around
+bool debug_camera = false; // START: the pause. The game frozen, the menu up, the camera free
 bool debug_slow_motion = false;
-bool debug_no_termination = false; // debug camera Z: a crash only stops the cycle
 
 // Debug: fills a trail with a full-length serpentine across the arena, the worst case for
 // drawing, its rows `offset` north of the player's (so several can lie side by side). Its last
@@ -425,12 +416,12 @@ static void stress_fill_trail(void)
  *                while the CPU starts writing its message
  *   SCENE_LOOP   the spectator's view of the loop, until three presses break it
  *   SCENE_PLAY   play, in 1st person, the bot in the arena
- * The game boots into BOOT_SCENE. To work on a later part, set it to that part and build;
+ * The game boots into BOOT_SCENE (features.h). To work on a later part, set it to that part and build;
  * or, while it runs, jump: START (the debug camera), then A for the next part, START again.
  * It boots into the prologue, the game's opening and its "main menu" (the spectator's view of
  * the loop: three presses break it and start play). Set SCENE_PLAY to boot straight into play
  * while working on it. The E2E scripts find their way from whichever it boots into
- * (tests/e2e/run.sh reads this line: skip_prologue, start_intro)
+ * (tests/e2e/run.sh reads BOOT_SCENE: skip_prologue, start_intro)
  */
 typedef enum
 {
@@ -439,7 +430,7 @@ typedef enum
 	SCENE_PLAY,
 	SCENE_COUNT
 } scene;
-#define BOOT_SCENE SCENE_INTRO
+// (BOOT_SCENE, which of these it boots into, is in features.h)
 
 /*
  * During the opening flight you're only watching: the loop can't be hit until the camera has
@@ -594,13 +585,19 @@ static void begin_round(void)
 	for (int i = 0; i < count && i < BOT_COUNT_MAX; ++i)
 	{
 		world_point at;
+		int way = h;
 
-		at.x = (short)(player1.bike.position.x + WORLD_HEADING_DX(right) * bot_start_right[i] +
-					   WORLD_HEADING_DX(h) * bot_start_ahead[i]);
-		at.y = (short)(player1.bike.position.y + WORLD_HEADING_DY(right) * bot_start_right[i] +
-					   WORLD_HEADING_DY(h) * bot_start_ahead[i]);
+		// The layout's own places for them (the rooms: one in each of the other rooms, arena.h),
+		// or round you
+		if (!arena_rival_start(i, &at, &way))
+		{
+			at.x = (short)(player1.bike.position.x + WORLD_HEADING_DX(right) * bot_start_right[i] +
+						   WORLD_HEADING_DX(h) * bot_start_ahead[i]);
+			at.y = (short)(player1.bike.position.y + WORLD_HEADING_DY(right) * bot_start_right[i] +
+						   WORLD_HEADING_DY(h) * bot_start_ahead[i]);
+		}
 		at = arena_clear_spot(at, SPAWN_MARGIN);
-		rider_init(&bots[i], at.x, at.y, (unsigned char)h);
+		rider_init(&bots[i], at.x, at.y, (unsigned char)way);
 		// The seed picks its reaction times: the same every run, but different for each bot and
 		// round (round 1's first bot keeps seed 1, which the E2E scripts were made with)
 		bot_init(&bot_minds[i], 1 + arena_rounds.number * BOT_COUNT_MAX + i);
@@ -610,10 +607,38 @@ static void begin_round(void)
 	status_show(&status, rounds_title(&arena_rounds));
 }
 
+/*
+ * The last round's rival, killed, restarted by the Watchdog (rounds.h, ROUND_RESTARTS): back in
+ * as a new process, as far from you as the arena allows: the other side of its middle (your place
+ * mirrored), or, when you're near the middle yourself, 2000 to your right as round 1's bot starts.
+ * Riding the way you are. Kept inside the walls as they've closed in, and clear of you
+ */
+#define RESTART_FAR 1500 // nearer the middle than this (both ways), mirrored is on top of you
+
+static void restart_rival(void)
+{
+	const world_point you = player1.bike.position;
+	const int h = player1.bike.heading, right = (h + 1) & 3;
+	const bool middle = you.x > -RESTART_FAR && you.x < RESTART_FAR && you.y > -RESTART_FAR && you.y < RESTART_FAR;
+	world_point at;
+
+	at.x = (short)(middle ? you.x + WORLD_HEADING_DX(right) * bot_start_right[0] : -you.x);
+	at.y = (short)(middle ? you.y + WORLD_HEADING_DY(right) * bot_start_right[0] : -you.y);
+	at = arena_clear_spot(at, SPAWN_MARGIN);
+	rider_init(&bots[0], at.x, at.y, (unsigned char)h);
+	bot_init(&bot_minds[0], 1 + arena_rounds.number * BOT_COUNT_MAX);
+	bot_set_skill(&bot_minds[0], bot_skill_now());
+	update_solid_trails();
+	status_show(&status, STATUS_ENEMY_RESTARTED);
+}
+
 static void between_rounds(void)
 {
 	switch (rounds_update(&arena_rounds, bots_alive()))
 	{
+	case ROUND_RESTARTS:
+		restart_rival();
+		break;
 	case ROUND_CLEARED:
 		player1.bike.bounded = 0; // nothing left to hit, and soon no edge
 		break;
@@ -660,23 +685,77 @@ void debug_pad1(void)
 	jo_printf(20, 5, "a.struck %d", is_key_struck(DIGI_A));
 }
 
+/*
+ * The pause menu (game/settings.h; main.c prints it): L moves to the next switch, R changes it.
+ * Most switches are read where they're used, every frame, so changing one is all it takes; the
+ * cycle's shape is a model built once, so it's built again
+ */
+void load_player_model(void); // main.c (main.h: not included here, it includes this file's header)
+
+bool pause_menu_up = false;
+
+static void pause_menu_input(unsigned short struck)
+{
+	// Flying the camera about (the d-pad), the menu steps aside, out of the picture; L or R
+	// brings it back (that press acts on it too)
+	if (jo_is_pad1_key_pressed(JO_KEY_UP) || jo_is_pad1_key_pressed(JO_KEY_DOWN) ||
+		jo_is_pad1_key_pressed(JO_KEY_LEFT) || jo_is_pad1_key_pressed(JO_KEY_RIGHT))
+		pause_menu_up = false;
+	if (struck & (DIGI_L | DIGI_R))
+		pause_menu_up = true;
+	if (struck & DIGI_L)
+		settings_next(&game_settings);
+	if ((struck & DIGI_R) && settings_change(&game_settings) == SETTING_CYCLE_SHAPE)
+		load_player_model();
+}
+
+/*
+ * Paused (START), the camera's free to fly about. The d-pad moves it over the floor; with B held,
+ * up and down are its height instead, and with C held, its pitch (look up / down). (L and R were
+ * the height, before they were the pause menu's)
+ */
 static void debug_camera_input(unsigned short struck)
 {
-	// X / Y: arena smaller / bigger (L and R are the camera's height here, and look aside in play).
-	// A cycle left outside a shrunk arena is pulled to the edge when play resumes: a crash
+	const bool height = jo_is_pad1_key_pressed(JO_KEY_B), pitch = jo_is_pad1_key_pressed(JO_KEY_C);
+
+	pause_menu_input(struck);
+	// X / Y: arena smaller / bigger. A cycle left outside a shrunk arena is pulled to the edge
+	// when play resumes: a crash
 	if (struck & DIGI_X)
 		arena_set_pieces(arena_pieces() - ARENA_PIECES_STEP);
 	if (struck & DIGI_Y)
 		arena_set_pieces(arena_pieces() + ARENA_PIECES_STEP);
-	// Z: termination on / off. Off, a crash just stops the cycle, as it did before crashes
-	// terminated the player: for the E2E steps that crash on purpose to look at what's left
+	// Z: termination on / off (the menu's "No termination" too). Off, a crash just stops the
+	// cycle, as it did before crashes terminated the player: for the E2E steps that crash on
+	// purpose to look at what's left
 	if (struck & DIGI_Z)
-		debug_no_termination = !debug_no_termination;
+		settings_change_one(&game_settings, SETTING_NO_TERMINATION);
 	// A: jump to the next part of the game (intro, loop, play, then the intro again), taking
-	// effect on leaving the debug camera
+	// effect on unpausing
 	if (struck & DIGI_A)
 		enter_scene((scene)((current_scene() + 1) % SCENE_COUNT));
 
+	if (height)
+	{
+		// Elevation. view_z moves the world, so the camera's height is -view_z: up raises it
+		if (jo_is_pad1_key_pressed(JO_KEY_UP))
+			view_z -= 4;
+		else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
+			view_z += 4;
+		if (view_z > -WORLD_FLOOR_Z) // not through the floor
+			view_z = -WORLD_FLOOR_Z;
+		if (view_z < -WORLD_CEILING_Z) // not too high
+			view_z = -WORLD_CEILING_Z;
+		return;
+	}
+	if (pitch)
+	{
+		if (jo_is_pad1_key_pressed(JO_KEY_UP))
+			view_rx += JO_DEG_TO_ANGLE(0.5);
+		else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
+			view_rx -= JO_DEG_TO_ANGLE(0.5);
+		return;
+	}
 	if (jo_is_pad1_key_pressed(JO_KEY_UP))
 		view_y -= DEBUG_CAMERA_SPEED;
 	else if (jo_is_pad1_key_pressed(JO_KEY_DOWN))
@@ -685,22 +764,6 @@ static void debug_camera_input(unsigned short struck)
 		view_x += DEBUG_CAMERA_SPEED;
 	else if (jo_is_pad1_key_pressed(JO_KEY_RIGHT))
 		view_x -= DEBUG_CAMERA_SPEED;
-
-	// Elevation. view_z moves the world, so the camera's height is -view_z
-	if (jo_is_pad1_key_pressed(JO_KEY_L))
-		view_z += 4;
-	else if (jo_is_pad1_key_pressed(JO_KEY_R))
-		view_z -= 4;
-	if (view_z > -WORLD_FLOOR_Z) // not through the floor
-		view_z = -WORLD_FLOOR_Z;
-	if (view_z < -WORLD_CEILING_Z) // not too high
-		view_z = -WORLD_CEILING_Z;
-
-	// Pitch
-	if (jo_is_pad1_key_pressed(JO_KEY_B))
-		view_rx += JO_DEG_TO_ANGLE(0.5);
-	else if (jo_is_pad1_key_pressed(JO_KEY_C))
-		view_rx -= JO_DEG_TO_ANGLE(0.5);
 }
 
 // Z steps through the ways to compare turn cameras: ease-out, ease-out slowed down,
@@ -761,13 +824,68 @@ bool foot_cd_hub(int *side, int *wall, int *middle, bool *in_lift)
 	return true;
 }
 
+/*
+ * The watchdog's drone (game/drone.h): over the city's way down from the moment you're up. Its
+ * route and the towers as its sight's boxes are worked out once, for where the corridor opened
+ * (the city's placed by it). 84 boxes, 840 bytes
+ */
+drone watchdog;
+static drone_stop watchdog_route[CITY_DRONE_STOPS];
+drone_box watchdog_boxes[CITY_TOWERS];
+
+// Whether the watchdog's boxes are worked out (stand_up): the city's placed by the corridor
+static bool watchdog_ready = false;
+
+int foot_tower_address(void)
+{
+	const world_point at = player1.bike.position; // on foot, where you stand (walk_step)
+	int i = 0;
+
+	if (!watchdog_ready || !view_is_on_foot())
+		return -1;
+	// Row by row, CITY_COLUMNS to a row (city.h): counted, not divided
+	for (int row = 0; row < CITY_ROWS; ++row)
+		for (int column = 0; column < CITY_COLUMNS; ++column, ++i)
+		{
+			const drone_box *b = &watchdog_boxes[i];
+
+			if (at.x >= b->x_min && at.x <= b->x_max && at.y >= b->y_min && at.y <= b->y_max)
+				return (row << 8) | (column << 4);
+		}
+	return -1;
+}
+
+// Where you got up: the level's beginning, where a terminated process starts again (restart_on_foot)
+static walker feet_start;
+
 static void stand_up(void)
 {
+	city_drone_route(arena_corridor, watchdog_route);
+	city_drone_boxes(arena_corridor, watchdog_boxes);
+	drone_init(&watchdog, watchdog_route, CITY_DRONE_STOPS);
+	watchdog_ready = true;
 	lift_init(&cd_lift, city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height, CITY_LIFT_TOP);
 	walker_init(&player_feet, player1.bike.position, player1.bike.heading * 0x4000);
+	feet_start = player_feet;
+	feet_start.eye = WALKER_EYE; // starting again you're stood up already
 	corridor_walker_area(arena_corridor, &feet_area);
 	corridor_targets(arena_corridor, &feet_targets);
 	target_lock_init(&feet_lock);
+}
+
+/*
+ * The level from its beginning (after a fall's terminated you: walker_fell_off): stood where you
+ * got up after the crash, the watchdog back at its first stop, the lift down, nothing locked. Work
+ * RAM's loaded already (the hidden load was the breach's), so it's at once: no scene to enter
+ */
+static void restart_on_foot(void)
+{
+	player_feet = feet_start;
+	drone_init(&watchdog, watchdog_route, CITY_DRONE_STOPS);
+	lift_init(&cd_lift, city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height, CITY_LIFT_TOP);
+	target_lock_init(&feet_lock);
+	player1.bike.position = walker_position(&player_feet);
+	player1.bike.heading = (unsigned char)(((player_feet.yaw + 0x2000) >> 14) & 3);
 }
 
 // Where you look from, for targeting: your eye, where your body faces and where the view looks
@@ -790,9 +908,12 @@ static target_eye feet_eye(void)
  * right of your view (again: let go); locked, the d-pad's left and right switch target instead of
  * turning you (strafe with L / R); unlocked, Y / B look up and down
  */
+static unsigned short bench_held(void);
+
 static void walk_step(unsigned short struck)
 {
-	const unsigned short held = press_latch_held(&pad1_presses);
+	// The benchmark holds its view's buttons instead (game/bench.h): no pad
+	const unsigned short held = BENCH ? bench_held() : press_latch_held(&pad1_presses);
 	walker_controls controls;
 	// Both of a pair held at once cancel out: neither way
 	const int left = (held & DIGI_LEFT) != 0, right = (held & DIGI_RIGHT) != 0;
@@ -877,8 +998,17 @@ static void walk_step(unsigned short struck)
 	view_on_foot(player_feet.yaw, controls.look_x, controls.look_y,
 				 walker_bob(&player_feet) + walker_dip(&player_feet) + walker_step_lag(&player_feet) -
 					 walker_height(&player_feet) - (walker_eye(&player_feet) - WALKER_EYE_RIDING));
-	// Locked: the head aims at it from where you are now (after this frame's move)
+	// The drone flies its route, and its scan looks for your eye (after this frame's move). Seen,
+	// for now, only shows: its sheet turns red (drone_draw.c). Noise, alarm and the reset are next
 	eye = feet_eye();
+	{
+		const int drone_frc = jo_time_get_frc(); // the debug line's "dr" (utils/perf.h)
+
+		drone_update(&watchdog);
+		watchdog.seen = drone_sees(&watchdog, eye.x, eye.y, eye.z, watchdog_boxes, CITY_TOWERS);
+		perf_part_add(PERF_DRONE, drone_frc);
+	}
+	// Locked: the head aims at it from where you are now (after this frame's move)
 	if (target_aim(&feet_lock, &feet_targets, &eye, &head_yaw, &head_pitch))
 		view_head_aim(head_yaw, head_pitch);
 }
@@ -899,6 +1029,7 @@ bool foot_body_state(body_state *s, int *yaw, int *feet)
 	s->eye = 0; // level_body_set fills it in: the camera's height
 	s->stride = 0;
 	s->speed = 0;
+	s->side = 0;
 	*yaw = player1.bike.heading * 0x4000;
 	*feet = 0;
 	switch (arena_breach.phase)
@@ -922,6 +1053,7 @@ bool foot_body_state(body_state *s, int *yaw, int *feet)
 																   : BODY_MOVING;
 		s->stride = player_feet.stride;
 		s->speed = player_feet.forward;
+		s->side = player_feet.side; // a side-step (L / R): the body shuffles that way
 		*yaw = player_feet.yaw;
 		*feet = walker_height(&player_feet);
 		return true;
@@ -999,6 +1131,16 @@ static void breach_step(unsigned short struck)
 		walk_step(struck);
 		perf_part_add(PERF_WALKER, walker_frc);
 		view_follow(&player1.bike);
+		// Fallen off into a street: nothing below, for good. The process is terminated (the terminal
+		// screen from the next frame), and the level starts again (game_step). With "No termination"
+		// on (the pause menu), straight back to the start without the screen
+		if (walker_fell_off(&player_feet, &feet_area))
+		{
+			if (settings_on(&game_settings, SETTING_NO_TERMINATION))
+				restart_on_foot();
+			else
+				game_update(&game, 1, 0);
+		}
 		return;
 	}
 	// The hidden load, once the hole's open and its first frame's been drawn: frozen on that, the
@@ -1042,12 +1184,18 @@ static void game_step(unsigned short struck)
 	if (game.phase == GAME_TERMINATED)
 	{
 		if (game_update(&game, 0, struck != 0))
-			enter_scene(SCENE_PLAY); // straight back to play: the prologue is only at boot
+		{
+			if (arena_breach.phase == BREACH_ON_FOOT)
+				restart_on_foot(); // fell off: Work RAM again from where you got up
+			else
+				enter_scene(SCENE_PLAY); // straight back to play: the prologue is only at boot
+		}
 		return;
 	}
 	if (struck & DIGI_START)
 	{
 		debug_camera = !debug_camera;
+		pause_menu_up = debug_camera; // the menu's up as it pauses
 		if (!debug_camera)
 			view_init(&player1.bike);
 	}
@@ -1101,13 +1249,22 @@ static void game_step(unsigned short struck)
 	// Spectating, the loop rides the cycle, not the pad (the presses that break it: next step)
 	if (spectating)
 		attract_frame(&controls);
+	/*
+	 * A whoosh on the side you turn (sound.h), when it's you riding. Not while the loop rides the
+	 * cycle (spectating): it turns every half second or so, and the whooshes ran into one hiss
+	 * under the hits (turn_sounds.steps, recorded)
+	 */
 	switch (rider_step(&player1, controls, solid_trails, solid_trail_count))
 	{
 	case TURN_LEFT:
 		view_turn_left();
+		if (!spectating)
+			sound_play_turn(TURN_LEFT);
 		break;
 	case TURN_RIGHT:
 		view_turn_right();
+		if (!spectating)
+			sound_play_turn(TURN_RIGHT);
 		break;
 	}
 	// Round 5, into the flicker: not a crash, the breach. The jolt of the hit at once
@@ -1122,7 +1279,7 @@ static void game_step(unsigned short struck)
 		return; // the world stops here: from the next step it's the breach's (breach_step)
 	}
 	// A crash terminates the player's process: the terminal screen from the next frame
-	game_update(&game, player1.crashed && !debug_no_termination, 0);
+	game_update(&game, player1.crashed && !settings_on(&game_settings, SETTING_NO_TERMINATION), 0);
 
 	// The loop: between strokes (pen up) it lays no trail: just a point that follows it
 	if (spectating && !attract_route_pen(&route))
@@ -1210,6 +1367,70 @@ static void game_step(unsigned short struck)
 }
 
 /*
+ * Stands you in the middle of a city tower's roof, at its height, facing yaw (a binary angle).
+ * short_of_middle: that far back from the middle, out along the corridor (the hub's lift takes
+ * you if you stand on its pad, in the middle)
+ */
+static void stand_on_tower(const city_tower *t, int short_of_middle, int yaw)
+{
+	const world_point at = corridor_point(arena_corridor, ((t->out_min + t->out_max) >> 1) - short_of_middle,
+										  ((arena_corridor->across_min + arena_corridor->across_max) >> 1) +
+											  ((t->across_min + t->across_max) >> 1));
+
+	walker_init_at(&player_feet, at, t->height, yaw);
+	player_feet.eye = WALKER_EYE; // up already
+}
+
+#define HUB_SHORT_OF_PAD 150 // where to stand on the hub's roof: short of the lift's pad
+
+/*
+ * The benchmark (BENCH, game/bench.h): which view it's at, and what it's counted so far. Each
+ * frame, before the game steps, it's told what the frame before cost, and stands you at the next
+ * view when it's time
+ */
+static bench_run bench;
+
+const bench_run *input_bench(void)
+{
+	return &bench;
+}
+
+static unsigned short bench_held(void)
+{
+	return bench.view < bench_view_count ? bench_views[bench.view].held : 0;
+}
+
+static void bench_place(const bench_view *v)
+{
+	// Back where you got up (the drone back at its first stop, the lift down, nothing locked), so
+	// each view starts the same whatever the one before did
+	restart_on_foot();
+	// Facing back along the corridor, towards the arena, then the view's quarter turns from there
+	const int yaw = (feet_start.yaw + 0x8000 + v->quarter * 0x4000) & 0xFFFF;
+
+	if (v->at == BENCH_AT_START)
+		player_feet.yaw = yaw;
+	else
+	{
+		const int column = (v->at >> 4) & 0xF, row = v->at >> 8;
+
+		stand_on_tower(city_tower_at(column, row),
+					   column == CITY_HUB_COLUMN && row == CITY_HUB_ROW ? HUB_SHORT_OF_PAD : 0, yaw);
+	}
+	player1.bike.position = walker_position(&player_feet);
+}
+
+static void bench_step(void)
+{
+	if (bench_frame(&bench, perf_frame_late, perf_vdp1.last_unfinished, perf_frame_cpu) == BENCH_PLACE)
+		bench_place(&bench_views[bench.view]);
+#ifdef JO_COMPILE_WITH_PROFILER_SUPPORT
+	// VDP1's own drawing time, from jo's profiler (built with JO_COMPILE_WITH_PROFILER_MODULE = 1)
+	bench_note_vdp1(&bench, (int)jo_profile_vdp1_last());
+#endif
+}
+
+/*
  * Each frame: the presses, then as many game steps as the last frame took vblanks. Everything
  * moves a fixed amount a step (a cycle's speed is units per step), so at a steady 60 frames a
  * second it's one step a frame. When a frame takes longer (VDP1 can't finish drawing in time),
@@ -1239,6 +1460,11 @@ void gamepad_input(void)
 	// Every press since the last frame, even if it spanned several vblanks. Taken first and on
 	// every frame, so presses can't pile up while the debug camera is on.
 	struck = press_latch_take(&pad1_presses);
+	if (BENCH)
+	{
+		struck = 0; // no pad: the benchmark's views hold their own buttons (walk_step)
+		bench_step();
+	}
 
 	if (steps > FRAME_STEPS_MAX)
 		steps = FRAME_STEPS_MAX;
@@ -1249,6 +1475,11 @@ void gamepad_input(void)
 			break;
 		game_step(i == 0 ? struck : 0);
 	}
+	// Paused (START: the game frozen), or the menu's sound effects off: every sound stops (sound.h)
+	sound_pause(debug_camera || !settings_on(&game_settings, SETTING_SFX));
+	// The cycle's motor (sound.h): while it's you riding, and moving. Not the loop's ride in the
+	// opening, not crashed (its speed's 0 then), not through the breach or on foot
+	sound_engine(!spectating && player1.bike.speed > 0 && arena_breach.phase == BREACH_NONE, player1.bike.boost);
 }
 
 /*
@@ -1273,18 +1504,18 @@ static void boot_on_foot(void)
 										   arena_corridor->across_min + ((arena_corridor->across_max - arena_corridor->across_min) >> 2));
 	player1.bike.heading = arena_corridor->side;
 	stand_up();
+	// On the hub's roof, short of its middle (the lift's pad: stood on it, it would take you at
+	// once), facing as you came: out along the corridor, the pad straight ahead
 	if (BOOT_AT_HUB)
-	{
-		// On the hub's roof, 150 short of its middle (the lift's pad: stood on it, it would take
-		// you at once), facing as you came: out along the corridor, the pad straight ahead
-		const city_tower *hub = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW);
-		const world_point at = corridor_point(arena_corridor, ((hub->out_min + hub->out_max) >> 1) - 150,
-											  ((arena_corridor->across_min + arena_corridor->across_max) >> 1) +
-												  ((hub->across_min + hub->across_max) >> 1));
-
-		walker_init_at(&player_feet, at, hub->height, player1.bike.heading * 0x4000);
-	}
+		stand_on_tower(city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW), HUB_SHORT_OF_PAD, player1.bike.heading * 0x4000);
+	// In the middle of the tower at that address (row << 8 | column << 4), facing back the way the
+	// corridor came: towards the yard, as you would going back
+	if (BOOT_AT_TOWER >= 0)
+		stand_on_tower(city_tower_at((BOOT_AT_TOWER >> 4) & 0xF, BOOT_AT_TOWER >> 8), 0,
+					   ((player1.bike.heading + 2) & 3) * 0x4000);
 	player_feet.eye = WALKER_EYE; // up already
+	if (BENCH)
+		bench_init(&bench); // its first view's placed on the first frame (bench_step)
 	// The round's title, typing on as round 5's entered: the breach stops the status line, so it
 	// would stay, cursor and all
 	status_init(&status);
@@ -1293,8 +1524,11 @@ static void boot_on_foot(void)
 void init_players(void)
 {
 	rounds_init(&arena_rounds); // booting straight into play (BOOT_SCENE) skips the loop's
-	arena_rounds.number = BOOT_ON_FOOT ? ROUND_COUNT - 1 : BOOT_ROUND;
-	enter_scene(BOOT_ON_FOOT ? SCENE_PLAY : BOOT_SCENE);
-	if (BOOT_ON_FOOT)
+	// (the benchmark's views are all on foot: it boots there whatever BOOT_ON_FOOT says)
+	const bool on_foot = BOOT_ON_FOOT || BENCH;
+
+	arena_rounds.number = on_foot ? ROUND_COUNT - 1 : BOOT_ROUND;
+	enter_scene(on_foot ? SCENE_PLAY : BOOT_SCENE);
+	if (on_foot)
 		boot_on_foot();
 }

@@ -23,7 +23,7 @@
 const landmark landmarks[LANDMARK_COUNT] = {
 	{0, 0, 1, PLACE_ARENA, 1100, 7000},				 // the control tower, at the arena's middle
 	{2000, -23000, 0, PLACE_SCSP, 2600, 7800},
-	{3000, 23000, 0, PLACE_BACKUP_RAM, 3200, 7400},
+	{3000, 23000, 0, PLACE_BACKUP_RAM, 4600, 6800}, // wide and low: a cartridge (landmark_shapes)
 	{-16500, -16500, 1, PLACE_VDP1, 2800, 7200},
 	{-16500, 16500, 1, PLACE_VDP2, 3600, 7300},
 	{-25000, 0, 1, PLACE_VIDEO, 4200, 8000},
@@ -65,12 +65,24 @@ int landmark_shapes(int which, unsigned int frame, landmark_shape *shapes)
 		return 6;
 	}
 	case PLACE_BACKUP_RAM:
-		// The slot, the cartridge standing in it, and its label: lit, but one second in every
-		// eight it's out (the battery's dying)
-		rect(&shapes[0], -3200, 3200, 0, 2600, DARK);
-		rect(&shapes[1], -2000, 2000, 2200, 7400, MID);
-		rect(&shapes[2], -1400, 1400, 4600, 6600, ((frame >> 6) & 7) == 0 ? GREEN_OUT : GREEN);
-		return 3;
+		/*
+		 * A cartridge in its slot, seen side on: wide and low (the user, 2026-11-13: "wider, and
+		 * less tall, and looks different than the video output": a box in a box, with a lit
+		 * panel, it read as the video output's screen). So a silhouette of its own: the slot's
+		 * long base; the cartridge's body with a narrower grip on top (shoulders, as a real
+		 * one's); its edge connector showing above the slot, two runs of gold either side of
+		 * the key; and the label, a low strip: lit, but one second in every eight it's out (the
+		 * battery's dying)
+		 */
+		// (The slot's a tall block: from the arena the skyline hides everything under ~4100, and
+		// a cartridge at the ground, 4200 high, didn't show over it at all: sky_arena.steps)
+		rect(&shapes[0], -4600, 4600, 0, 4200, DARK);
+		rect(&shapes[1], -3800, 3800, 4200, 6200, MID);
+		rect(&shapes[2], -2600, 2600, 6200, 6800, MID);
+		rect(&shapes[3], -3300, -400, 4200, 4600, AMBER_DEEP);
+		rect(&shapes[4], 400, 3300, 4200, 4600, AMBER_DEEP);
+		rect(&shapes[5], -2600, 2600, 5000, 5700, ((frame >> 6) & 7) == 0 ? GREEN_OUT : GREEN);
+		return 6;
 	case PLACE_VDP1:
 	{
 		/*

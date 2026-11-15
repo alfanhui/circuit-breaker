@@ -1,0 +1,41 @@
+# The roof underfoot cut off when VDP1 runs out of time (the user, 2026-11-15, a gif at 0660: fps
+# 30, vdp1 over 30, busy 100%, the roof drawn only in part). Stood on 0660, then running west across
+# 0650 to 0640 between the tall towers: Mednafen reads vdp1 over 14 (busy 83%) at 0650 and over 3 at
+# 0640, cpu peaks ~200%. Standing still in a roof's middle (the benchmark's views) reads over 0.
+# Every frame recorded, a shot every quarter second. Read the last shot's "vdp1 over N/T": T is every
+# frame VDP1 didn't finish since boot. 2026-11-15: 16 with DRAW_BUDGET 0, 3 with it on (SG-8)
+record
+boot_at 0660
+wait_up
+wait 2.0
+shot r660_00
+flashes_from
+keydown up
+wait 0.25
+shot r660_01
+wait 0.25
+shot r660_02
+wait 0.25
+shot r660_03
+wait 0.25
+shot r660_04
+wait 0.25
+shot r660_05
+wait 0.25
+shot r660_06
+wait 0.25
+shot r660_07
+wait 0.25
+shot r660_08
+wait 0.25
+shot r660_09
+wait 0.25
+shot r660_10
+wait 0.25
+shot r660_11
+wait 0.25
+shot r660_12
+keyup up
+wait 1.5
+flashes_to roof_0660
+shot r660_99_stopped

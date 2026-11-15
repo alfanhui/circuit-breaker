@@ -105,7 +105,42 @@ static unsigned short *line_table; // one colour RAM number per screen line, in 
 //                            last one sets up row 0
 //   MAX_BLANK_ROWS + r       row r + 1's ratio, copied at the end of row r
 //   after the last row       row 0's ratio again, in case a restart is ever late
-static unsigned int dma_table[MAX_BLANK_ROWS + JO_TV_HEIGHT + 8];
+// Three of them (game/floor_fade.h, floor_fade_tables): the DMA reads the one for the picture on
+// screen, a frame's fog is built into another, and the VBlank where VDP1 shows that frame switches
+// the DMA to it, as jo switches the floor plane's rotation then. ~1.1 KB each
+#define DMA_ENTRIES (MAX_BLANK_ROWS + JO_TV_HEIGHT + 8)
+static unsigned int dma_tables[FLOOR_FADE_TABLES][DMA_ENTRIES];
+static floor_fade_tables tables;
+
+/*
+ * jo's numbers for frames (vdp1_command_pipeline.c): the frame being built, and at a VBlank, the
+ * frame VDP1 shows from it. jo's glows and its planes use them to change with the picture; they're
+ * jo's internals (internal/vdp1_command_pipeline.h), not its API, so declared here. We asked for
+ * them as API (docs/BACKLOG.md, U-3; johannes-fetz/joengine#111): jo fixed the planes instead.
+ * Called from our VBlank callback, which jo calls after its own VDP1 VBlank work (core.c's
+ * jo_core_vblank_in_handler), so the frame shown is this field's
+ */
+unsigned int __jo_vdp1_frame_tag(void);
+bool __jo_vdp1_displayed_frame_changed(unsigned int *const tag);
+
+/*
+ * The fog that matches the floor is the one built a frame after the frame VDP1 shows, measured
+ * (Mednafen, 2026-11-15, tests/e2e/flash_look_up.steps, the stray colours check: the circuit
+ * floor's lines unfogged for a few frames looking up and back):
+ *     the frame shown - 1: 10 frames; the frame shown: 1-8 a run; the frame shown + 1: 0
+ * jo applies the floor's rotation with the frame shown (its applied tag equals it), and the fog
+ * has the same frame numbers as the floor's camera, so by the code it'd be + 0. Why it's + 1 isn't
+ * known yet (how VDP2 latches the rotation table against CCRR, or Mednafen's model of it): check
+ * on a Saturn (docs/HARDWARE_TESTS.md). The 2-frame ring before it was the same while frames were
+ * on time; this one stays with the picture when a frame runs late
+ */
+#define FOG_LEAD 1
+
+// The table the DMA reads now
+static const unsigned int *shown_table(void)
+{
+	return dma_tables[tables.showing >= 0 ? tables.showing : 0];
+}
 
 
 // VDP2's row counter. Rows of the picture count from 0; the blank rows below it carry on
@@ -169,7 +204,7 @@ static void arm_dma(const unsigned int *from)
 {
 	JO_SCU_DMA_READ(FOG_DMA_LEVEL) = PHYSICAL(from);
 	JO_SCU_DMA_WRITE(FOG_DMA_LEVEL) = VDP2_CCRR_PHYSICAL;
-	JO_SCU_DMA_COUNT(FOG_DMA_LEVEL) = sizeof(dma_table[0]); // the whole entry, so the read address lands on the next one
+	JO_SCU_DMA_COUNT(FOG_DMA_LEVEL) = sizeof(dma_tables[0][0]); // the whole entry, so the read address lands on the next one
 	JO_SCU_DMA_ADD(FOG_DMA_LEVEL) = JO_SCU_DMA_ADD_READ4_WRITE2; // reads 4 bytes at a time, writes 2
 	JO_SCU_DMA_MODE(FOG_DMA_LEVEL) = DMA_MODE_HBLANK;
 	JO_SCU_DMA_ENABLE(FOG_DMA_LEVEL) = DMA_ENABLE_ON; // armed: starts on every HBlank from now on
@@ -186,6 +221,7 @@ void floor_fade_init(void)
 	// Not JO_VDP2_LINE_COLOR_TABLE: under SGL jo handed that out from the start of VRAM bank B1,
 	// where the text layer (jo_printf) kept its font, and the table overwrote the glyphs. In the
 	// floor's own bank, which jo's allocator tracks
+	floor_fade_tables_init(&tables);
 	line_table = (unsigned short *)jo_vdp2_malloc(JO_VDP2_RAM_CELL_RBG0, JO_TV_HEIGHT * sizeof(unsigned short));
 	if (line_table == JO_NULL)
 		return; // no room: no fog (line_table stays NULL, so the rest does nothing)
@@ -213,15 +249,20 @@ void floor_fade_init(void)
 	jo_enable_screen_transparency(JO_RBG0_SCREEN, 0);
 
 	stop_dma(); // not running yet: in case anything left this level going
-	arm_dma(dma_table);
+	arm_dma(shown_table());
 }
 
 void floor_fade_vblank(void)
 {
-	unsigned int left, row;
+	unsigned int left, row, shown;
+	const unsigned int *table;
 
 	if (line_table == JO_NULL)
 		return;
+	// VDP1 shows a new frame from this field: the fog built for it (or the newest before it)
+	if (__jo_vdp1_displayed_frame_changed(&shown))
+		floor_fade_tables_show(&tables, shown + FOG_LEAD);
+	table = shown_table();
 	// The whole channel, not just its read address: under SGL a CD read set up this same level
 	// for itself and left it that way. Six register writes a frame, so nothing can stop the fog
 	// for good. Stopped first, safely (stop_dma), which takes a line or two: the row's read after it.
@@ -234,11 +275,11 @@ void floor_fade_vblank(void)
 	if (left <= MAX_BLANK_ROWS)
 		// The HBlanks still to come before row 0 (at the end of this row and every one after it)
 		// use the last that many padding entries
-		arm_dma(&dma_table[MAX_BLANK_ROWS - left]);
+		arm_dma(&table[MAX_BLANK_ROWS - left]);
 	else
 		// Still in the picture (shouldn't happen in a VBlank callback): row r's HBlank sets up
 		// row r + 1, from entry MAX_BLANK_ROWS + r. Stopped, it has to be started again here
-		arm_dma(&dma_table[MAX_BLANK_ROWS + (row < JO_TV_HEIGHT ? row : 0)]);
+		arm_dma(&table[MAX_BLANK_ROWS + (row < JO_TV_HEIGHT ? row : 0)]);
 }
 
 void floor_fade_set_colour(jo_color colour)
@@ -265,13 +306,16 @@ void floor_fade_distances(int view_index, int *fade_start, int *fade_end)
 static void rebuild(const floor_fade_view *view)
 {
 	unsigned char levels[JO_TV_HEIGHT];
+	unsigned int *dma_table;
 
 	if (line_table == JO_NULL)
 		return;
 	floor_fade_rows(view, levels, JO_TV_HEIGHT);
+	// Into a table not on screen, for the frame being built: shown with its picture (above)
+	dma_table = dma_tables[floor_fade_tables_build(&tables, __jo_vdp1_frame_tag())];
 
-	// Laid out as described at dma_table
-	for (unsigned int e = 0; e < sizeof(dma_table) / sizeof(dma_table[0]); ++e)
+	// Laid out as described at dma_tables
+	for (unsigned int e = 0; e < DMA_ENTRIES; ++e)
 	{
 		unsigned int row = e < MAX_BLANK_ROWS ? 0 : e - MAX_BLANK_ROWS + 1; // the row this entry sets up
 		unsigned int ratio = (unsigned int)floor_fade_ratio(levels[row < JO_TV_HEIGHT ? row : 0]);

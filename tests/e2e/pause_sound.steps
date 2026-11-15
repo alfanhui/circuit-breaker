@@ -1,0 +1,40 @@
+# Paused, every sound stops (src/sound.h, sound_pause): records the game's sound (/out/sound.wav).
+# Into play as engine_sound.steps, the hum at cruise, then START (the debug camera: the game
+# frozen) for 3 s, a turn press while paused (no whoosh), START again: the hum's back at the pitch
+# it had, then a turn's whoosh. Then the pause menu turns the sound effects off: silent
+record_sound
+wait_boot
+start_intro
+press b
+wait 3.5
+wait 2
+press left
+wait 1
+press up
+wait 1
+press right
+wait 4
+shot pause_0_riding
+press start
+wait 1.5
+shot pause_1_paused
+wait 1.5
+press start
+wait 2
+shot pause_2_back
+press left
+wait 1.5
+shot pause_3_end
+# The menu's sound effects off (START, L twice to "Sound effects", R, START): riding on and a
+# turn, and nothing's heard
+wait 1.5
+press start
+press l 2
+press r
+wait 0.5
+shot pause_4_sound_off
+press start
+wait 2
+press right
+wait 1.5
+shot pause_5_silent

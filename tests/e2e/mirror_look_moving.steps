@@ -1,0 +1,38 @@
+# Looking up at the mirror while the view moves (mirror_look_up.steps found nothing wrong held
+# still): half way to the glass, shots back to back (~130 ms apart) as the look goes up and comes
+# down, then walking in with it held
+wait_up
+wait 1.0
+hold left 0.6
+wait 0.3
+hold left 0.6
+wait 0.8
+hold up 1.5
+wait 0.5
+keydown y
+shot mm_00
+shot mm_01
+shot mm_02
+shot mm_03
+shot mm_04
+wait 0.5
+keyup y
+shot mm_05
+shot mm_06
+shot mm_07
+shot mm_08
+shot mm_09
+wait 0.5
+keydown y
+wait 0.5
+keydown up
+shot mm_10
+shot mm_11
+shot mm_12
+shot mm_13
+shot mm_14
+shot mm_15
+shot mm_16
+shot mm_17
+keyup up
+keyup y

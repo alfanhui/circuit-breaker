@@ -2,6 +2,7 @@
 #define __CITY_H__
 
 #include "corridor.h"
+#include "drone.h"
 
 /*
  * Work RAM's city (docs/WORK_RAM.md, "The city"): the entry and the way down to the first hub, the
@@ -14,8 +15,8 @@
  * own (python tools/work_ram_plan.py --c prints it), so its heights are the ones the plan checks:
  *
  *            0      1      2      3      4      5      6
- *   row 0  -1460  CD     -1350  -1310   ##    (s)    (s)      CD: the CD block's hub, -1400
- *   row 1  -1400  -1360  -1300  -1260   ##    (s)     ##
+ *   row 0  -1460  CD     -1400  -1310   ##    (s)    (s)      CD: the CD block's hub, -1400
+ *   row 1  -1400  -1360  -1360  -1260   ##    (s)     ##
  *   row 2   (s)    ##     ##    -1210   ##    (s)   -1150
  *   row 3    ##    ##     ##    -1160   ##    (s)   -1100
  *   row 4   -60   -100    ##    -1100  (s)    (s)     ##
@@ -146,5 +147,21 @@ int city_roof_under(int out, int across, int z);
 
 // Adds the towers' roofs to where you can stand. Returns false if there wasn't room for them all
 int city_walker_area_add(const corridor *c, walker_area *area);
+
+/*
+ * The watchdog's drone (game/drone.h): its first route. It rides the street between the plan's
+ * columns 1 and 2, beside the guard pages of column 2, facing back towards the corridor over the
+ * roofs of columns 0 and 1: the way down. Three stops down the street as the roofs step down, by
+ * rows 6-7, 8-9 and 10-11, each 300-400 over the roofs it watches, its scan angled down at them
+ * (drone.h), waiting CITY_DRONE_WAIT at each, then back up. You go down past it.
+ * Writes CITY_DRONE_STOPS stops (in the world's x and y: for a corridor behind `c`'s wall)
+ */
+#define CITY_DRONE_STOPS 4
+#define CITY_DRONE_WAIT 180 // 3 s at a stop
+#define CITY_DRONE_IN 40	  // its middle this much in from the street's (drone_draw.c: it's 270 long)
+void city_drone_route(const corridor *c, drone_stop *route);
+
+// Every tower as a box from the ground to its roof, for the drone's sight (drone_sees): CITY_TOWERS
+void city_drone_boxes(const corridor *c, drone_box *boxes);
 
 #endif

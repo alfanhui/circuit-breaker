@@ -97,8 +97,94 @@ static void ratio_spans_none_to_almost_all_fog(void)
 		CHECK(floor_fade_ratio(level) > floor_fade_ratio(level - 1)); // every level a little darker
 }
 
+// Built every frame, shown two frames later (at the VBlank before the frame two on is built):
+// each picture shows the fog built for it
+static void the_fog_shown_is_the_one_built_for_the_picture(void)
+{
+	floor_fade_tables t;
+	int table_for[20];
+
+	floor_fade_tables_init(&t);
+	for (unsigned int frame = 0; frame < 20; ++frame)
+	{
+		if (frame >= 2)
+			CHECK_EQ(table_for[frame - 2], floor_fade_tables_show(&t, frame - 2));
+		table_for[frame] = floor_fade_tables_build(&t, frame);
+	}
+}
+
+// A late frame: VDP1 shows the same picture for two fields, and nothing new is shown; then the
+// next. The fog stays the late frame's, and then is the next one's, not one built since
+static void a_late_frame_keeps_its_own_fog(void)
+{
+	floor_fade_tables t;
+	int a, b, c;
+
+	floor_fade_tables_init(&t);
+	a = floor_fade_tables_build(&t, 10);
+	CHECK_EQ(a, floor_fade_tables_show(&t, 10));
+	b = floor_fade_tables_build(&t, 11);
+	c = floor_fade_tables_build(&t, 12); // frame 12 built while 11 is still being drawn
+	CHECK(b != a && c != a && c != b);	  // three tables: none on screen overwritten
+	CHECK_EQ(b, floor_fade_tables_show(&t, 11));
+	CHECK_EQ(c, floor_fade_tables_show(&t, 12));
+}
+
+// A frame with no rebuild shows the newest fog built before it
+static void a_frame_without_a_rebuild_keeps_the_last(void)
+{
+	floor_fade_tables t;
+	int a;
+
+	floor_fade_tables_init(&t);
+	a = floor_fade_tables_build(&t, 5);
+	floor_fade_tables_build(&t, 9); // for a frame not shown yet
+	CHECK_EQ(a, floor_fade_tables_show(&t, 7));
+}
+
+// Built twice in one frame (a view change and a tilt): one table, the last build in it
+static void two_builds_in_a_frame_share_a_table(void)
+{
+	floor_fade_tables t;
+
+	floor_fade_tables_init(&t);
+	CHECK_EQ(floor_fade_tables_build(&t, 3), floor_fade_tables_build(&t, 3));
+}
+
+// The table on screen is never built into, even when it's the oldest
+static void the_table_on_screen_is_never_overwritten(void)
+{
+	floor_fade_tables t;
+	int on_screen;
+
+	floor_fade_tables_init(&t);
+	on_screen = floor_fade_tables_build(&t, 1);
+	floor_fade_tables_show(&t, 1);
+	for (unsigned int frame = 2; frame < 10; ++frame)
+		CHECK(floor_fade_tables_build(&t, frame) != on_screen);
+}
+
+// Frame numbers wrap round 2^32: still the newest
+static void the_frame_numbers_can_wrap(void)
+{
+	floor_fade_tables t;
+	int a, b;
+
+	floor_fade_tables_init(&t);
+	a = floor_fade_tables_build(&t, 0xFFFFFFFFu);
+	b = floor_fade_tables_build(&t, 0u);
+	CHECK_EQ(a, floor_fade_tables_show(&t, 0xFFFFFFFFu));
+	CHECK_EQ(b, floor_fade_tables_show(&t, 0u));
+}
+
 void run_floor_fade_tests(void)
 {
+	RUN(the_fog_shown_is_the_one_built_for_the_picture);
+	RUN(a_late_frame_keeps_its_own_fog);
+	RUN(a_frame_without_a_rebuild_keeps_the_last);
+	RUN(two_builds_in_a_frame_share_a_table);
+	RUN(the_table_on_screen_is_never_overwritten);
+	RUN(the_frame_numbers_can_wrap);
 	RUN(ratio_spans_none_to_almost_all_fog);
 	RUN(near_floor_is_untouched);
 	RUN(horizon_is_full_haze);

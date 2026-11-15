@@ -19,6 +19,7 @@ static body_state doing(int mode, int eye, int stride, int speed)
 	s.eye = eye;
 	s.stride = stride;
 	s.speed = speed;
+	s.side = 0;
 	return s;
 }
 
@@ -275,7 +276,10 @@ static body_state from_walker(const walker *w)
 {
 	const int mode = walker_move(w) == WALKER_MOVE_VAULT ? BODY_VAULT : walker_move(w) == WALKER_MOVE_CLIMB ? BODY_CLIMB : w->falling ? BODY_AIR : BODY_MOVING;
 
-	return doing(mode, U(walker_eye(w) - walker_step_lag(w)), w->stride, w->forward);
+	body_state s = doing(mode, U(walker_eye(w) - walker_step_lag(w)), w->stride, w->forward);
+
+	s.side = w->side;
+	return s;
 }
 
 // A climb, whatever the ledge's height (and a vault up onto something low and deep): both hands
@@ -385,6 +389,80 @@ static void vaulting_a_hand_stays_on_the_top(void)
 	}
 }
 
+/*
+ * Side-stepping (L / R): a shuffle. Each foot in turn steps the way you go, lifting as it does;
+ * the feet never cross; the hips trail the head; nothing stretches. way: 1 right, -1 left
+ */
+static void side_stepping(int way)
+{
+	body b;
+	int widest = 0, narrowest = 30000, lifted[2] = {0, 0};
+	int was_x[2] = {0, 0};
+
+	body_init(&b);
+	for (int frame = 0; frame < 200; ++frame)
+	{
+		// The walker's stride moves on 1.5 x its speed a frame
+		body_state s = doing(BODY_MOVING, STOOD, frame * 864, 0);
+
+		s.side = way * WALKER_STRAFE_SPEED;
+		body_update(&b, &s);
+		check_bones(&b);
+		if (frame >= 20)
+		{
+			const int now = b.joint[BODY_ANKLE_R].x - b.joint[BODY_ANKLE].x;
+
+			CHECK(now > U(1)); // the right foot stays on the right: they never cross
+			widest = now > widest ? now : widest;
+			narrowest = now < narrowest ? now : narrowest;
+			for (int k = 0; k < 2; ++k)
+			{
+				const int x = b.joint[BODY_ANKLE + k * BODY_SIDE].x, z = b.joint[BODY_ANKLE + k * BODY_SIDE].z;
+
+				CHECK(z >= U(2) - 2); // never through the floor
+				// Well off the floor, it's swinging the way you go (not being carried back)
+				if (z > U(4))
+				{
+					CHECK(way * (x - was_x[k]) > 0);
+					lifted[k] = 1;
+				}
+			}
+			CHECK_EQ(0, b.joint[BODY_ANKLE].y); // no step forwards or back
+			CHECK(way * b.joint[BODY_PELVIS].x < 0); // the hips trail
+			CHECK(!in_view(&b, STOOD, BODY_FINGERS) && !in_view(&b, STOOD, BODY_FINGERS_R));
+		}
+		was_x[0] = b.joint[BODY_ANKLE].x;
+		was_x[1] = b.joint[BODY_ANKLE_R].x;
+	}
+	CHECK(lifted[0] && lifted[1]);		// both feet step
+	CHECK(widest - narrowest > U(8)); // out wide, and closed up again
+}
+
+static void side_stepping_shuffles_the_feet(void)
+{
+	side_stepping(1);
+	side_stepping(-1);
+}
+
+// Stopped again, you stand as you did: even, hands hanging
+static void a_side_step_ends_stood_even(void)
+{
+	body b;
+
+	body_init(&b);
+	for (int frame = 0; frame < 80; ++frame)
+	{
+		body_state s = doing(BODY_MOVING, STOOD, frame < 40 ? frame * 864 : 40 * 864, 0);
+
+		s.side = frame < 40 ? -WALKER_STRAFE_SPEED : 0;
+		body_update(&b, &s);
+	}
+	CHECK(near(-b.joint[BODY_WRIST].x, b.joint[BODY_WRIST_R].x, 2));
+	CHECK(near(-b.joint[BODY_ANKLE].x, b.joint[BODY_ANKLE_R].x, 2));
+	CHECK_EQ(0, b.joint[BODY_PELVIS].x);
+	CHECK(b.joint[BODY_WRIST].z < b.joint[BODY_SHOULDER].z - U(20));
+}
+
 void run_body_tests(void)
 {
 	RUN(climbing_your_hands_take_the_edge);
@@ -398,4 +476,6 @@ void run_body_tests(void)
 	RUN(getting_up_pushes_off_the_floor);
 	RUN(sliding_your_legs_go_ahead);
 	RUN(changes_ease);
+	RUN(side_stepping_shuffles_the_feet);
+	RUN(a_side_step_ends_stood_even);
 }

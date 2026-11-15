@@ -145,6 +145,7 @@ typedef struct
 	int eye;	// how high your eye is above the ground, x16
 	int stride; // the step's phase (ANGLE: the walker's)
 	int speed;	// forwards, x256 a frame (the walker's)
+	int side;	// to your right, x256 a frame (the walker's; negative: left): a side-step
 } body_state;
 
 typedef struct

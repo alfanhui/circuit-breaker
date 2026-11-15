@@ -175,6 +175,27 @@ static int fog_tilt = 0; // the floor fog's tilt (tan x 1000) as last built
  * BOARD_FADE_END (well before the skyline ring, 10000 off: what's under it is haze)
  */
 static int fog_height = -1;
+// The tilt and height the view had last frame: once they hold still, the fog's rebuilt for them
+// exactly, whatever it was built for while they moved (view_follow)
+static int fog_last_tilt = 0, fog_last_height = -1;
+/*
+ * VDP1 shows a frame's picture two frames after it's built: the slave sorts and copies its
+ * commands to VDP1 during the next frame (jo's slave.c), VDP1 draws them, then they're shown.
+ * What VDP2 is given shows from the next VBlank, two frames sooner, unless jo holds it back:
+ *
+ * - The floor and sky planes: jo holds them back. Since johannes-fetz/joengine#111 (jo `5b1dbac`)
+ *   the rotation parameters set in a frame are applied in the field where VDP1 shows that frame's
+ *   picture, late frames included. So they're drawn with this frame's camera: VDP2_PLANE_DELAY 0.
+ *   (Before, they ran 2 frames ahead: the pink band under the skyline on a quick look up,
+ *   flash_look_up.steps, and we drew them with the camera of 2 frames ago.)
+ * - The floor fog's per-row tables: ours, switched from our own VBlank callback
+ *   (floor_fade_vdp2.c). Built now, for this frame, and switched in with this frame's picture, in
+ *   the field jo applies the planes (game/floor_fade.h, floor_fade_tables). Before, a rebuild was
+ *   made 2 frames after it was decided: right only while no frame ran late, and in the city many
+ *   do. A frame out, the fog's rows were for a horizon a few rows off, and a band of the floor
+ *   showed unfogged under it starting to look up (the user, 2026-11-15)
+ */
+#define VDP2_PLANE_DELAY 0
 #define BOARD_FOG_HEIGHT_STEP 64
 #define BOARD_FADE_START 3000
 #define BOARD_FADE_END 14000
@@ -1063,19 +1084,41 @@ void view_follow(const cycle *c)
 				const int climb = height > fog_height ? height - fog_height : fog_height - height;
 
 				height = height > BOARD_FOG_HEIGHT_MAX ? BOARD_FOG_HEIGHT_MAX : height;
+				/*
+				 * Rebuilt in steps while the view moves (a tilt step, a climb step), and once more
+				 * as soon as it holds still for a frame, if it was built for anything else. Before,
+				 * the last rebuild was only once the tilt landed on exactly 0: the user saw the sky's
+				 * pink horizon below the city's skyline after looking up and letting go (2026-11-14,
+				 * a screenshot at 0020), the rows under the horizon left unfogged as if above it.
+				 * Not caught on film (look_up_0020.steps, crash_look_up.steps), so whatever kept
+				 * the table off, a still view now always gets one built for it
+				 */
+				const bool still = tilt == fog_last_tilt && height == fog_last_height;
+
+				fog_last_tilt = tilt;
+				fog_last_height = height;
 				if (fog_height < 0 || change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0) ||
-					climb > BOARD_FOG_HEIGHT_STEP)
+					climb > BOARD_FOG_HEIGHT_STEP || (still && (tilt != fog_tilt || height != fog_height)))
 				{
 					fog_tilt = tilt;
 					fog_height = height;
+					// Built for this frame, shown with its picture (floor_fade_vdp2.c)
 					floor_fade_set_camera(tilt, height, ON_FOOT_FOCAL, BOARD_FADE_START, BOARD_FADE_END);
 				}
 			}
-			// Rebuilt in steps, and once more on landing level, so it ends exactly right
-			else if (change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0))
+			// Rebuilt in steps, and once more on landing level, or as soon as it holds still, so it
+			// ends exactly right
+			else
 			{
-				fog_tilt = tilt;
-				floor_fade_set_first_person_tilt(tilt);
+				const bool still = tilt == fog_last_tilt;
+
+				fog_last_tilt = tilt;
+				fog_last_height = -1; // (on foot again, the height's checked afresh)
+				if (change > LOOK_FOG_TILT_STEP || (tilt == 0 && fog_tilt != 0) || (still && tilt != fog_tilt))
+				{
+					fog_tilt = tilt;
+					floor_fade_set_first_person_tilt(tilt); // shown with this frame's picture
+				}
 			}
 		}
 
@@ -1091,6 +1134,52 @@ void view_follow(const cycle *c)
 		view_rz = (jo_angle)(ISO_RZ + (shake_yaw >> 1));
 		view_rx = (jo_angle)(ISO_RX + (shake_pitch >> 1));
 	}
+}
+
+// The cameras of the last VDP2_PLANE_DELAY frames and this one (above, with the fog's tables), in a
+// ring. With a delay of 0 it's this frame's alone: kept so a delay can be tried again (1 or 2
+// gives the old behaviour) if a jo without #111's fix is ever built against
+static view_vdp2_camera vdp2_ring[VDP2_PLANE_DELAY + 1], vdp2_shown;
+static int vdp2_at = 0; // where this frame's goes; the oldest is the one after it
+static bool vdp2_have = false;
+
+void view_vdp2_frame(void)
+{
+	view_vdp2_camera now;
+
+	now.roll = view_roll;
+	now.rx = view_rx;
+	now.rz = view_rz;
+	now.x = view_x;
+	now.y = view_y;
+	now.z = view_z;
+	now.sky_rise = view_sky_rise();
+	now.ground = view_ground_height();
+	if (!vdp2_have)
+		for (int i = 0; i <= VDP2_PLANE_DELAY; ++i)
+			vdp2_ring[i] = now; // the first frame: this one's, there's no other
+	vdp2_have = true;
+	vdp2_ring[vdp2_at] = now;
+	if (++vdp2_at > VDP2_PLANE_DELAY) // (a ring of one: always 0)
+		vdp2_at = 0;
+	vdp2_shown = vdp2_ring[vdp2_at]; // VDP2_PLANE_DELAY frames ago: with 0, this one's
+}
+
+const view_vdp2_camera *view_vdp2(void)
+{
+	return &vdp2_shown;
+}
+
+void view_push_vdp2_matrix(void)
+{
+	// view_push_world_matrix's, with the planes' camera (view_vdp2_frame)
+	jo_3d_push_matrix();
+	if (vdp2_shown.roll != 0)
+		angle_rotate_z(vdp2_shown.roll);
+	angle_rotate_x(vdp2_shown.rx);
+	angle_rotate_z(vdp2_shown.rz);
+	matrix_scale(JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE, JO_FIXED_1 / VIEW_WORLD_SCALE);
+	jo_3d_translate_matrix(-vdp2_shown.x, -vdp2_shown.y, vdp2_shown.z);
 }
 
 void view_push_world_matrix(void)

@@ -76,6 +76,8 @@ enum
 	PART_GLITCH_DARK,								 // the designed crash's tear bands (breach.h)
 	PART_GLITCH_PINK,
 	PART_LOCK, // the head's lock on a target (game/target.h)
+	PART_BENCH_PASS, // the benchmark's verdict, the whole screen (game/bench.h)
+	PART_BENCH_FAIL,
 	PART_COUNT
 };
 
@@ -188,6 +190,8 @@ void hud_init(void)
 	part_sprites[PART_GLITCH_DARK] = make_part(JO_COLOR_RGB(8, 0, 16));  // near black (all 0 would be see-through)
 	part_sprites[PART_GLITCH_PINK] = make_part(JO_COLOR_RGB(255, 40, 160)); // the flicker's pink
 	part_sprites[PART_LOCK] = make_part(JO_COLOR_RGB(255, 170, 0)); // amber, as the gauge: yours, not the world's
+	part_sprites[PART_BENCH_PASS] = make_part(JO_COLOR_RGB(0, 150, 40)); // green: tests/e2e/run.sh reads it
+	part_sprites[PART_BENCH_FAIL] = make_part(JO_COLOR_RGB(170, 0, 20)); // red
 	minimap_init();
 	prepare_map_disc();
 }
@@ -441,6 +445,26 @@ void hud_draw_band(int top, int height, bool pink)
 	const int x1 = JO_TV_WIDTH_2 - 1;
 
 	draw_corners(pink ? PART_GLITCH_PINK : PART_GLITCH_DARK, x0, y0, x1, y0, x1, y1, x0, y1, GLITCH_DEPTH);
+}
+
+/*
+ * The benchmark's verdict (game/bench.h): the whole screen green or red, over everything but the
+ * text (VDP2's text layer is in front of VDP1's), so a film reads it from the picture's colour
+ */
+void hud_draw_verdict(int pass)
+{
+	const int x = JO_TV_WIDTH_2 + 8, y = JO_TV_HEIGHT_2 + 8; // a little past each edge
+
+	draw_corners(pass ? PART_BENCH_PASS : PART_BENCH_FAIL, -x, -y, x, -y, x, y, -x, y, GLITCH_DEPTH);
+}
+
+void hud_draw_panel(int column, int row, int columns, int rows)
+{
+	// Text cells are 8 x 8 (a shift: no multiply needed); a 4 pixel margin all round
+	const int x0 = (column << 3) - JO_TV_WIDTH_2 - 4, y0 = (row << 3) - JO_TV_HEIGHT_2 - 4;
+	const int x1 = x0 + (columns << 3) + 7, y1 = y0 + (rows << 3) + 7;
+
+	draw_corners(PART_GLITCH_DARK, x0, y0, x1, y0, x1, y1, x0, y1, GLITCH_DEPTH);
 }
 
 /*

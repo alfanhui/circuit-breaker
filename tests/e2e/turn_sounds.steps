@@ -1,0 +1,26 @@
+# The cycle's turn whoosh (src/sound.c), after the loop-break hits (as hit_sounds.steps): records
+# the game's sound (/out/sound.wav). The third hit breaks the loop and is a turn itself; then a
+# left turn and a right, 2 s apart. Each whoosh should be heard on its own side: louder in that
+# channel of the recording. The press times show in the log (shots)
+record_sound
+wait_boot
+start_intro
+press b
+wait 3.5
+wait 2
+shot press1
+press left
+wait 3
+shot press2
+press up
+wait 3
+shot press3
+press right
+wait 4
+shot turn_left
+press left
+wait 2
+shot turn_right
+press right
+wait 2
+shot end

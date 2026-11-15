@@ -8,6 +8,400 @@ Effort: S = under an hour, M = a session, L = several sessions.
 
 Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_TESTS.md).
 
+## Stabilise graphics (proposed 2026-11-15)
+
+**Why this section exists.** Since the move on foot, most play-test reports have been one of three
+things: something "clipping" or missing, a one-frame artefact, or a drop to 30 fps. Each was fixed
+where it was seen (the rows under "Now" and the two "Next: requested" sections), and several fixes
+moved the problem to the next view. This section is the work that stops that happening per place.
+Anyone can pick a task up: each says what to do, where, and when it's done.
+
+**What the analysis found** (our rows below, jo's `Samples/demo - first person shooter`, and
+SegaXtreme threads; the notes are in SKILLS.md, "Other people's Saturn work"):
+
+1. **Our "clipping" is mostly unfinished frames.** With `JO_FRAMERATE = 1` VDP1's buffers swap
+   every VBlank, finished or not, and VDP1 draws far to near: the nearest polygons (the roof under
+   you, a close wall, the HUD) are what goes. Mimas Engine had the same fault for two months and
+   cured it with manual frame change; XL2 and Ponut describe the same "nearest goes first".
+2. **Nothing tells VDP1's load before it's too late.** We count polygons; the cost is pixels
+   written and lines started. jo's sample plans its draw from the last frame's command count
+   and keeps a reserve for what must show.
+3. **Every place has its own rules.** `level.c` (4950 lines) rebuilds its meshes every frame from
+   special cases (`city_deep`, the doorway's band, `skyline_trim`, the pyramid's cut). jo's
+   sample has none of that: rooms and doors are data (`jo/cell.h`), and one walk decides what's
+   drawn.
+4. **A slow spot is found by a person.** Films are judged by eye, and their key presses land
+   differently run to run. jo's `tests/` plays a scripted scene and shows a green or red screen;
+   its harness reads it.
+5. **VDP1 and VDP2 are shown a fixed two frames apart** (`VDP2_DELAY`, view.c). That holds only
+   while every frame takes one VBlank.
+
+**Not measured yet:** every size and gain below is an estimate until its "done when" is filmed.
+Mednafen doesn't model most of VDP1's time: the VDP1 tasks also need a row in
+[HARDWARE_TESTS.md](HARDWARE_TESTS.md).
+
+**Order.** SG-1 first (everything else builds on the newer jo). Then SG-2 and SG-3 together, then
+SG-5 (the gate), so each later task is judged by it. The rest in any order. (Done 2026-11-15: SG-5
+was built first after all, so SG-1 and SG-2 could be judged by it.)
+
+**Run the gate:** `powershell -NoProfile -ExecutionPolicy Bypass -File tests\e2e\run_e2e.ps1 -Steps
+bench.steps` (about 3 minutes: two builds and ~60 s of views). Exit 0 green, 2 red, 3 no verdict;
+`tests/build/e2e/bench_verdict.png` has a line a view. Every later task's "check" includes it.
+
+| ID | Task | Size | Needs | Status |
+|---|---|---|---|---|
+| SG-1 | Merge upstream jo-engine v2026.3 into the fork | S | - | **Done** (2026-11-15): committed `7be6067`; then upstream `47720e7` (with #111's fix) merged on top, staged, not committed |
+| SG-2 | Swap only finished frames (`JO_FRAMERATE_DYNAMIC`) | S | SG-1 | **Tried, not taken** (2026-11-15): slower, see below |
+| SG-3 | The game steps by VBlanks passed, not by frames drawn | M | SG-2 | **Was already so** (input.c). The late count: we changed it, jo's author showed jo's was right (#110); back to jo's |
+| SG-4 | VDP1 and VDP2 shown together, however long a frame took | M | SG-2 | **Done by jo** (2026-11-15): #111 fixed in `5b1dbac`, merged; the planes' delay ring is 0 (uncommitted) |
+| SG-5 | Budget films that pass or fail on their own | M | SG-1 | **Done, uncommitted** (2026-11-15) |
+| SG-6 | Glitch checks on the films (holes, flashes) | M | SG-5 | **Done, uncommitted** (2026-11-15): flashes, stray colours, holes; see below |
+| SG-7 | Measure pixels, not polygons; try a smaller guard band | S | SG-1 | **Measured, band not taken** (2026-11-15): the towers are ~85% of VDP1's pixels; see below |
+| SG-8 | A draw budget for whatever is optional | S | SG-7 | **Done, uncommitted** (2026-11-15): landmarks only now (the arena went second, but on foot that's the pyramid: gone most of the time at the CD lift, the user); roof cuts 16 to 3 on the run |
+| SG-9 | A full-screen wall hides what's behind it (`jo_3d_set_depth_limit`) | S | SG-1 | To do |
+| SG-10 | The mirror clipped by VDP1's window, not cut by the CPU | M | SG-1 | To do |
+| SG-11 | The level as data: a spike with jo's cells on the corridor | S | SG-1 | To do |
+| SG-12 | The level as data: the corridor, then the city | L | SG-5, SG-11 | To do |
+| SG-U | For jo-engine upstream: what to raise (below) | S each | SG-1, your go-ahead | **U-3, U-5, U-6 sent** (2026-11-15): [#110](https://github.com/johannes-fetz/joengine/issues/110) (U-6, the late count), [#107 comment](https://github.com/johannes-fetz/joengine/issues/107#issuecomment-6892310486) (U-5), [#111](https://github.com/johannes-fetz/joengine/issues/111) (U-3, VDP2 planes and frames); texts in [UPSTREAM_DRAFTS.md](UPSTREAM_DRAFTS.md). Workarounds in the game name them: `perf_frame_late` (#110), `VDP2_DELAY` (#111). **Replies:** #110 closed, our reading was wrong (VDP1 was smooth, the judder was VDP2; jo's late count is right); #111 fixed upstream in `5b1dbac` (after v2026.3): see UPSTREAM_DRAFTS.md |
+
+### SG-1: merge upstream jo-engine v2026.3 (S)
+
+- **Why:** we're 48 commits behind `upstream/master` (tag `v2026.3`). Among them: `d5e1abc`,
+  which answers our [#107](https://github.com/johannes-fetz/joengine/issues/107) (the VBlank
+  erase replaces most of the whole-screen clear polygon); the clip and subdivision short paths
+  (`f04d3d2`, `d949dcc`, `2d2eab3`); the SMPC fix for frozen pads (`51c6b99`); background file
+  reads that don't block a frame (`94d6c30`).
+- **How:** the fork has no changes of its own under `jo_engine/` or `Compiler/` since the last
+  merge (`git diff 5e99944 HEAD -- jo_engine Compiler` is empty), so `git merge upstream/master`
+  on a branch should be clean. Don't change jo in the fork (CLAUDE.md).
+- **Check:** build with no new warnings; `tests/run_tests.bat` (252,119 checks today); films
+  `hub.steps`, `slow_0650.steps`, `stairs_sky.steps`, `mirror_sky.steps`, `turns.steps` before
+  and after, the debug line's fps, cpu, `vdp1 busy`, `over` noted for each.
+- **Done when:** the same or better in every film, and sound, pads and the HUD checked in play.
+- **Outcome (2026-11-15): done, staged in the jo-engine checkout, not committed.**
+  `git merge --no-commit --no-ff upstream/master` on `feature/alfanhui`: no conflicts (our only
+  change there, SKILLS.md, isn't touched upstream). The game builds with no new warnings; unit
+  tests 252,183 checks, 0 failed. The benchmark (SG-5) reads the same before and after, view for
+  view (0650 back 141 late frames both times, the rest within 2% of peak cpu). `turns.steps`:
+  presses, turns and the HUD map as before, 60 fps; the hub films (on foot, HUD text) the same.
+  **Not checked:** sound by ear. To finish: commit the merge (signed: your passphrase).
+
+### SG-2: swap only finished frames (S)
+
+- **Why:** cause 1. With the swap held until VDP1 is done, an over-budget frame is shown a VBlank
+  late and whole, in place of on time and with its nearest polygons missing.
+- **How:** makefile: `JO_FRAMERATE_DYNAMIC = 1` (its comment says why it was off: the clear
+  polygon's ~4 ms, which SG-1 mostly removes). Keep `JO_FRAMERATE = 1`.
+- **Check:** `stairs_perf.steps` and the yard (it was 48-52 fps with the clear polygon, 60
+  without): the cost of what's left of the clear. `hub.steps`, `mirror_slow.steps`,
+  `slow_0650.steps`: `over` must read 0 and nothing may be cut. Read
+  `jo_core_get_late_frame_count()` into the debug line beside our `late`.
+- **Done when:** no film shows a cut roof or wall, and no view that's 60 fps today is slower by
+  more than 2 fps. If the yard does lose more, the fallback is to keep the fixed swap and rely on
+  SG-8; write the figures here either way.
+- **Watch:** a late frame now slows the game down (it steps once a frame): SG-3. And VDP2 is no
+  longer a fixed two frames ahead: SG-4. Don't ship SG-2 without both.
+- **Outcome (2026-11-15): tried, not taken; `JO_FRAMERATE_DYNAMIC = 0` stays (makefile says why).**
+  The benchmark went from 2 views failing to 6: the mirror looking up, and the CD block's hub
+  facing three ways, went from 0 late frames to 192 of 192 (30 fps). `hub.steps` both ways
+  (`tests/build/e2e/hub_compare.png`): fixed swap 60 fps, nothing cut, `over 0`; dynamic 30 fps
+  with as few as 25 polygons and the CPU at 68%. Not the clear polygon: jo's own comments say
+  why. With the manual change VDP1 erases during the VBlank and starts the new table only after
+  it, so it loses the VBlank's ~2.4 ms of a 16.7 ms field. Views where VDP1 was already near
+  full (`busy 100%`) then miss every change. Use: build with it on to find views with under
+  ~2.4 ms of VDP1 to spare. It's worth trying again once SG-7 and SG-8 have cut VDP1's fill.
+
+### SG-3: the game steps by VBlanks passed (M)
+
+- **Why:** the first rule is the controls. With SG-2 a frame that takes two VBlanks would
+  otherwise play at half speed.
+- **How:** in the main loop, read how many VBlanks the last frame took (jo counts them:
+  `jo_core_get_vblank_count()`), and run the game's step that many times (at most 3) before
+  drawing once. The pad is read once; presses are latched so a step can't miss or double one
+  (`press_latch`). The pure modules (`game/`) already step by a fixed tick, so nothing in them
+  changes. Easing that belongs to the picture (the eye, the body) steps with the game.
+- **Tests:** a unit test for the stepper (1, 2, 3 VBlanks: the same distance covered a second);
+  a film that forces slow frames (the debug camera in the corridor) and times a run between two
+  marks against the same run at 60.
+- **Done when:** a run's time between two marks is the same within a frame at 60 and at 30.
+- **Outcome (2026-11-15): already built** (`gamepad_input`, input.c: as many `game_step`s as the
+  last frame took vblanks, at most 3, presses latched; `perf_last_frame_vblanks`, utils/perf.c).
+  Found while doing it, and fixed: **the "late" count missed most late frames.** jo doesn't wait
+  for a vblank it's already past, so a frame of 1.23 vblanks is followed by one that starts
+  mid-field: a picture shown twice, but both jo's count and ours (rounded to the nearest vblank)
+  said on time. `perf_frame_late` now counts every vblank a frame runs past its own, with a 1 ms
+  allowance; the debug line's `late` uses it. At 0650 that's 141 frames of 192 late, where it
+  read 0: the "drop to 30" the user saw there. Films and backlog rows before 2026-11-15 that read
+  "late 0" may have been wrong.
+- **Correction (2026-11-15, the same day): that was wrong, and `perf_frame_late` is jo's count
+  again.** jo's author measured our repro field by field (johannes-fetz/joengine#110): after a
+  frame of 1.2 fields, the next one's VDP1 table waits for its own VBlank, so every picture stays
+  exactly one field, and `jo_core_get_late_frame_count()` is exactly the repeated fields. What
+  judders in that rhythm is VDP2 (299 repeats, 299 skips in 600 frames), fixed in jo by #111.
+  "141 late" counted frames over budget, not repeated pictures. With jo's count, 0650 reads 18
+  repeated fields of 192 and 0640 0. Frames over budget still show as cpu peak (`C`).
+
+### SG-4: VDP1 and VDP2 shown together (M)
+
+- **Why:** cause 5. The floor, sky and fog (VDP2) are set with the camera of `VDP2_DELAY` (2)
+  frames ago so they meet VDP1's picture. Once a frame can take two VBlanks that's wrong for a
+  frame each time: the pink horizon again. Mimas Engine's sky "bleeding below the horizon" was
+  this, fixed by applying the boundary at the moment the picture is presented.
+- **How:** keep each frame's VDP2 state (the rotation parameters, the fog table's choice, the
+  board's palette phase) with the frame it belongs to, and write it in the VBlank in which that
+  VDP1 frame is swapped in. Find out first whether jo tells us the swap happened (read
+  `__jo_vdp1_vblank()` in `vdp1_command_pipeline.c`); if there's no way to know from outside,
+  that's an SG-U item, not a fork change.
+- **Check:** `look_going_up.steps` (shots every 0.05 s) at 60, and again with frames forced slow.
+- **Done when:** no shot shows the sky or floor a frame ahead of the towers, at either rate.
+- **Outcome (2026-11-15): blocked on jo; not changed in the fork.** jo already does this for its
+  own glows (`glow.c`): VDP2 state is kept with the VDP1 frame's number (`__jo_vdp1_frame_tag()`)
+  and written in the VBlank that frame is shown (`__jo_vdp1_displayed_frame_changed()`, from a
+  VBlank callback). Both are internal (`jo_engine/internal/vdp1_command_pipeline.h`). Two
+  things stop us from copying it:
+  - our floor and sky are written by `jo_background_3d_plane_a_draw()` / `_b_draw()` mid-frame,
+    from the 3D matrix stack, which can't run in an interrupt;
+  - what we'd need from outside is the number of the frame VDP1 shows *next* field (the table
+    taken at this VBlank, `__jo_vdp1_taken_tag`), which is a static.
+  Since SG-2 isn't taken, frames are still one VBlank each but for late ones. So the mismatch is
+  only around a late frame, and SG-8 makes those rarer. The issue to send is U-3 below.
+- **Then done by jo (2026-11-15):** sent as #111; the author fixed it the same day in `5b1dbac`
+  (option 1: the scroll registers and rotation parameters set in a frame are applied with its
+  VDP1 picture, late frames included). Merged (upstream `47720e7`). In the game (view.c),
+  `VDP2_PLANE_DELAY` is 0: the planes are drawn with this frame's camera. The fog's per-row
+  tables are ours, written from our own VBlank callback, so they keep `FOG_TABLE_DELAY` 2 (still
+  a frame out after a late frame, for a frame). Checked with SG-6's film `flash_look_up.steps`:
+  delay 0 passes (0 stray colours); the old delay 2 on the new jo fails (2545-4921 stray samples:
+  the planes now lag), so jo's fix is live.
+
+### SG-5: budget films that pass or fail on their own (M)
+
+- **Why:** cause 4. A place that goes over budget should fail a run, not wait for a play-test.
+- **How:** copy the shape of jo's `DEMO_BENCH` (its `main.c`, and `tests/README.md`, "The checks
+  of the samples"):
+  - A build switch in `features.h`, `BENCH_VIEW n`: the game boots on foot at a fixed place and
+    heading from a table (address, x, y, yaw, pitch), with no input. That removes the key timing
+    that makes `hub.steps` and `city.steps` turn differently run to run.
+  - It runs 192 frames, counting late frames, `vdp1 over`, the worst cpu %, and the master's
+    wait. Then the whole screen goes green or red, with the counts as text.
+  - `run_e2e.ps1 -Bench` builds each view, runs it, reads the verdict from the screenshot's
+    colour and the counts from a shot, and exits non-zero on a red one.
+  - The first table: 0650, 0640, 0630, 0A40, 0B40; the CD block's hub looking south and east;
+    at the glass looking up; the foot of the stairs; the top of the lift looking down; the
+    arena with long trails.
+- **Rule:** green means 0 late frames and 0 `over`. Views that are red today go in the table
+  marked "known", each with its backlog row, so the list of them only gets shorter.
+- **Done when:** one command prints a table of the views, and a deliberate slow-down (the far
+  drone model off) turns its view red.
+- **Outcome (2026-11-15): done, uncommitted.** Built differently from the plan in one way: one
+  build goes round every view in one boot, rather than a build per view (~60 s of views in place
+  of a build and a boot each).
+  - `src/game/bench.h/.c` (pure, `tests/test_bench.c`): the views and the counting.
+  - `BENCH` in features.h: boots on foot, no pad. Each view puts you back where you got up, then
+    on its tower facing its way, holding its buttons (`bench_place`, input.c). It settles 90
+    frames, then counts 192.
+  - main.c `draw_bench`: the whole screen green or red (`hud_draw_verdict`), a line a view.
+  - A `bench` line in a steps file builds with `BENCH 1` (run_e2e.ps1). `wait_verdict` in run.sh
+    reads the colour and sets the exit code.
+  - The gauge's per-frame flag (`vdp1_gauge.last_unfinished`) and `perf_frame_cpu`,
+    `perf_frame_late` feed it.
+  **Today's table (merged jo, fixed swap): green.** Ten views 0 late, 0 `over`; `0650 back` 141
+  late of 192 and `0640 back` 1 late, both marked known (the "Slow in the city" row). **Since
+  (2026-11-15, jo `47720e7`, late = jo's count, see SG-3):** green; `0650 back` 18 repeated
+  fields of 192 (cpu peak 123%), known; `0640 back` 0, no longer marked known. It found
+  the 0650 slowdown on its first run, before the marks: the "deliberate slow-down" check was
+  real. **Not in the table yet:** the foot of the stairs, the top of the lift, the arena with
+  long trails (a view off foot needs a place type of its own). **Caveat:** `over` read 0 in
+  every view, including the ones dynamic mode shows VDP1 near full. The gauge reads EDSR (U-2):
+  `over` may undercount, on Mednafen and on the Saturn alike.
+
+### SG-6: glitch checks on the films (M)
+
+- **Why:** artefacts that last a frame are only caught when a shot happens to land on them.
+- **How:** two checks, both in the film runner, both ideas from jo's `tests/harness/glitch.py`:
+  - **Holes:** in a check build the VDP2 back colour is magenta, a colour nothing else uses.
+    For views where the level must cover the screen below the horizon, any magenta there fails.
+  - **Flashes:** shots every field for a second through a move (a look up, a turn, a step off a
+    roof); a shot that differs from both its neighbours far more than they differ from each
+    other is a one-frame fault, saved with its neighbours.
+- **Done when:** the pink-horizon frame (`look_going_up.steps`, with `VDP2_DELAY` put back to 1)
+  is caught by the flash check without anyone looking.
+- **Outcome (2026-11-15):** done, with one change of plan. Mednafen records every frame
+  (`-qtrecord`, PNG codec, as jo's harness does) when a film has a `record` line;
+  `tests/e2e/glitch.py` (Python's standard library, 8 unit tests in `test_glitch.py`) reads it.
+  Films mark a stretch with `flashes_from` / `flashes_to NAME` and `holes_from` / `holes_to NAME`;
+  a fault saves its frames and the film exits 4 at its end. Proof film: `flash_look_up.steps`.
+  - **The pink band wasn't a flash.** Recorded with `VDP2_DELAY 1`, it lasted the whole quick
+    look up (4 frames, shrinking), so each frame differed from its neighbours no more than a good
+    one (before/after against across: 0.3-0.64; a flash is above 1). The neighbour test stays,
+    for true one-frame faults (unit-tested on made-up frames; no real one seen yet).
+  - **What caught it: stray colours.** The still frames in the stretch (before, at the top, after
+    the move) give the colours that belong; a moving frame with more than 150 samples (~0.2% of
+    the screen) of any other colour is a fault. The pink band: 4218, 2281, 850, 245 samples in
+    frames 1-4; good moving frames 41 at most. With `VDP2_DELAY 2`: 0. A film using it must hold
+    still before, between and after its moves.
+  - **Holes:** `GLITCH_CHECK` (src/features.h) makes VDP2's back colour magenta; run_e2e.ps1
+    builds it for a film with `holes_from`. It shows (the loading screen is all magenta) and none
+    was found in play at 0020; the check hasn't yet met a real hole. Worth adding to the films of
+    the open "Graphics wrong turning close to a tall edge".
+  - Found on the way: with `-ss.correct_aspect` on, Mednafen recorded frames 10560 pixels wide at
+    ~12 fps (off when recording now), and `wait_up` took the magenta loading screen for the
+    corridor (it now wants a dark screen). `boot_at` films that wait_up still poll the full 44 s:
+    a city boot is never the corridor's red.
+
+### SG-7: measure pixels, not polygons; try a smaller guard band (S)
+
+- **Why:** cause 2. XL2: "the quad count isn't as important as the amount of pixels written";
+  a distorted quad can nearly double them. We've never called `jo_3d_set_guard_band`, so jo's
+  default (512 pixels) applies: VDP1 walks up to 512 pixels off each edge of the screen.
+- **How:** `jo_profile_count_pixels(true)` in debug builds and a `px` figure on the debug line
+  (it costs ~2 µs a polygon: debug only). Then try the guard band at 64 and 128 for the city's
+  flat sides: jo cuts at the screen's edge what goes further, and a flat polygon has no texture
+  to distort. Textured things (the skyline ring, wall tiles) keep the wide band.
+- **Check:** `hub.steps` (south and east), `slow_0650.steps`: `px`, `vdp1 busy`, cpu, before and
+  after. The CPU pays for the cuts, so it can lose.
+- **Done when:** the figures are in this row, and the band is set to whichever wins.
+- **Outcome (2026-11-15).** Built: a profiler-build line of VDP1's pixels by part (row 9, `px`;
+  `perf_px_mark` in utils/perf.h: jo's running per-CPU estimate split at marks between the draw
+  groups, the slave's share on its own; nothing in a normal build). On `roof_cut_run.steps`
+  (0660 running west to 0640, where the user saw the roof cut off), the worst frame: ~550-600k
+  pixels, of them the towers and floor 443k (master) + 157k (slave), the arena's walls 69k, the
+  landmarks 23k, the drone 3k. **The towers are ~85%:** that's the city's own work (the "Slow in
+  the city" row, SG-12), not something to leave out. **Guard band 64: not taken.** VDP1 busy 73%
+  to 71%: our own cuts already keep the on-foot walls to the screen (`level_view_begin`), so
+  VDP1 isn't walking far off it. The textured parts keep jo's default.
+
+### SG-8: a draw budget for whatever is optional (S)
+
+- **Why:** cause 2, and what jo's sample (`plan_draw`, guards.c) and Mimas Engine both ended up
+  with. Even with SG-2, a frame that's over budget is a slow frame.
+- **How:** a pure module, `game/draw_budget.h`, unit-tested. Before drawing, the things the
+  frame can do without ask for room in a fixed order of importance, nearest first: the drone
+  (near model, far model, none), your body in the mirror (36, 11 polygons, none), the
+  landmarks, the A-bus, the scan's lit roofs, the skyline's far strips. Room is what last frame
+  left: `jo_vdp1_command_max() - jo_vdp1_command_count()`, and VDP1's time (`perf_vdp1`, or
+  `jo_profile_vdp1_last()`) against a line set below a frame. Rank by distance, never by size
+  on screen, and step back up only after a second of headroom, so nothing flickers between two
+  states (both lessons are Mimas Engine's).
+- **Never optional:** the roof you stand on, walls within reach, the HUD. Keep a reserve of
+  commands for them, as the sample keeps 56.
+- **Done when:** the unit tests cover the order and the hysteresis, and SG-5's red views are
+  green or name what was dropped.
+- **Outcome (2026-11-15): done, smaller than planned.** `game/draw_budget.h` (7 unit tests):
+  on a frame VDP1 left unfinished, the next leaves out one more part, farthest first: the
+  landmarks (`level_sky_draw`), then the arena's walls while on foot in the city. A part comes
+  back after 60 finished frames; if that tips VDP1 over within 60 frames, the wait doubles (to
+  ~17 s at most), and halves again when a return holds. Never left out: the towers, your body,
+  the drone (you play against it), the HUD. Why only two parts: SG-7 found the rest a few % of
+  VDP1. Why by misses, not by room: a normal build has no per-frame reading of VDP1's time
+  (`busy` says which chip finished last, not room; jo's `jo_profile_vdp1_last` is profiler-only),
+  so it learns from the frames it loses. `DRAW_BUDGET` in features.h turns it off for films;
+  the debug line shows `bg` (parts out) and `over N/T` (this second / since boot).
+  **Measured, `roof_cut_run.steps`, same moves:** unfinished frames over the run 16 without, 3
+  with (late 274 to 239). The 3 are the misses it reacts to. Benchmark: green, unchanged, `bg0`
+  in every view. Not done: a benchmark view that runs (its views stand still and read 0 here),
+  and the city's own pixels (SG-12).
+  **Fixed the same day:** "landmarks" first left out all of `level_sky_draw`, the skyline ring
+  behind the towers with it: on roofs the sky's pink horizon showed where the city should be,
+  for a second or more after each miss (the user). Now only the landmarks and the A-bus are left
+  out; the skyline and the CD block's disc always draw. Checked with the budget forced to leave
+  everything out (`roof_turn.steps` at 0B40): the skyline stays.
+
+**2026-11-15, three of the user's reports, fixed (uncommitted):**
+- *The pyramid gone at the CD lift:* the budget's second part, "the arena", is the pyramid on foot.
+  Taken out of the budget (`BUDGET_PARTS` 1); film `hub_pyramid.steps`.
+- *The A-bus looked reachable:* it now starts `ABUS_GAP` (900) out from Backup RAM's hub, past a gap
+  no jump clears (level.c, abus_add). Set it to 0 when Backup RAM opens.
+- *The circuit floor unfogged starting to look up:* the fog's tables now switch with jo's shown
+  frame + 1 (`game/floor_fade.h` floor_fade_tables, `FOG_LEAD`), not 2 frames after a rebuild.
+  `flash_look_up.steps` read 6-8 stray frames at + 0 and 0 at + 1; why + 1 isn't known: check on a
+  Saturn (HARDWARE_TESTS.md).
+
+### SG-9: a full-screen wall hides what's behind it (S)
+
+- **Why:** close to a tall wall VDP1 still fills the city behind it ("Graphics wrong turning
+  close to a tall edge", open since 2026-11-09). jo's cells do this for a room's wall:
+  "up to 50 ms against a wall".
+- **How:** when one near face covers the whole screen (its four corners outside it, the eye in
+  front), call `jo_3d_set_depth_limit(its furthest corner)` for the frame, and `-1` otherwise.
+  We already work out the hiders (`game/skyline.h`, `game/occluder.h`): this is one more test
+  on the nearest.
+- **Done when:** a film turning slowly within 40 of a guard page's side reads 60 fps and
+  `over` 0 where it reads 30 and `over` 30 today.
+
+### SG-10: the mirror clipped by VDP1's window (M)
+
+- **Why:** the mirror's pass is 26-31% of a frame of CPU, much of it cutting the reflected
+  corridor to the glass's four edges. jo draws a mirror in a far window clipped by VDP1 to the
+  glass's rectangle on screen (`jo_3d_window`, `jo_3d_window_clip`, `JO_3D_FAR_WINDOW`;
+  `jo_cells_draw_mirror` in `cell.c` is the worked example).
+- **How:** the glass's screen rectangle as the far window, clipping on; the reflected pass
+  selects it, and cuts only against the screen and the near plane. The glass is upright and the
+  view doesn't roll, so its outline is close to a rectangle; where it isn't (looking up, close),
+  keep the cut for the sloping edge.
+- **Check:** `mirror_sky.steps`, `mirror_slow.steps`, `mirror_look_angle.steps`: `mi`, cpu,
+  `vdp1 busy`, and nothing reflected outside the glass.
+- **Done when:** `mi` is lower with the same picture, or the row says why it isn't.
+
+### SG-11: the level as data, a spike on the corridor (S)
+
+- **Why:** cause 3. Before deciding how to describe our levels, find out how much of jo's way
+  fits. The corridor, yard and stairs are rooms with a doorway: jo's case. The city is open
+  roofs: not jo's case (its cells are insides; the outside is one rectangle seen through doors).
+- **How:** read `Documentation/level_format.md`, `jo/cell.h`, `jo/level.h`, and the sample's
+  `tools/make_assets.py`. Write the corridor by hand as two or three cells and portals in a
+  scratch build and draw it with `jo_cells_draw`. Don't wire it into the game.
+- **Answer these in this row:** can a cell's mesh keep our look (the fog tables, the outlined
+  tiles, the cut walls)? What do the VDP2 floor and sky need (the sample's rooms cover the
+  screen; ours can't, see "Not for us: an airtight level")? What does a frame cost against
+  today's `stairs_sky.steps`? How much of `level.c` would go?
+- **Done when:** those four answers are written here, with a recommendation for SG-12.
+
+### SG-12: the level as data, the corridor then the city (L)
+
+- **Why:** cause 3. This is what makes the next level a matter of building it, not tuning it.
+- **How, the corridor:** as SG-11 recommends: jo's cells, or our own table in their shape.
+- **How, the city:** not portals. Generalise what already works there, the tables worked out
+  ahead (`city_seen`, `tools/make_city_seen.py`): for each place you can stand (a roof's
+  quarter), the tool writes what can be seen from it (towers, the pyramid, landmarks, the
+  corridor through its doorway) and which model of each. In the game, "where am I" is one
+  lookup, and the meshes for a place are built when you enter it, not every frame. `city_deep`,
+  the doorway's band and the per-view cuts become rows of that table; the tool's own unit test
+  (as `test_city_seen.c`: worked out again with the game's code, bit for bit) proves each one.
+- **Rule for every step:** SG-5's views stay green, and one special case leaves `level.c` for
+  each row the table gains.
+- **Done when:** adding a tower, or a second district, is a change to the plan
+  (`tools/work_ram_plan.py`) and a rebuild of the tables, with no new code in `level.c`.
+
+### SG-U: for jo-engine upstream (S each; each needs your go-ahead before it's sent)
+
+Per CLAUDE.md: check for an existing issue, reproduce on the latest release, send measurements.
+These replace writing our own VDP1 command writer (below): if jo's path is what's short, jo is
+where it gets fixed.
+
+| # | What | Kind | First find out |
+|---|---|---|---|
+| U-1 | A near polygon partly off screen drawn with its first corner on screen. XL2 (HELLSLAVE thread, Dec 2019): VDP1's pre-clipping only skips whole lines; turning the quad so corner A is inside lets VDP1 stop early, and it cured "15 fps near walls". jo already turns pre-clipping off for polygons inside the screen (`jo_3d_pre_clipping`, 3d.c), but nothing in 3d.c reorders corners | Issue, offer a PR | Does jo's guard band cut already make it moot? Measure a wall filling the screen at a slant, corners as they are and turned by hand (flat polygons: free to turn) |
+| U-2 | How far VDP1 got: jo's budget is commands (`jo_vdp1_command_count`), but an unfinished frame is about pixels. Mimas Engine reads VDP1's command address register (COPR; the "finished" flag, CEF, isn't reliable on a console) and submits only what was finished last frame | Issue | Our `game/vdp1_gauge.h` reads CEF and BEF (EDSR) and LOPR, not COPR: so our own `vdp1 over` and `vdp1 busy` may misread on a console. Check them there first ([HARDWARE_TESTS.md](HARDWARE_TESTS.md)), move the gauge to COPR if so, then say what we found and ask whether jo wants it as an API |
+| U-3 | The frame VDP1 shows next, for the program's VDP2: make `__jo_vdp1_frame_tag()` and `__jo_vdp1_displayed_frame_changed()` public (glows use them), and either expose the tag taken at this VBlank or let `jo_background_3d_plane_a_draw()` / `_b_draw()` keep their rotation parameters with the frame's tag and write them when it's shown, as glows do. Our measure: `look_going_up.steps`, and SG-4's outcome | Issue, offer a PR | Sent as #111; fixed in jo `5b1dbac` and merged (SG-4) |
+| U-4 | Glows beside a rotation screen (the "Glow that's cheap" row: jo's glows take the VRAM bank our RBG0 floor is in) | Issue | As that row says |
+| U-5 | Follow up #107: say what SG-2 measured with the VBlank erase, and thank him | Comment | SG-2's figures (done): the erase works, but the manual change loses VDP1's drawing time in the VBlank, so at 60 fps it's slower for us than 1-cycle mode. Needs your go-ahead |
+| U-6 | jo's late count misses a frame of 1 to 2 vblanks (SG-3's outcome): `__jo_core_synch()` doesn't wait when it's past its vblank, so the next frame starts mid-field and both count one vblank. A picture's shown twice; `jo_core_get_late_frame_count()` and `jo_core_get_fps()` say 60 | Issue, offer a PR | Reproduce in a jo sample with a busy loop of ~1.2 fields. Needs your go-ahead |
+
+### Not planned: our own VDP1 command writer (XL)
+
+Writing the VDP1 command table ourselves, round jo's mesh path, is the one size not taken on. jo's
+own path has gained most of what we'd write (the cuts, the windows, the two CPUs sharing, the
+VBlank erase), and a fork of it breaks CLAUDE.md's rule. If 0640 is still over a frame after
+SG-1 to SG-12, the evidence goes upstream as an SG-U row first.
+
+### A decision that's yours, not a task
+
+jo's sample runs at 30 fps (`JO_FRAMERATE = 2`), as did most of the Saturn's 3D games and every
+project in the threads read. CLAUDE.md asks for "above 30 fps always", and the game is tuned at
+60. If the city can't hold 60 after this section, 60 in the arena and a steady 30 on foot is the
+fallback. It isn't proposed here.
+
 ## Now (being worked on)
 
 | Item | Status | Effort |
@@ -49,26 +443,46 @@ Items to check on the real console are gathered in [HARDWARE_TESTS.md](HARDWARE_
 | Stutter that the FPS counter doesn't show | `late` counter added (debug line 11). Long trails did drop to 32 fps; now 60. If you see stutter and `late` doesn't move, it's the emulator's pacing on the PC: **retest** | M |
 | Docker E2E still waits ~15 s for the BIOS | Mednafen has no emulated BIOS and fast-forward can't go faster in the container | S |
 
+## Next: requested 2026-11-14
+
+| Item | Status | Effort |
+|---|---|---|
+| START a proper pause, with a menu of switches (L next, R change), and a switch for the debug text | **Done, uncommitted** (2026-11-14). START pauses: the game frozen, the sound stopped, and a menu in terminal green on a dark panel (`draw_pause_menu`, main.c; `hud_draw_panel`). Its switches live in `src/game/settings.c` (unit-tested: `test_settings.c`), each starting as `features.h` has it: debug text (`SHOW_DEBUG_TEXT`, new), flight text, sound effects (the sounds are now always loaded), cycle shape (the model's rebuilt), city sides, no termination (Z too). Sky and the two fogs set the VDPs up at boot, so they stay build switches. The paused camera stays: the menu steps aside while it flies (d-pad), L or R brings it back; its height moved from L/R to B + up/down, pitch to C + up/down (`level_bounds.steps` changed to match). Filmed in `pause_menu.steps`; `pause_sound.steps` now also turns sound off from the menu (silent through a turn) | S |
+| The city plan and the game: mirrored | **Done, uncommitted** (2026-11-14): the plan's redrawn as the game has it (draft 5, `tools/work_ram_plan.py` mirrors the drawing only), each tower labelled with its address (row 0000-0B00, column 0-F: `0500` the entry, `0010` the CD block), and the debug text's row 8 shows `at 0510`, the tower you stand on, to name where a frame was slow. Was: `docs/images/work_ram_plan.svg` (draft 4) now outlines what's built (columns 0-6, rows 0-11), dims the rest and shows the drone as built. The game's city is the plan's own table, but mirrored left to right: "out" from the corridor runs to the world's west (+x) while the plan draws it east, so walking out, the plan's south (Backup RAM) is on your left. Options: draw the plan as the game has it; or flip the game's across (city_tower_corners, city_seen tables, the city films' turns); or keep both with the note. `work_ram_plan.png` beside it is draft 2, stale | S |
+| The user's seven (2026-11-14) | **Done, uncommitted**, but for the slowdowns (below). (1) The A-bus from Backup RAM's hub (0B30) out to the cartridge on the horizon: a slate strip with a green packet sliding along it (level.c, `abus_add`; the cartridge slot is on the SCU's A-bus); it costs the approach 1-5 fps (54-55 with it, 56-60 without). (2) 0020 and 0120 level with the CD block's hub and 0110 (`HEIGHTS` in tools/work_ram_plan.py, the table and city_seen regenerated), so you can jump back; `the_hub_jumps_back_across_the_street`. (4) The rotors' dashes are strips now, not lines. (5) The lift's beam, from inside the corridor, starts at its walls' top (not caught on film: a turn round the yard showed none). (6) The glass's streaks slide down it as you near it (`mirror_glints`: half your distance, round every 1024). (7) The crash's slew towards the mirror was tried and taken out again (the user: "looks odd"). Films: `yard_beam.steps`, `slow_0650.steps`, `slow_0B40.steps`. New: `BOOT_AT_TOWER` (features.h) and a film's `boot_at 0650` line | M |
+| Pink horizon after looking up (on foot) | **Fixed, uncommitted** (2026-11-14, second go). Caught on film (`look_going_up.steps`, shots every 0.05 s): one frame, the first of a look up or down, its biggest step. VDP2 (the floor and sky planes, and the fog's per-row table) shows what's set two frames before VDP1 shows its picture (the slave sorts and copies a frame's commands to VDP1 during the next). Now VDP2 is drawn with the camera of two frames ago (view.c, `view_vdp2_frame`, `VDP2_DELAY`), and a fog rebuild waits as long (a ring); one frame of delay wasn't enough. Riding (`turns.steps`) still lines up. The first try, below, stays (a still view always gets a table of its own). Was: The user's screenshot at 0020: the sky's pink horizon band under the city's skyline after looking up and letting go, those rows unfogged, as if the floor fade's table had the horizon lower. Not reproduced (`look_up_0020.steps` booted there; `crash_look_up.steps` after the crash). The table was rebuilt only in steps while the view moved and once more if the tilt landed on exactly 0: now also as soon as the view holds still for a frame, if it was built for any other tilt or height (view.c, `fog_last_tilt`) | S |
+| Walking slowly at the mirror: glitches | **Fixed, uncommitted** (2026-11-14, `mirror_slow.steps`). From ~400 out the frame fell to 30-44 fps and VDP1 didn't finish (a black frame now and then). Two causes: the reflection was cut to the glass's edges, which near it are far off the screen (VDP1 walking unseen pixels, corners past its 11-bit range): now each side's cut at the tighter of the glass's edge and the screen's (`level_mirror_begin`). And the reflection's depth, 2300 always: now three times your distance from the glass, from 700 (`mirror_depth`). VDP1 now finishes every frame up to the glass; the last ~250 run 49-56 fps (the mirror ~50% of a frame, CPU) | S |
+| Back from the CD block to Backup RAM (0130 to 0230) | **Fixed, uncommitted** (2026-11-14, second round). Every street on the way down is a jump down, and a jump never landed higher than it left, so none could be jumped the other way. Now a jump that goes into the side of a roof whose top's in reach (`WALKER_CLIMB`, 100) catches its edge and climbs up (walker.c, `catch_ledge`: Mirror's Edge's catch). Only a ledge higher than you left: a gap too far still holds you at its lip. Tests: `the_way_there_and_back_is_runnable` runs the whole route as the walker, to the CD block and back to Backup RAM's hub; `a_jump_catches_a_ledge_above` | S |
+| Falling off into a street ends the run | **Done, uncommitted** (2026-11-14). In the air with nothing under you, 300 below where you fell from (`walker_fell_off`): the terminal screen ("SH-2 process terminated..."), then Work RAM again from where you got up after the crash, the drone back at its first stop (input.c, `restart_on_foot`). "No termination" in the pause menu: straight back, no screen. Filmed with a build where any drop over 40 counted (`fall_restart.steps`). How a jump fell into a street isn't known yet: a step off a lip, sideways, past the roof it checked is the likeliest | S |
+| The mirror's streaks: diagonal, as a reflection moves | **Done, uncommitted** (2026-11-14). Each band now drifts 3/8 across for each unit it moves (level.c, `mirror_glints`): ~40 degrees, not ~25. Kept on the glass | S |
+| Looking up at the mirror: artefacts | **Not reproduced** (2026-11-14, `mirror_look_up.steps`, `mirror_look_moving.steps`, `mirror_look_angle.steps`): far, half way, close, still, moving, strafing and turning. What's seen: the reflected corridor's black walls, and above them the dark far wall with the CD block's disc on it (as designed); no spikes or tears, two frames of 145-184%. Waiting on a screenshot from the user | ? |
+| The drone, lighter far off | **Done, uncommitted** (2026-11-14). Its cost is mostly points (jo turns and projects every point in software): past 1200, a model of 42 points and 33 polygons (square rotors, the rim their outline, the dash a line), not 98 and 61. `dm` 7% where it was 10-14 (`drone.steps`) | S |
+| The turn's whoosh, subtler | **Done, uncommitted** (2026-11-14). Half as loud, its sweep's top 1500 Hz (was 2600), less resonance, a softer swell in (scripts/make_sounds.py) | S |
+| Slow in the city: 0650-0630 and 0B40-0940 | **2026-11-15, what the roof you stand on hides** (`game/floor_hides.h`, 7 unit tests incl. 4000 random soundness cases; the method for every level in [LEVELS.md](LEVELS.md)): the towers' sides now stop at the cone your roof hides, per direction (the old rule used the nearest edge's distance every way, so near an edge it hid nothing), and a tower wholly in it isn't drawn. At 0650 the worst second's pixels 574k to 435k (the slave's share 138k to 38k); standing in 0660's middle 184k. Mid-jump nothing hides (you're over the street, and its depths really show): those are now the worst frames, ~570k, and the draw budget is what catches them. Benchmark green; `flash_look_up.steps` clean. **2026-11-15, the roof cut off** (the user's gif at 0660: the roof underfoot drawn only in part, fps 30, `vdp1 over 30`): VDP1 runs out of time, and the roof underfoot, nearest, is sent last. Film `roof_cut_run.steps` (0660 running west to 0640): `over 14` busy 83% at 0650, `over 3` at 0640, cpu peaks ~200%; standing in a roof's middle (the benchmark's views) reads `over 0`, so the benchmark misses it. A 64-pixel guard band (SG-7's idea) changed VDP1 73% to 71%: our own cuts already keep the on-foot walls to the screen, so not that. **Measured, partly fixed; now in the benchmark** (2026-11-15: `bench.steps` stood on 0650 facing back, 141 of 192 frames over budget, 0640 1; by jo's late count, the pictures really repeated: 0650 18 of 192, 0640 0; the debug line's `late` read 0 here before SG-3's fix. Both views are marked known in `src/game/bench.c`: take the marks off as this row's done). Before that: (2026-11-14, `slow_0650.steps`, `slow_0B40.steps`). Second round (the user: "0650 to 0640 to 0630 cause FPS drop to 30"): measured 51-57 fps, peaks 113-132% (a frame now and then takes two vblanks: the 30 fps stutter). Within `sd` (37-46%): the skyline 5-6%, the towers' sides and tops 22-26% (the hiding trim and the cuts ~7% each), the per-tower tests ~15%: spread, no one hot spot. The drone's far model took 3-5% off; the rest needs the city's own work cut (its own job). Not things hidden behind the city: the city's own tower sides are the cost (`sd` 43 at 0650, 66-68 at 0A40, inside `tp` 52-91), with the arena 8-11 and the walker 12-13: 52-54 fps at 0650-0640, 41-54 up column 4. Fixed: the drone's model isn't transformed when it's out of view or behind a tower (`level_box_seen`: dm 9-14 to 0 there), and the corridor's boxes aren't looked at from a roof the doorway can't see (`city_seen_doorway`). To do: the sides' cost there (the films are the benchmark), and the arena's 10% while deep in the city | M **2026-11-15, a wedge cut out of a side** (the user, 0650, `gap_run.steps`): a side standing on a lower roof had its foot raised end by end and joined straight, cutting across where its own foot and the hidden height cross. `floor_hides_line` now takes a limit only as a whole line above the foot at both ends (the screen-edge limits too); 2 new unit tests catch the old way. Shots match `FLOOR_HIDES 0`; roof_cut_run over 5 (was 3), benchmark passes. |
+| The drone, higher, its scan angled down at the roofs | **Done, uncommitted** (2026-11-14, the user's ask). Its stops 320 / 170 / 60 (300-400 over the roofs it watches). The scan's a beam from the sensor down to a line on the roofs that sweeps out from 200 to 1400 ahead in 2 s, then flies back (a CRT's); the roofs under the line are lit cyan (red once it has you), but not one in a nearer tower's shadow (`drone_scan_lit`), added in level.c straight after each roof, chained to it (VDP1 has no depth). Seen: the line under you and nothing between its sensor and your eye. Right under its nose it's blind (the fan's 45 degrees). Rotors: a thin tyre (25-29) round a big black disc, the grey hub and the white dash flashing, filmed from below. Cost: `ds` 4-7 (was 11-16), the approach 57-60 fps (was 32-52), the entry's edge 54-56 | M |
+| A player's pause menu (resume, restart, quit), apart from the debug one | When the game has more than one mode to leave for: the debug switches then go behind a button combination, or a debug build | S |
+| The feature switches in one file, a switch for the sound effects, silent when paused | **Done, uncommitted** (2026-11-14). `src/features.h` holds every build switch, with its explanation: boot (`BOOT_SCENE`, `BOOT_ROUND`, `BOOT_ON_FOOT`, `BOOT_AT_HUB`, from input.c), what's drawn (`SHOW_SKY`, `FLOOR_FOG`, `WALL_TRAIL_FOG`, `CYCLE_SHAPE` with its shapes, from main.c; `CITY_SIDES_TO_BOARD`, from level.c), sound (`SFX_ON`, new: false loads and plays nothing) and debug (`SHOW_FLIGHT_DEBUG`). The film scripts (run.sh, run_e2e.ps1, film_round.ps1) read and set it there. Paused (START, the debug camera: the only pause there is) every sound stops at once and nothing plays (`sound_pause`, sound.h); unpaused, the hum comes back at the pitch it had. Recorded in `pause_sound.steps`: hum at 366 Hz, silent the 3 s paused, back at 366 Hz | S |
+
 ## Next: requested 2026-11-13
 
 In the order given; the order isn't a priority.
 
 | Item | Status | Effort |
 |---|---|---|
-| The cycle's sound: an electric car's hum | Requested: the cycle's engine sound as an electric car's hum, whine and "sing" (rising with speed), in place of the current noise | M |
-| A whoosh on the cycle's turns | Requested: a whoosh sound as the cycle turns | S |
-| Strafing on foot, with its own motion | Requested: a sideways step for the walker, with the body's strafe motion (the joints, as walking's) | M |
-| The inner city's floor and frame rate, surrounded by towers | Bug: in the city, with towers all round, the floor glitches and the frame rate drops. Needs a film to pin down where | M |
-| The mirror's landmarks: only the CD-ROM | Bug: the mirror shows the video output landmark; it should show only the CD-ROM's | S |
-| The pyramid and the sky city cut off from the lift's edge | Bug: up close to the lift's edge nearest the pyramid, the pyramid's walls and the sky city clip out. Kin to "The pyramid's foot cut off from the lift" (above): look again at `PYRAMID_BELOW_EYE` and the city's near cut there | S-M |
-| Round 4: three more bots, one a quadrant | Requested: in the arena's round 4, three other bots, one in each of the other quadrants | M |
-| Round 5: the watchman restarts a bot's node | Requested: in round 5, the watchman restarts a bot's node after it dies, forcing the player into the wall | M |
-| No floor in the yard, looking back from the lift | Bug: at the lift, looking back up at the yard, the yard has no floor | S-M |
-| The sky city's pink horizon seeps through after looking up | Bug: after looking up (the sky city's black), the pink horizon shows through on coming back down | S |
-| Glow that's cheap on the Saturn | To try: glow effects that cost little (half-transparent or additive halos on VDP1, a VDP2 colour-calculation layer, a sprite's gouraud fade) and measure each | M |
-| No HUD map on foot | Requested: remove the HUD map while on foot | S |
-| The backup RAM landmark: its own shape | Requested: wider and less tall, and looking different from the video output landmark | S-M |
-| The sound landmark in front of the sky, from the lift | Bug: going up the lift, the sound landmark draws in front of the background sky (a sort or cut order between the landmark and the sky city) | S-M |
+| The cycle's sound: an electric car's hum | **Done, uncommitted** (2026-11-14, second version). The first try, a motor's whine (600 → 840 Hz on a boost), was "too high pitch and annoying" (the user), who then gave a recording to match: Seger's AVAS simulation (youtu.be/1h0f1hhm97U). Measured as it played (the page's own audio analyser): a soft chord, its root 334 Hz stood still gliding to 398 Hz at speed, with quieter tones at 2/3, 3/4, 9/8, 4/3, 3/2, 2 and 9/4 of it and a faint one at ~5.2, their balance drifting. `HUM.PCM` is that chord as a 1.49 s loop (scripts/make_sounds.py, `hum`: each tone two or three sines a hair apart, beating at its own pace; 32 KB at 11025 Hz), played round and round on the last channel while you ride (`sound_engine`, sound.c), its rate 10050 Hz setting off (root 334), 11025 at cruise (366), 12000 at full boost (398). From the game's recording (`engine_sound.steps`) at full boost: 266 299 398 449 530 599 797 Hz, the clip's 264 299 398 445 527 598 791; no clicks. Silent in the opening's loop, crashed and on foot. To judge by ear | M |
+| A whoosh on the cycle's turns | **Done, uncommitted** (2026-11-13). `WHOOSH.PCM` (scripts/make_sounds.py, `whoosh`: noise through a band-pass swept 500 → 2600 → 500 Hz, resonant, 0.32 s, 14 KB) played on each of your turns, panned to that side (-9 dB the other: `WHOOSH_PAN`, sound.c). Not while the loop rides the cycle in the intro: it turns every half second and the whooshes ran into a hiss. Recorded in `turn_sounds.steps`: left turn left 2066 / right 775, the right turn the reverse. **Found doing it:** since the move to jo 2026 every sound played 1.39x fast (sound.c's `sample_rate` was SGL's pitch word, jo 2026 takes Hz): fixed, the hits back to their length (HIT1 0.45 s in the recording → 0.65) | S |
+| Strafing on foot, with its own motion | **Done, uncommitted** (2026-11-14). The walker already stepped sideways (L / R); the body now shows it (`body_state.side`, game/body.c): the walk's step turned a quarter, the leading foot stepping out and the trailing one closing up (4 units each way, hips 5 apart: the feet never cross), the hips trailing the head by 3, the arms up a little in a guard. Blends with a walk into a diagonal step. Unit tests `side_stepping_shuffles_the_feet`, `a_side_step_ends_stood_even`; film `strafe.steps` (its walk to the glass ends at an angle, 250 short: the body's small in it) | M |
+| The inner city's floor and frame rate, surrounded by towers | **Probably fixed with the row below, to retest** (2026-11-14): the doorway's band ran right across the city, 4500 out from the arena's wall, and crossing it anywhere switched the city's board, towers and skyline off for as long as you were in it. If it still glitches, say where (near which landmark, which way you face): a film can find it | M |
+| The mirror's landmarks: only the CD-ROM | **Fixed, uncommitted** (2026-11-13). The reflected corridor has openings at the side, and the mirror's dark back wall (`mirror_far_wall`, level.c) was only the corridor's width: through the openings the real world behind the glass showed, the sky's pink horizon and the video output's landmark. The wall's now 6000 wider either side and 12000 high: cut to the glass, it's still one polygon. `mirror_sky.steps`, still 59-60 fps | S |
+| The pyramid and the sky city cut off from the lift's edge | **Fixed, uncommitted** (2026-11-14). Not the pyramid's cut: "in the doorway" (neither in the corridor nor out in the city: `grey_portal_set`, level.c) was judged only by how far out you are, a band 40 either side of the corridor's end right across the city. The roofs by the hub reach it, 2900 to the side: on their edge the board, the towers and the skyline all switched off, the pyramid's flat slope over everything. Off to the side of the corridor's width you're now out in the city. Found with a debug line in film `hub_edge.steps` (new) | S-M |
+| Round 4: three more bots, one a quadrant | **Done, uncommitted** (2026-11-14). Round 4 (the four rooms) has three rivals (was one), each starting at the middle of one of the other three rooms and setting off through a door to the next room round, as you do (`arena_rival_start`, game/arena.h; `round_rivals`, rounds.c). After that they ride as bots do: the first turned for your room within a few frames. Unit test `the_rooms_rivals_have_a_room_each`; film `film_round.ps1 -Round 4` | M |
+| Round 5: the watchman restarts a bot's node | **Done, uncommitted** (2026-11-14). The last round can't be won: its rival, killed, is restarted 1.5 s later (its trail's sunk by then), every time (`ROUND_RESTARTS`, game/rounds.h; `restart_rival`, input.c: back in across the arena's middle from you, the status line "Watchdog: process restarted"). The walls go on closing in: the only way out is the flicker. Round 5 no longer goes round to round 1. Unit tests `the_last_rounds_rival_is_restarted`, `the_last_round_doesnt_end`; film `film_round.ps1 -Round 5 -Steps restart.steps`. Not built: the Watchdog herding you to the flicker (STORY.md) | M |
+| No floor in the yard, looking back from the lift | **Fixed, uncommitted** (2026-11-14). From the city the corridor's floor is cut to the doorway (its walls hide the rest: `portal.floor_planes`); from up the lift you look in over the walls, and the floor went while the yard's boxes stayed, the city's board showing under them. Above the walls' top (`CORRIDOR_TOP_ON_FOOT`) the doorway now hides nothing (`grey_portal_set`, level.c). Film `lift_yard.steps` (new). Looking straight down at it from the lift is 58 fps, cpu 101% (123 polygons): to watch | S-M |
+| The sky city's pink horizon seeps through after looking up | **Not reproduced; maybe fixed with the doorway's band (below), to retest** (2026-11-14). Filmed looking up and back on the hub's roof (`look_up_return.steps`): nothing seeps on the way down; facing south there's a steady sliver of pink between the disc's underside and the skyline's tops. But crossing the doorway's band anywhere in the city switched the skyline ring off, and the sky's pink horizon showed where it had been: if you'd walked back ("upon return") across that line, that's this. If it's still there, say where you stand and which way you face | S |
+| Glow that's cheap on the Saturn | **Looked into, not built** (2026-11-14). jo-engine 2026 has glows (`jo/glow.h`: a soft disc added by VDP2, NBG2 / NBG3 with colour calculation "add", no CPU a pixel, 2 on screen), but they take VDP2's VRAM bank B0 and hide the rotation screen while they're on: that's our floor (RBG0), so not as it is. To try, cheapest first, each filmed with `vdp1 busy` before and after: (1) a halo as a screen-door (mesh) quad round a light, as the HUD map's glass: the only VDP1 blend that shows over the VDP2 floor and sky; a checkerboard on an emulator, a blur on a TV; (2) the same quad half-transparent with a Gouraud fade to nothing at its corners, where it's only ever over VDP1 polygons (a tower's lit edge, the lift's beam against the towers); (3) VDP2's colour calculation on the sprite layer, so chosen VDP1 pixels are added to the floor and sky under them: the real thing, but it needs palette sprites and a look at what jo sets up; (4) asking upstream whether jo's glows could run beside a rotation screen (an issue, with what we measured: needs your go-ahead) | M |
+| No HUD map on foot | **Done, uncommitted** (2026-11-13). On foot (`view_is_on_foot`, main.c) neither the map nor the boost gauge is drawn: the gauge is the map's frame, and alone it was an empty amber ring, with no boost on foot. Filmed in `corridor_still.steps` | S |
+| The backup RAM landmark: its own shape | **Done, uncommitted** (2026-11-14). It was a box in a box with a lit panel, as the video output's screen. Now a cartridge seen side on (game/landmarks.c): 9200 wide (was 6400), 6800 high (was 7400), its body with a narrower grip on top, two runs of gold contacts either side of the key, the label a low green strip (still out one second in eight). On a tall slot: from the arena the skyline hides everything under ~4100, and a first try 4200 high at the ground didn't show at all. Film `sky_arena.steps` | S-M |
+| The sound landmark in front of the sky, from the lift | **Fixed, uncommitted** (2026-11-13). Going up the lift the city's skyline ring's foot rises with you (400 under your eye), and under it nothing hid what's further: the sound chip's capacitors and their board showed under the skyline, stood on the black. A landmark beyond the ring is now cut by one more plane, through your eye and the foot of the ring's strip it's seen over (`landmark_ring_cut`, level.c): below that line it's behind the city. Film `lift_sound.steps` (new); `hub.steps` unchanged | S-M |
 
 ## From the Tomb Raider devlog: adjustments to try, most worth it first (2026-11-11)
 
@@ -160,7 +574,8 @@ In build order: the design doc has the detail and the numbers.
 | The city's entry blocks | **Done** (2026-11-03): `game/city.h`, the floor plan (draft 3, rescaled) round the entry: 21 towers, the corridor's far end open onto the entry roof, a jump over the first street, drops through the next blocks. Unit tests (`test_city.c`), film `city.steps` (50-60 fps). Still to do: the corridor's insides seen back through the doorway from outside (not drawn); the ground far below is white (the post-breach floor, the corridor's seam colour); no lift or hub in the slice; the rest of the plan; the far city on VDP2 | M |
 | Culling plan ([CULLING.md](CULLING.md)) | Measure each part of the level's drawing, then cells and portals worked out ahead by the plan tool, a grid for the walker's roofs, the far city on VDP2. Start with the measuring: the corridor's start view fell to 30 fps with the city in (CPU 99%, cause not yet found) | L |
 | Towers drawn properly | Boxes with the corridor's near-wall cuts, fog, the grid far below on VDP2. Started: the entry blocks are grey boxes with tops shaded by height | M |
-| The watchdog drone's route and sight | Rides tower faces between floors, scans a floor with a sheet of light, seen if no tower's in the way | M |
+| The watchdog drone's route and sight | **Done, uncommitted** (2026-11-14). `game/drone.c` (pure, `test_drone.c`, plus two in `test_city.c`): a route of stops (place, heading, wait) flown at 6 a frame an axis, turning as it goes; the scan's sheet sweeps down its floor like a CRT's scanline (64 frames, 256 high), and sees you when it passes your eye, you're in its fan (45 degrees either side, 1500 out) and no tower's in the way (16 points along the line, against the towers as boxes). The sheet's rays stop at the first tower over it, so its light doesn't go through towers, as its sight doesn't (`drone_scan_ends`). Its first route: the street between the plan's columns 1 and 2, three floors down beside the guard pages, facing back over the way down (`city_drone_route`). Drawn (`drone_draw.c`): a Tron light cycle that flies, a dark hull with red-orange glowing lines, four rotors that are light cycle wheels lying flat (white lines stepping round a dark red ring, the blades a mesh blur), 53 polygons, 7 m across; the sheet in VDP1 mesh (see-through: VDP1 half-transparency is solid over VDP2, SKILLS.md) with white edges and the rail it rides, red when it has you. Seen only shows for now. Films `drone.steps`, `drone_seen.steps`. Its cost is on the debug readout's row 7 (`dr dm ds`) | M |
+| The drone's cost | It's ~15% of a frame (model ~10, rays 2-4) and its sheet ~10 more, in a city that's at 85-95% already where it flies: 60 fps on the roof it watches, 38-59 on the approach (`drone.steps`, 13500,381). Handing its meshes to the slave made it worse (mwait ~17000, 38 fps: the slave's slow out here, as with the towers). To try: a far model (rotors as one quad each, no blur: ~25 polygons), the sheet's triangles merged where rays run the whole reach, the slave job for the sheet once the slave's slowness in the city is understood. Triangles cut by the near plane are left out for now (you in the fan: the sheet filled the screen, 42 fps): cut them on the CPU at a near distance instead, so the far part stays | M |
 | Noise, suspicion, alarm, reset | Runs and landings are heard; caught is a reset to the last fed checkpoint | M |
 | Sound | The drone's hum (pitch is height, panned), landings, vaults | M |
 | The art pass | The drone's model (Arc Raiders), red runner vision (Mirror's Edge), hex addresses, two districts | L |

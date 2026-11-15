@@ -33,30 +33,28 @@
 #include "src/hud.h"
 #include "src/scene_memory.h"
 #include "src/sound.h"
+#include "src/drone_draw.h"
 #include "src/slave_draw.h"
 #include "src/game/intro_flight.h"
 #include "src/game/landmarks.h"
 #include "src/game/board.h"
 #include "src/game/arrival_flight.h"
+#include "src/game/draw_budget.h" // what a frame leaves out when VDP1 is short (SG-8)
+#include "src/features.h" // the build's switches: SHOW_SKY, FLOOR_FOG, CYCLE_SHAPE ...
+#include "src/game/settings.h" // the pause menu's: the ones that can change while playing
+
+// What this frame leaves out when VDP1 couldn't finish the one before (game/draw_budget.h, SG-8)
+static draw_budget budget = {0, 0, BUDGET_HOLD_FRAMES, -1};
+
+// The cycle's shape now (CYCLE_RIBBON ... CYCLE_LINKED): the pause menu's, CYCLE_SHAPE at boot
+static inline int cycle_shape(void)
+{
+	return settings_value(&game_settings, SETTING_CYCLE_SHAPE);
+}
 
 // The floor is VDP2's rotating background, one FLOOR.TGA tile repeated forever (made by tools/make_floor.py).
 // Scaling the plane packs FLOOR_TEXELS into FLOOR_TILE_UNITS of world: ~2 texels per unit, so blocks
 // near the low 1st person camera stay small.
-// The purple-to-pink sky above the walls. It's the second half of the floor's VDP2 screen (RBG0
-// plane B), so the floor fog's per-row blend reaches it too, but every row above the horizon
-// gets fog level 0 (glow_rows 0), and the 1500 high walls always reach above the horizon, so
-// the sky shows only over the wall tops, untouched. false: black beyond the walls instead
-#define SHOW_SKY true
-
-// The floor fades to black with distance (src/floor_fade_vdp2.c). It's only been checked in
-// emulators: false builds a fallback disc for the real Saturn with the floor at full brightness
-// everywhere and the fog's DMA never started (docs/HARDWARE_TESTS.md, test 1)
-#define FLOOR_FOG true
-
-// Walls and trails dim with distance too, matching the floor (src/object_fog_vdp1.c), with VDP1
-// Gouraud shading. A prototype to judge: Gouraud can only take 16 of 31 steps of brightness off,
-// so far walls dim rather than vanish. false: walls and trails at full brightness everywhere
-#define WALL_TRAIL_FOG true
 
 // The grid is the player's ruler for speed and distance, so it's the same in every view.
 // 125 divides the arena (8000 / 125 = 64 tiles) and the 250 wide wall pieces, so grid lines
@@ -189,15 +187,6 @@ static jo_pos3D_fixed ribbon_points[RIBBON_POINTS];
 static jo_3d_polygon ribbon_polygons[RIBBON_PARTS + 1];
 static jo_3d_polygon_attribute ribbon_attributes[RIBBON_PARTS + 1];
 static jo_3d_mesh ribbon;
-/*
- * Which shape a cycle is. Three to choose from while we decide (docs/BACKLOG.md): set CYCLE_SHAPE
- * and build. It's a constant, so the compiler drops the two that aren't picked, code and tables
- */
-#define CYCLE_RIBBON 0 // a ribbon twisting from level into the trail's upright edge
-#define CYCLE_TOKEN 1  // a diamond spinning on its point
-#define CYCLE_CURSOR 2 // a terminal's block cursor, blinking
-#define CYCLE_LINKED 3 // the token, joined to its trail by a still ribbon
-#define CYCLE_SHAPE CYCLE_LINKED
 // The token: 6 points (its foot, four round the middle, its top), 8 three-cornered faces
 #define TOKEN_POINTS 6
 #define TOKEN_FACES 8
@@ -257,7 +246,7 @@ void initCamera(jo_camera *curCam)
  *                                        is the rest; low cpu with low fps is VDP1 (docs/CULLING.md)
  * show: false clears it (the prologue's spectator view, a "main menu", shows none)
  */
-#define DEBUG_LINES 7
+#define DEBUG_LINES 10 // rows 0 to 9 (mwait sidle is on row 8, VDP1's pixels on 9)
 #define DEBUG_BLANK "                                        " // a whole row: 40 characters
 
 void debug_3d(bool show)
@@ -293,32 +282,45 @@ void debug_3d(bool show)
 		jo_printf(0, 2, "%s %d %d %c boost %d     ", first_person ? "1ST" : "ISO", player1.bike.position.x,
 				  player1.bike.position.y, compass[player1.bike.heading], player1.bike.gauge);
 	jo_printf(0, 3, "spd %d arena %d%s%s%s%s     ", cycle_cruise_speed(), 2 * arena_half(),
-			  debug_no_termination ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
+			  settings_on(&game_settings, SETTING_NO_TERMINATION) ? " NOTERM" : "", player1.bike.bounded ? "" : " GHOST",
 			  view_linear_turn ? " LIN" : "", debug_slow_motion ? " SLOW" : "");
 	jo_printf(0, 4, "bot %d %d %c boost %d rnd %d.%d %c     ", bots[0].bike.position.x, bots[0].bike.position.y,
 			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
 			  "EMH"[bot_skill_now()]);
 	jo_printf(0, 8, "mwait %d sidle %d   ", jo_core_master_wait_time(), jo_core_slave_idle_time());
+#ifdef JO_COMPILE_WITH_PROFILER_SUPPORT
+	// VDP1's pixels, thousands, worst frame (utils/perf.h): the whole, the slave's (the city's floor
+	// and boxes), then the master's: world, arena, trails, sky, drone, body, mirror, the rest
+	jo_printf(0, 9, "px%d S%d w%d a%d t%d k%d d%d b%d m%d o%d   ", perf_px_peak[PX_TOTAL], perf_px_peak[PX_SLAVE],
+			  perf_px_peak[PX_WORLD], perf_px_peak[PX_ARENA], perf_px_peak[PX_TRAILS], perf_px_peak[PX_SKY],
+			  perf_px_peak[PX_DRONE], perf_px_peak[PX_BODY], perf_px_peak[PX_MIRROR], perf_px_peak[PX_OTHER]);
+#endif
 	jo_printf(0, 5, "ar%d co%d sd%d tp%d fl%d gr%d bd%d wk%d mi%d     ", perf_part_peak[PERF_ARENA],
 			  perf_part_peak[PERF_CORRIDOR], perf_part_peak[PERF_SIDES], perf_part_peak[PERF_TOPS],
 			  perf_part_peak[PERF_FLOOR], perf_part_peak[PERF_GRID], perf_part_peak[PERF_BANDS],
 			  perf_part_peak[PERF_WALKER], perf_part_peak[PERF_MIRROR]);
+	// The drone (row 5's full): flying and looking, its model, its scan's sheet
+	// ...and bg: how many parts the draw budget has left out this frame (game/draw_budget.h)
+	jo_printf(0, 7, "dr%d dm%d ds%d bg%d     ", perf_part_peak[PERF_DRONE], perf_part_peak[PERF_DRONE_MODEL],
+			  perf_part_peak[PERF_DRONE_SCAN], budget.dropped);
+	// Where you are in the city: the tower's address on the floor plan (work_ram_plan.svg), to name
+	// where a frame was slow
+	{
+		const int address = foot_tower_address();
+
+		if (address >= 0)
+			jo_printf(22, 7, "at %04X ", address);
+		else
+			jo_printf(22, 7, "        ");
+	}
 	// VDP1's own figures (game/vdp1_gauge.h): frames it didn't finish this last second, % of frames
 	// it was still drawing when the CPU was done (high with a low cpu: VDP1 limits the frame
 	// rate), how many commands its list had, and the chip's version
-	jo_printf(0, 6, "vdp1 over %d busy %d%% cmd %d v%d     ", perf_vdp1.over, perf_vdp1.busy_percent,
-			  perf_vdp1.commands, perf_vdp1_version);
+	// (over/all: this second's, then every one since boot)
+	jo_printf(0, 6, "vdp1 over %d/%d busy %d%% cmd %d v%d     ", perf_vdp1.over, perf_vdp1.unfinished_total,
+			  perf_vdp1.busy_percent, perf_vdp1.commands, perf_vdp1_version);
 }
 
-/*
- * The opening flight's debug line, top left, while it flies (and blanked once it lands):
- *     FLIGHT 2/4 alongside>bank 300 x3
- *     cycle 6400 500 cam 7100 1800 400
- * the segment playing (of 4), the keys it's between (game/intro_flight.c), the frame (of 512)
- * and how hurried it is (input.c); then where the cycle is, and the camera (x, y, height), to
- * place the keys by. false: no lines, as a player would see it
- */
-#define SHOW_FLIGHT_DEBUG true
 
 static void debug_flight(void)
 {
@@ -329,7 +331,7 @@ static void debug_flight(void)
 
 	if (arriving >= 0)
 		frame = arriving;
-	if (frame < 0 || !SHOW_FLIGHT_DEBUG)
+	if (frame < 0 || !settings_on(&game_settings, SETTING_FLIGHT_TEXT))
 	{
 		if (shown)
 		{
@@ -617,6 +619,94 @@ static void draw_breach_bands(void)
 					  // just above the radar, sat on the horizon's pink glow: green on pink was hard to read)
 #define STATUS_BLANK "                                        " // a whole row: 40 characters
 
+/*
+ * The pause menu (START; game/settings.h), on the text layer below the status line, in the
+ * terminal's green:
+ *                 PAUSED
+ *       > Debug text .......... on
+ *         Flight text ......... on
+ *         ...
+ *        L next   R change   START play
+ * The text layer keeps what's printed, so it's printed only when it's opened or a switch or the
+ * cursor moves (shown_as: what's on screen), and blanked once when it closes
+ */
+#define PAUSE_ROW 15 // the title; the switches below it, then the buttons' line
+#define PAUSE_COLUMN ((40 - SETTINGS_LINE_LENGTH) >> 1)
+
+/*
+ * The benchmark (BENCH, game/bench.h): while it runs, which view it's at, on the bottom row; once
+ * it's done, the whole screen green or red with a line a view under the debug text:
+ *     0650 back   late 141 over   0 pk 123 FAIL
+ *     hub q2      late   0 over   0 pk  74 ok
+ * "known" in place of FAIL: it fails today, and has a backlog row (it doesn't turn the screen red).
+ * tests/e2e/run.sh's wait_verdict reads the colour; the shot keeps the lines
+ */
+#define BENCH_ROW 10 // the verdict's first line: under the debug text's rows
+#define BENCH_FRC_PER_FIELD 13982 // FRC counts in a field (utils/perf.c, NTSC): VDP1's time as a %
+
+static void draw_bench(void)
+{
+	const bench_run *b = input_bench();
+
+	if (b->view < bench_view_count)
+	{
+		jo_printf(0, 27, "bench %d/%d %s            ", b->view + 1, bench_view_count, bench_views[b->view].name);
+		return;
+	}
+	hud_draw_verdict(bench_passed(b));
+	// L late frames, O frames VDP1 didn't finish, C the worst CPU, V VDP1's longest drawing (both
+	// % of a field; V only with jo's profiler built in, else 0)
+	jo_printf(0, BENCH_ROW, "BENCH %s   L late O over C cpu V vdp1   ", bench_passed(b) ? "PASS" : "FAIL");
+	for (int i = 0; i < bench_view_count; ++i)
+	{
+		const bench_result *r = &b->results[i];
+
+		// (36 characters: the right edge of the 40 columns is under the TV's border)
+		// (a division a line, once the run's over)
+		jo_printf(0, BENCH_ROW + 1 + i, "%-10s L%3d O%3d C%3d V%3d %s  ", bench_views[i].name, r->late, r->over,
+				  r->peak, r->vdp1_peak * 100 / BENCH_FRC_PER_FIELD, r->pass ? "ok" : bench_views[i].known ? "known" : "FAIL");
+	}
+	jo_printf(0, 27, "                                       ");
+}
+
+static void draw_pause_menu(bool paused)
+{
+	static bool shown = false;
+	static settings shown_as;
+	char line[SETTINGS_LINE_LENGTH + 1];
+
+	if (!paused)
+	{
+		if (shown)
+			for (int row = 0; row < SETTING_COUNT + 3; ++row)
+				jo_printf(0, PAUSE_ROW + row, STATUS_BLANK);
+		shown = false;
+		return;
+	}
+	// A dark box behind it, every frame (VDP1 draws its list afresh each frame; the text stays)
+	hud_draw_panel(PAUSE_COLUMN - 2, PAUSE_ROW, 30, SETTING_COUNT + 3);
+	if (shown)
+	{
+		bool same = shown_as.cursor == game_settings.cursor;
+
+		for (int which = 0; which < SETTING_COUNT; ++which)
+			same = same && shown_as.value[which] == game_settings.value[which];
+		if (same)
+			return; // nothing's changed: what's on screen is still right
+	}
+	shown = true;
+	shown_as = game_settings;
+	jo_printf_with_color(PAUSE_COLUMN + 10, PAUSE_ROW, terminal_palette.id, "PAUSED");
+	for (int which = 0; which < SETTING_COUNT; ++which)
+	{
+		settings_line(&game_settings, (setting)which, line);
+		jo_printf_with_color(PAUSE_COLUMN, PAUSE_ROW + 1 + which, terminal_palette.id, "%s", line);
+	}
+	jo_printf_with_color(PAUSE_COLUMN - 2, PAUSE_ROW + 2 + SETTING_COUNT, terminal_palette.id,
+						 "L next   R change   START play");
+	jo_set_printf_color_index(JO_COLOR_INDEX_White); // back to white for the debug readout
+}
+
 // hidden: the HUD's off (the prologue, the flight down): any text left on the row is wiped. It's
 // printed on VDP2's text layer, which keeps it until it's written over, so leaving play for the
 // prologue (the debug camera's A) left the last message showing
@@ -699,6 +789,9 @@ static void draw_loop_break(void)
 
 void draw_3d(void)
 {
+	// perf_frame_start (an earlier callback) has just read whether VDP1 finished the frame before
+	if (DRAW_BUDGET)
+		draw_budget_frame(&budget, perf_vdp1.last_unfinished);
 	apply_breach_glitch();
 	set_floor_colours(view_is_on_foot()					 ? (level_in_city() ? FLOOR_BOARD : FLOOR_BLACK)
 					  : arena_breach.phase != BREACH_NONE ? FLOOR_WHITE
@@ -718,6 +811,9 @@ void draw_3d(void)
 	// starts each frame with none (the identity), as in jo's own plane sample. After it, on
 	// jo-engine 2026 the sky came out wholly transparent: the camera looks along -z, and jo takes
 	// the sky's depth from that matrix (jo's vdp2.c, jo_vdp2_set_rotation_matrix)
+	// VDP2's floor and sky are drawn with the planes' camera (view.h, view_vdp2_frame): this
+	// frame's, now that jo shows them with this frame's VDP1 picture (johannes-fetz/joengine#111)
+	view_vdp2_frame();
 	if (SHOW_SKY)
 	{
 		jo_3d_push_matrix();
@@ -725,7 +821,7 @@ void draw_3d(void)
 			// jo_angle / 104 ~= radians * 100. Up and down with the camera's pitch (view_sky_rise):
 			// looking up on foot, the sky stayed put while the world went down the screen, and a
 			// band opened between the sky's horizon and the floor's
-			jo_3d_translate_matrix(view_rz / 104, -2 - view_sky_rise(), 100);
+			jo_3d_translate_matrix(view_vdp2()->rz / 104, -2 - view_vdp2()->sky_rise, 100);
 			jo_background_3d_plane_b_draw(false);
 		}
 		jo_3d_pop_matrix();
@@ -754,6 +850,35 @@ void draw_3d(void)
 		object_fog_begin_frame(fog_on, fog_eye, fog_forward_x, fog_forward_y);
 	}
 
+	//  FLOOR: VDP2's, so with the planes' camera (view_vdp2_frame), in a matrix of its own
+	{
+		const view_vdp2_camera *v = view_vdp2();
+		const int grid_frc = jo_time_get_frc(); // the debug line's "gr" (utils/perf.h): the grid
+
+		view_push_vdp2_matrix();
+		jo_3d_push_matrix();
+		{
+			// The world's matrix (view.c) is the camera's turn, the world at 1/VIEW_WORLD_SCALE, and
+			// the camera's position. The floor undoes the last two and does them again its own way
+			// (FLOOR_VIEW_SCALE): the position back, the world 17/16 its size round the camera
+			// (the picture doesn't change: VIEW_WORLD_SCALE's own trick), then the camera's place
+			// within the grid's repeat (floor_wrap). On foot, far down: the ground under Work
+			// RAM's city (view.h)
+			jo_3d_translate_matrix(v->x, v->y, -v->z);
+			// (Drawn larger, the floor's texels are bigger: the world's shrunk by as much, and the
+			// texels a matrix unit stay the same. FLOOR_VIEW_SCALE says why)
+			matrix_scale(FLOOR_VIEW_SCALE >> view_floor_shift, FLOOR_VIEW_SCALE >> view_floor_shift,
+						 FLOOR_VIEW_SCALE >> view_floor_shift);
+			jo_3d_translate_matrix(-floor_wrap(v->x), -floor_wrap(v->y), v->z + v->ground);
+			// Then the floor's texels in world units. Spectating, it's drawn larger (view_floor_shift)
+			matrix_scale(FLOOR_SCALE << view_floor_shift, FLOOR_SCALE << view_floor_shift, JO_FIXED_1);
+			jo_background_3d_plane_a_draw(true);
+		}
+		jo_3d_pop_matrix();
+		jo_3d_pop_matrix();
+		perf_part_add(PERF_GRID, grid_frc);
+	}
+
 	view_push_world_matrix();
 	// The slave SH-2 draws the corridor's floor and boxes from the world's matrix while this CPU
 	// goes on (src/slave_draw.h): handed over as they're built, waited for before the pop below
@@ -761,39 +886,23 @@ void draw_3d(void)
 	{
 		int floor_frc;
 
-		//  FLOOR
-		jo_3d_push_matrix();
-		{
-			floor_frc = jo_time_get_frc(); // the debug line's "gr" (utils/perf.h): the grid
-			// The world's matrix (view.c) is the camera's turn, the world at 1/VIEW_WORLD_SCALE, and
-			// the camera's position. The floor undoes the last two and does them again its own way
-			// (FLOOR_VIEW_SCALE): the position back, the world 17/16 its size round the camera
-			// (the picture doesn't change: VIEW_WORLD_SCALE's own trick), then the camera's place
-			// within the grid's repeat (floor_wrap). On foot, far down: the ground under Work
-			// RAM's city (view.h)
-			jo_3d_translate_matrix(view_x, view_y, -view_z);
-			// (Drawn larger, the floor's texels are bigger: the world's shrunk by as much, and the
-			// texels a matrix unit stay the same. FLOOR_VIEW_SCALE says why)
-			matrix_scale(FLOOR_VIEW_SCALE >> view_floor_shift, FLOOR_VIEW_SCALE >> view_floor_shift,
-						 FLOOR_VIEW_SCALE >> view_floor_shift);
-			jo_3d_translate_matrix(-floor_wrap(view_x), -floor_wrap(view_y), view_z + view_ground_height());
-			// Then the floor's texels in world units. Spectating, it's drawn larger (view_floor_shift)
-			matrix_scale(FLOOR_SCALE << view_floor_shift, FLOOR_SCALE << view_floor_shift, JO_FIXED_1);
-			jo_background_3d_plane_a_draw(true);
-			perf_part_add(PERF_GRID, floor_frc);
-		}
-		jo_3d_pop_matrix();
 		floor_frc = jo_time_get_frc(); // and "fl": the corridor's glass floor
 
 		// The corridor behind the flicker, once it's given way: its glass floor over the grid
 		if (!spectating)
 		{
 			level_view_begin(arena_corridor, debug_camera); // the planes everything on foot is cut to
+			// The roofs the watchdog's scan lights, coloured as the city's drawn (drone_draw.h)
+			if (view_is_on_foot() && level_in_city())
+				drone_draw_prepare(&watchdog, watchdog_boxes, CITY_TOWERS);
+			else
+				level_scan_set(JO_NULL, 0, 0);
 			draw_corridor_floor(arena_corridor, clip);
 			perf_part_add(PERF_FLOOR, floor_frc);
 			floor_frc = jo_time_get_frc();
 			draw_corridor_boxes(arena_corridor, clip);
 			perf_part_add(PERF_TOPS, floor_frc);
+			perf_px_mark(PX_WORLD); // (the slave's share comes in as PX_SLAVE, utils/perf.h)
 		}
 
 		// Spectating: no walls, so the arena seems to go on for ever (view.c). They rise out of the
@@ -808,6 +917,8 @@ void draw_3d(void)
 				wall_eye.x = (short)view_x;
 				wall_eye.y = (short)view_y;
 			}
+			// Always: on foot in the city this is the pyramid, a landmark, and the draw budget leaving
+			// it out lost it from the CD block's lift (game/draw_budget.h)
 			draw_arena_walls(&visible_walls, &wall_eye, clip, !first_person && !debug_camera, arena_wall_rise(),
 							 &arena_flicker, arena_corridor);
 			// The ground round the arena, raised level with the walls' tops: the arena's sunk into
@@ -817,6 +928,7 @@ void draw_3d(void)
 			// (Not on foot: from out there the arena's a pyramid, level.c's arena_pyramid_add)
 			if (arena_rounds.phase != ROUND_OPEN && !view_is_on_foot())
 				draw_arena_surround(arena_wall_rise(), !first_person && !debug_camera);
+			perf_px_mark(PX_ARENA);
 		}
 
 		if (enable_trails && player1_trail_mesh != JO_NULL) // not after the arena's memory's given back
@@ -865,6 +977,7 @@ void draw_3d(void)
 			}
 			trail_mesh_end(attract_mesh);
 			perf_part_add(PERF_TRAILS, trails_frc);
+			perf_px_mark(PX_TRAILS);
 		}
 
 		// In 1st person the camera is inside it; coming down into it, it's seen until the camera's close
@@ -907,8 +1020,17 @@ void draw_3d(void)
 		int side, wall, middle;
 		bool in_lift;
 
+		// The landmarks are the first thing to go when VDP1 is short (game/draw_budget.h): on the
+		// horizon, the farthest. The skyline behind the towers always stays
 		if (foot_cd_hub(&side, &wall, &middle, &in_lift))
-			level_sky_draw(side, wall, middle, sky_frame++, view_is_on_foot() ? PLACE_WORK_RAM : PLACE_ARENA, in_lift);
+			level_sky_draw(side, wall, middle, sky_frame++, view_is_on_foot() ? PLACE_WORK_RAM : PLACE_ARENA, in_lift,
+						   draw_budget_allows(&budget, BUDGET_LANDMARKS));
+		perf_px_mark(PX_SKY);
+		// The watchdog's drone and its scan (drone_draw.h): out in the city only. From inside the
+		// corridor its walls would hide it, and VDP1 has no depth to know that
+		if (view_is_on_foot() && level_in_city())
+			drone_draw(&watchdog, watchdog_boxes, CITY_TOWERS, sky_frame);
+		perf_px_mark(PX_DRONE);
 	}
 	// Your body (game/body.h), once you have one (from the crash on): posed once here, then drawn
 	// from your own eyes, and again in the mirror below
@@ -925,6 +1047,7 @@ void draw_3d(void)
 			had_body = true;
 			level_body_set(&player_body, &doing, yaw, feet);
 			level_body_draw(true);
+			perf_px_mark(PX_BODY);
 		}
 		else
 		{
@@ -953,6 +1076,7 @@ void draw_3d(void)
 			jo_3d_pop_matrix();
 			level_mirror_end(arena_corridor, clip);
 			perf_part_add(PERF_MIRROR, mirror_frc);
+			perf_px_mark(PX_MIRROR);
 		}
 	}
 	jo_3d_pop_matrix();
@@ -960,6 +1084,7 @@ void draw_3d(void)
 	draw_loop_break();
 	// Spectating, you're only watching: no HUD (the gauge, the radar and the status line), nor
 	// while the camera comes down into the cycle: it appears as you take over
+	draw_pause_menu(debug_camera && pause_menu_up);
 	if (spectating || view_arriving())
 	{
 		draw_status(true);
@@ -968,8 +1093,12 @@ void draw_3d(void)
 		perf_frame_end();
 		return;
 	}
-	hud_draw_boost(&player1.bike); // on top of the world: screen pixels, no perspective
-	if (!debug_camera) // both views: in iso it turns with the iso camera (hud.h)
+	// On foot there's no map: the user asked for it gone ("remove the HUD map when on foot"); the
+	// arena's trails are no guide in the city, and the screen is yours to look about. Nor the boost
+	// gauge: it's the map's frame, and there's no boost on foot
+	if (!view_is_on_foot())
+		hud_draw_boost(&player1.bike); // on top of the world: screen pixels, no perspective
+	if (!debug_camera && !view_is_on_foot()) // both views: in iso it turns with the iso camera (hud.h)
 	{
 		// Every trail on the field, and a marker on the rim pointing at each live bot
 		hud_marker markers[BOT_COUNT_MAX];
@@ -992,7 +1121,9 @@ void draw_3d(void)
 	}
 	draw_status(false);
 	draw_breach_bands();
-	debug_3d(true);
+	debug_3d(settings_on(&game_settings, SETTING_DEBUG_TEXT));
+	if (BENCH)
+		draw_bench();
 	// debug_pad1();
 	perf_frame_end(); // includes the debug text
 }
@@ -1143,18 +1274,18 @@ void load_player_model(void)
 	 * token (narrower than the token's middle, so it comes out of it whichever way that's spun),
 	 * and twists and widens back to the upright edge the trail starts from
 	 */
-	const bool linked = CYCLE_SHAPE == CYCLE_LINKED;
+	const bool linked = cycle_shape() == CYCLE_LINKED;
 	// Each cross-section's turn from level: cos and sin x1024 (0, 22.5, 45, 67.5, 90 degrees), and
 	// half its length: half the cycle's width at the front, half the trail's height at the back
 	static const short turn[RIBBON_PARTS + 1][2] = {{1024, 0}, {946, 392}, {724, 724}, {392, 946}, {0, 1024}};
 	static const signed char half[RIBBON_PARTS + 1] = {PLAYER_HALF, 26, 28, 29, TRAIL_HEIGHT / 2};
 	static const signed char half_linked[RIBBON_PARTS + 1] = {16, 20, 25, 28, TRAIL_HEIGHT / 2};
 
-	if (CYCLE_SHAPE == CYCLE_TOKEN || linked)
+	if (cycle_shape() == CYCLE_TOKEN || linked)
 		load_token();
-	if (CYCLE_SHAPE == CYCLE_TOKEN)
+	if (cycle_shape() == CYCLE_TOKEN)
 		return;
-	if (CYCLE_SHAPE == CYCLE_CURSOR)
+	if (cycle_shape() == CYCLE_CURSOR)
 	{
 		load_cursor();
 		return;
@@ -1213,7 +1344,7 @@ void draw_cycle(world_point position, int heading, jo_color colour, bool running
 	// way round there, and nobody can tell
 	const int ridden = position.x + position.y;
 
-	if (CYCLE_SHAPE == CYCLE_TOKEN || CYCLE_SHAPE == CYCLE_LINKED)
+	if (cycle_shape() == CYCLE_TOKEN || cycle_shape() == CYCLE_LINKED)
 	{
 		// The faces: a light and a deeper shade turn about, one upper face white (the flash that
 		// comes round). A terminated process has no flash (and doesn't spin: it isn't moving)
@@ -1228,7 +1359,7 @@ void draw_cycle(world_point position, int heading, jo_color colour, bool running
 		{
 			jo_3d_translate_matrix(position.x, position.y, 0);
 			angle_rotate_z((jo_angle)(heading * RIBBON_QUARTER_TURN));
-			if (CYCLE_SHAPE == CYCLE_LINKED)
+			if (cycle_shape() == CYCLE_LINKED)
 			{
 				// The ribbon from the token's middle back to the trail: turned with the cycle,
 				// but not leant or spun. Lightest inside the token, the trail's own colour behind
@@ -1245,7 +1376,7 @@ void draw_cycle(world_point position, int heading, jo_color colour, bool running
 		jo_3d_pop_matrix();
 		return;
 	}
-	if (CYCLE_SHAPE == CYCLE_CURSOR)
+	if (cycle_shape() == CYCLE_CURSOR)
 	{
 		// The blink: white for 128 units ridden, the rider's colour for the next 128 (about 3 a
 		// second at cruise). The sides and top a shade apart so it reads as a block. Terminated:
@@ -1333,13 +1464,19 @@ void load_textures(void)
 
 void jo_main(void)
 {
-	jo_core_init(JO_COLOR_Black);
+	// The back colour: black, or magenta in a glitch-check build (features.h GLITCH_CHECK), where a
+	// hole in the level is then easy to find in a film (tests/e2e/glitch.py)
+	jo_core_init(GLITCH_CHECK ? JO_COLOR_RGB(255, 0, 255) : JO_COLOR_Black);
 	// Low Work RAM (1 MB at 0x00200000, the "slow" bank): jo-engine 2026 doesn't use it. As a second
 	// zone for jo_malloc it's only used once the first (in high Work RAM, makefile) is full, so the
 	// heap can't run short now that zone's smaller. (SCU DMA can't reach it, so data DMA'd to the
 	// VDPs is better kept in high RAM: it is, while the first zone has room)
 	jo_add_memory_zone((unsigned char *)0x00200000, 0x100000);
+	// VDP1's pixels by part on the debug line (utils/perf.h): only a profiler build counts them
+	jo_profile_count_pixels(true);
 	jo_set_tga_palette_handling(my_tga_palette_handling);
+	// The pause menu's switches as features.h starts them: first, as the cycle's model needs its shape
+	settings_init(&game_settings);
 
 	load_textures();
 
@@ -1353,6 +1490,7 @@ void jo_main(void)
 	init_arena_walls();
 
 	load_player_model();
+	drone_draw_init(); // the watchdog's drone's model
 	arena_trail_meshes_take(); // after the fog's on: the meshes set their quads up for it
 
 	init_3d_planes();

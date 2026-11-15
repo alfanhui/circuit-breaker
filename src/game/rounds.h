@@ -41,12 +41,24 @@
 #define ROUND_CLEARED 1 // the last rival is gone: the walls start to sink
 #define ROUND_RISES 2	// the walls are about to rise: move the world now, if it needs moving
 #define ROUND_BEGINS 3	// the next round's walls are up: bring its rivals in
+#define ROUND_RESTARTS 4 // the last round's rival, dead, is restarted: bring it back in (below)
+
+/*
+ * The last round can't be won (STORY.md, "The designed crash"; the user, 2026-11-13: "make the
+ * watchman restart bot node after it dies. Forcing the player into the wall"). Its rival is the
+ * Watchdog's own process: killed, it's restarted, ROUND_RESTART_FRAMES later (its trail's sunk by
+ * then: a second, rider.h), every time. The walls go on closing in, and the only way out of the
+ * round is through the flicker. So in the last round no rivals left isn't ROUND_CLEARED:
+ * rounds_update counts, and reports ROUND_RESTARTS
+ */
+#define ROUND_RESTART_FRAMES 90
 
 typedef struct
 {
 	unsigned char number;  // 0 to ROUND_COUNT - 1 (shown to the player as 1 to 5)
 	unsigned char phase;   // ROUND_PLAYING ... ROUND_RISING
 	unsigned short frames; // frames since this phase began
+	unsigned char dead;	   // the last round: frames its rival's been dead (0: it's riding)
 } rounds;
 
 // The first round, being played

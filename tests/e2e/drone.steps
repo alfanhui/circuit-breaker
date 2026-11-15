@@ -1,0 +1,45 @@
+# The watchdog's drone (game/drone.h, drone_draw.c), seen from the city's entry roof. Booted on
+# foot: out of the corridor as city.steps goes (up to the tower, strafe onto the right half, on out
+# onto the entry), a step on and turned left (south: it's ~60 degrees left of out), out over the city: the drone rides the street
+# between the plan's columns 1 and 2, its beam angled down, its scan line lighting the roofs back towards you. Shots
+# as it waits, sweeps and rides down; then closer, on the floor it watches
+wait_up
+keydown up
+wait 8.5
+keyup up
+hold l 2.2
+wait 0.3
+keydown up
+wait 1.8
+keyup up
+wait 0.5
+shot dr_00_on_the_entry
+hold up 0.5
+hold left 0.4
+wait 0.4
+shot dr_01_turned_left
+wait 0.7
+shot dr_02
+wait 0.7
+shot dr_03
+wait 1.5
+shot dr_04
+# On south off the entry onto the next roof down (row 6, 60 lower), turned left to face it: close
+# up, in its fan, so its scan line finds you (red)
+hold up 1.2
+wait 0.3
+hold left 0.3
+wait 0.3
+shot dr_05_close
+wait 0.5
+shot dr_06
+wait 0.5
+shot dr_07
+wait 0.5
+shot dr_08
+wait 1.5
+shot dr_09
+wait 2.0
+shot dr_10
+wait 2.0
+shot dr_11

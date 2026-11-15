@@ -1,0 +1,31 @@
+# Where the user found the city slow (2026-11-14): 0650 -> 0640 -> 0630, facing back towards the
+# corridor's yard. Booted on 0650 (BOOT_AT_TOWER), facing back; a run along row 6 east over 0640
+# (50 down) and the street onto 0630 (50 down again). Shots as it goes, for the debug text's
+# figures (fps, cpu, the parts: co the corridor, sd tp the city's sides and tops, fl the glass
+# floor) and its address (at)
+boot_at 0650
+wait_up
+wait 1.0
+shot sl_00_on_0650
+keydown up
+wait 0.5
+shot sl_01
+wait 0.5
+shot sl_02
+wait 0.5
+shot sl_03
+wait 0.5
+shot sl_04
+wait 0.5
+shot sl_05
+wait 0.5
+shot sl_06
+keyup up
+wait 1.0
+shot sl_07_stopped
+hold left 0.15
+wait 1.0
+shot sl_08_left
+hold right 0.3
+wait 1.0
+shot sl_09_right

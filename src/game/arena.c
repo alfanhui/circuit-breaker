@@ -128,6 +128,21 @@ world_point arena_start(void)
 	return p;
 }
 
+bool arena_rival_start(int which, world_point *at, int *heading)
+{
+	// The north-west, north-east and south-east rooms' middles, in units (west is +x, south +y),
+	// and the way to the next room round
+	static const signed char room_x[ARENA_ROOM_RIVALS] = {4, -4, -4}, room_y[ARENA_ROOM_RIVALS] = {-4, -4, 4};
+	static const unsigned char way[ARENA_ROOM_RIVALS] = {HEADING_EAST, HEADING_SOUTH, HEADING_WEST};
+
+	if (layout != ARENA_ROOMS || which < 0 || which >= ARENA_ROOM_RIVALS)
+		return false;
+	at->x = (short)(room_x[which] * unit);
+	at->y = (short)(room_y[which] * unit);
+	*heading = way[which];
+	return true;
+}
+
 int arena_start_heading(void)
 {
 	// Along the donut's lane, not into the block; north everywhere else (as the flight down lands)

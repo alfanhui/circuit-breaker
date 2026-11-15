@@ -1,0 +1,26 @@
+# The cycle's motor (src/sound.c, sound_engine): records the game's sound (/out/sound.wav). Silent
+# while the loop rides in the opening; then the three hits, and it's you riding: the hum winds up
+# from low, holds at cruise, climbs as you boost (hold up), comes back down, and a turn's whoosh
+# over it
+record_sound
+wait_boot
+start_intro
+press b
+wait 3.5
+wait 2
+press left
+wait 1
+press up
+wait 1
+shot engine_0_broken
+press right
+wait 5
+shot engine_1_cruise
+keydown up
+wait 1.2
+shot engine_2_boost
+keyup up
+wait 2
+press left
+wait 1.5
+shot engine_3_end

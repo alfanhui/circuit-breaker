@@ -615,6 +615,77 @@ static void a_full_run_jumps_a_gap_in_reach(void)
 	CHECK(walker_position(&w).x >= 0 && walker_position(&w).x <= 6); // held at the lip
 }
 
+// A jump up: across a gap of 200 onto a roof 60 higher than you left. You can't land on it (the
+// jump's top is 45 up), but you go into its side with its top in reach, catch the edge and climb
+// up (walker.c's catch_ledge): stood on it, at a walk. 160 higher is out of reach: held at the lip
+static void a_jump_catches_a_ledge_above(void)
+{
+	walker w;
+	walker_area area;
+	world_point at = {1000, 0};
+	int frames, caught = 0;
+
+	walker_area_clear(&area);
+	walker_area_add_roof(&area, 0, -1000, 2000, 1000, 300);
+	walker_area_add_roof(&area, -1000, -1000, -200, 1000, 360);
+	walker_init_at(&w, at, 300, 0x4000);
+	for (frames = 0; frames < 600 && walker_height(&w) != 360; ++frames)
+	{
+		walker_update(&w, pad(0, 1, 0), &area);
+		caught |= walker_move(&w) == WALKER_MOVE_CLIMB;
+	}
+	CHECK(!w.falling);
+	CHECK_EQ(360, walker_height(&w));
+	CHECK(caught);
+	CHECK(walker_position(&w).x < -200);
+	CHECK(w.forward <= WALKER_FORWARD_SPEED);
+
+	walker_area_clear(&area);
+	walker_area_add_roof(&area, 0, -1000, 2000, 1000, 300);
+	walker_area_add_roof(&area, -1000, -1000, -200, 1000, 460);
+	walker_init_at(&w, at, 300, 0x4000);
+	run(&w, pad(0, 1, 0), &area, 600);
+	CHECK(!w.falling);
+	CHECK_EQ(300, walker_height(&w));
+	CHECK(walker_position(&w).x >= 0 && walker_position(&w).x <= 6); // held at the lip
+}
+
+// In the air over nothing (a street): not fallen off at first (you feel the fall), then once
+// you're WALKER_LOST_DROP down, you have. Over a roof you'll land on, never
+static void falling_into_a_street_is_the_end(void)
+{
+	walker w;
+	walker_area area;
+	world_point street = {-500, 0}, roof = {500, 0};
+	int frames, lost_at = -1;
+
+	walker_area_clear(&area);
+	walker_area_add_roof(&area, 0, -1000, 2000, 1000, 0);
+	walker_init_at(&w, street, 300, 0);
+	w.falling = 1;
+	w.fall_from = 300;
+	w.take_off = 300;
+	for (frames = 0; frames < 200 && lost_at < 0; ++frames)
+	{
+		walker_update(&w, pad(0, 0, 0), &area);
+		if (walker_fell_off(&w, &area))
+			lost_at = frames;
+	}
+	CHECK(lost_at > 30); // a moment's fall first
+	CHECK(walker_height(&w) < 300 - WALKER_LOST_DROP);
+
+	walker_init_at(&w, roof, 300, 0);
+	w.falling = 1;
+	w.fall_from = 300;
+	w.take_off = 300;
+	for (frames = 0; frames < 200; ++frames)
+	{
+		walker_update(&w, pad(0, 0, 0), &area);
+		CHECK(!walker_fell_off(&w, &area));
+	}
+	CHECK_EQ(0, walker_height(&w)); // landed (a long drop: a stagger, not the end)
+}
+
 // Nothing steers you in the air: turning in a jump, you land where you would have
 static void the_air_doesnt_steer(void)
 {
@@ -904,6 +975,8 @@ void run_walker_tests(void)
 	RUN(a_full_run_jumps_a_lip);
 	RUN(a_full_run_stops_at_a_long_drop);
 	RUN(a_full_run_jumps_a_gap_in_reach);
+	RUN(a_jump_catches_a_ledge_above);
+	RUN(falling_into_a_street_is_the_end);
 	RUN(the_air_doesnt_steer);
 	RUN(a_full_run_vaults_a_low_wall);
 	RUN(a_full_run_climbs_a_ledge);

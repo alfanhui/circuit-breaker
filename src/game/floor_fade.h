@@ -38,4 +38,34 @@ void floor_fade_rows(const floor_fade_view *view, unsigned char *levels, int row
 #define FLOOR_FADE_RATIO_MAX 31
 int floor_fade_ratio(int level);
 
+/*
+ * The fog's rows shown with the picture they were built for (floor_fade_vdp2.c). A frame's fog is
+ * built while the frame is (the camera's tilt and height then), but VDP1 shows that frame's picture
+ * a frame or two later, and later still when a frame runs late. jo applies the floor plane's
+ * rotation in the field VDP1 shows its frame (johannes-fetz/joengine#111); the fog has to change
+ * in that same field, or for a frame its rows are for a horizon a few rows off, and a band of the
+ * far floor shows unfogged under it (the user, 2026-11-15: "the circuit floor clips up" starting
+ * to look up). A fixed delay of 2 frames was right only while no frame ran late.
+ *
+ * So there are FLOOR_FADE_TABLES tables, each with the number of the frame it was built for (jo's
+ * frame tag). Built into: one already for this frame, else the oldest that isn't on screen. Shown,
+ * at each VBlank where VDP1 shows a new frame: the newest built for that frame or one before it.
+ * Three: the one on screen, one for the frame VDP1 is drawing, one for the frame being built.
+ * Tags count up and wrap: compared by their difference, as signed.
+ */
+#define FLOOR_FADE_TABLES 3
+
+typedef struct
+{
+	unsigned int tag[FLOOR_FADE_TABLES]; // the frame each table was built for
+	int built[FLOOR_FADE_TABLES];		 // 0: never built
+	int showing;						 // the one on screen (-1: none yet)
+} floor_fade_tables;
+
+void floor_fade_tables_init(floor_fade_tables *t);
+// The table to build frame `tag`'s fog into (it's marked built for it)
+int floor_fade_tables_build(floor_fade_tables *t, unsigned int tag);
+// VDP1 shows frame `shown` from this field: the table to show now (-1: none built yet)
+int floor_fade_tables_show(floor_fade_tables *t, unsigned int shown);
+
 #endif

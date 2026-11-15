@@ -1,0 +1,58 @@
+# A wedge cut out of the guard tower's side beside 0650's roof (the user, 2026-11-15): running west
+# over 0650, the side on your right stands on 0640's roof, 50 lower, and the floor rule (FLOOR_HIDES)
+# cut its foot along a line above what shows: the street's depths showed between it and the roof.
+# A shot every 0.12 s across 0650. Look at shots 08-13 for black or the board under the right-hand
+# side: none since floor_hides_line (game/floor_hides.h). The same shots with FLOOR_HIDES 0 match
+boot_at 0660
+wait_up
+wait 2.0
+keydown up
+wait 0.12
+shot gap_00
+wait 0.12
+shot gap_01
+wait 0.12
+shot gap_02
+wait 0.12
+shot gap_03
+wait 0.12
+shot gap_04
+wait 0.12
+shot gap_05
+wait 0.12
+shot gap_06
+wait 0.12
+shot gap_07
+wait 0.12
+shot gap_08
+wait 0.12
+shot gap_09
+wait 0.12
+shot gap_10
+wait 0.12
+shot gap_11
+wait 0.12
+shot gap_12
+wait 0.12
+shot gap_13
+wait 0.12
+shot gap_14
+wait 0.12
+shot gap_15
+wait 0.12
+shot gap_16
+wait 0.12
+shot gap_17
+wait 0.12
+shot gap_18
+wait 0.12
+shot gap_19
+wait 0.12
+shot gap_20
+wait 0.12
+shot gap_21
+wait 0.12
+shot gap_22
+wait 0.12
+shot gap_23
+keyup up

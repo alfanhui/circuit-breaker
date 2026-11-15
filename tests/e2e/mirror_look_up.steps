@@ -1,0 +1,54 @@
+# Looking up at the mirror (the user, 2026-11-14: "looking up at the mirror causes weird artefact
+# issues"). Booted stood up, turned round to face the glass, then Y held to look up at three
+# distances: far, half way, close. Shots while looking up, and walking in with the look held
+wait_up
+wait 1.0
+hold left 0.6
+wait 0.3
+hold left 0.6
+wait 0.8
+shot mu_00_facing
+keydown y
+wait 0.6
+shot mu_01_far_up
+wait 0.3
+shot mu_02_far_up
+keyup y
+wait 0.5
+hold up 1.5
+wait 0.3
+shot mu_03_half
+keydown y
+wait 0.6
+shot mu_04_half_up
+wait 0.3
+shot mu_05_half_up
+hold up 0.3
+wait 0.1
+shot mu_06_walking_up
+hold up 0.3
+wait 0.1
+shot mu_07_walking_up
+hold up 0.3
+wait 0.1
+shot mu_08_walking_up
+hold up 0.3
+wait 0.1
+shot mu_09_walking_up
+hold up 0.3
+wait 0.1
+shot mu_10_walking_up
+hold up 0.3
+wait 0.1
+shot mu_11_walking_up
+keyup y
+wait 0.5
+shot mu_12_close
+keydown y
+wait 0.6
+shot mu_13_close_up
+wait 0.3
+shot mu_14_close_up
+keyup y
+wait 0.5
+shot mu_15_level

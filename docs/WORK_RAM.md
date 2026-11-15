@@ -317,6 +317,10 @@ Each step is playable, tested and filmed before the next.
    Unit tests for both (a gap just in reach vaults; one just out of reach skids).
 3. **Towers drawn properly.** Boxes, the cuts for near walls, fog, the grid below on VDP2.
 4. **The drone's route and sight.** Riding between floors, the scan's sheet, the sight test.
+   Done 2026-11-14 (game/drone.h; drawn with its look already, at the user's ask: drone_draw.c).
+   Its scan became a beam angled down from high over the street, a CRT's line sweeping across the
+   roofs and lighting them, rather than a level sheet through one floor's height (the user's ask):
+   you hide in a tower's shadow, out of its fan, or under its nose.
    Pure C first; drawn as a box.
 5. **Noise, suspicion, alarm, reset.** Long drops call the drone. Lifts as safe zones and
    checkpoints. This is where it becomes a game.

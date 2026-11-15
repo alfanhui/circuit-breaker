@@ -1,0 +1,37 @@
+# The corridor's yard from the CD block hub's lift (BOOT_AT_HUB 1 in src/input.c: stood facing
+# west, 150 short of the pad). Onto the pad, a half turn to face east (as lift_pyramid.steps), and
+# shots as it rises: level, a little to the right, and looking down. From above the corridor's
+# walls its floor must show under the yard's boxes (the user, 2026-11-13: "there is no floor in
+# the yard")
+wait_up
+wait 1.0
+hold up 0.45
+wait 0.3
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 1.4
+shot ly_01_rising
+wait 1.0
+shot ly_02_rising
+hold right 0.4
+wait 0.4
+shot ly_03_right
+keydown b
+wait 0.8
+shot ly_04_down
+keyup b
+wait 0.6
+hold left 0.4
+wait 0.4
+shot ly_05_left
+keydown b
+wait 0.8
+shot ly_06_left_down
+keyup b
+wait 1.5
+shot ly_07_top

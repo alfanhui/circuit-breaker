@@ -1,4 +1,5 @@
 #include "level.h"
+#include "game/settings.h" // the pause menu's "City sides" (CITY_SIDES_TO_BOARD at boot, features.h)
 #include "game/body.h"
 #include "game/walker.h"
 #include "utils/angles.h"
@@ -8,6 +9,8 @@
 #include "game/city.h"
 #include "game/occluder.h"
 #include "game/skyline.h"
+#include "game/floor_hides.h" // what the roof you stand on hides
+#include "features.h"           // FLOOR_HIDES
 #include "game/landmarks.h"
 #include "object_fog_vdp1.h"
 #include "view.h"
@@ -1447,6 +1450,19 @@ static void grey_portal_set(const corridor *passage)
 	level_eye_across = eye_across - ((passage->across_min + passage->across_max) >> 1);
 	portal.outside = out > CORRIDOR_LENGTH + GREY_DOORWAY;
 	portal.inside = out < CORRIDOR_LENGTH - GREY_DOORWAY;
+	/*
+	 * Between the two you're in the doorway: neither (nothing's cut to it, and the city's own
+	 * things, its board, its ring of skyline, the roofs' tables, wait until you're through). But
+	 * that's a band right across the city, GREY_DOORWAY either side of the doorway's line: the
+	 * roofs by the CD block's hub reach it, 2900 to the side of the corridor, and stood on their
+	 * edge there the board, the towers and the skyline all went, the pyramid's flat slope over
+	 * everything (the user, 2026-11-13: "When up close to edge nearest to pyramid from the
+	 * elevator, the pyramid walls and sky city clips out"; hub_edge.steps). Off to the side of
+	 * the corridor's width you're not in its doorway: you're out in the city
+	 */
+	if (!portal.inside && !portal.outside &&
+		(eye_across < passage->across_min - GREY_DOORWAY || eye_across > passage->across_max + GREY_DOORWAY))
+		portal.outside = true;
 	if (!portal.inside && !portal.outside)
 		return;
 	left_plane = frustum_add_edge(&level_view, grey_point(left, 0), grey_point(left, 1000), in);
@@ -1458,6 +1474,14 @@ static void grey_portal_set(const corridor *passage)
 		portal.floor_planes &= ~sill_plane;
 	if (eye_across <= passage->across_max)
 		portal.floor_planes &= ~right_plane;
+	/*
+	 * From above the corridor's walls (up the CD block's lift, a tall roof), you look in over
+	 * them: the doorway hides none of the floor then. Cut to it still, the floor went and what
+	 * stands on it stayed (the user, 2026-11-13: "When at elevator, looking back up at the yard
+	 * section, there is no floor in the yard")
+	 */
+	if (level_view.eye.z > CORRIDOR_TOP_ON_FOOT)
+		portal.floor_planes = 0;
 }
 
 /*
@@ -1486,6 +1510,16 @@ static void grey_portal_set(const corridor *passage)
 // darkened with depth. All of it, the stairs, the tower and the city through the far doorway, took
 // 41% of a frame near the glass (cpu 104%, 57 fps)
 #define MIRROR_DEPTH 2300
+/*
+ * And less near the glass: three times your distance from it, from MIRROR_DEPTH_NEAR. Walking up to
+ * it, the pane fills the screen and the reflection's a second whole view of the corridor, as deep
+ * as the first: within ~400 of it the frame took 34-44 fps, the mirror 41-57% (mi), VDP1 not
+ * finishing (a black frame now and then: the user, 2026-11-14, "the whole screen glitches out";
+ * mirror_slow.steps). Up close the glass shows you and the floor at your feet; past the depth, the
+ * dark wall (mirror_far_wall), which moves in with it. A multiply and two compares, once a frame
+ */
+#define MIRROR_DEPTH_NEAR 700
+static int mirror_depth = MIRROR_DEPTH; // this frame's (mirror_decide)
 static bool mirror_on = false; // this frame: the glass is in view from the corridor
 /*
  * Once you've slid under the duct (corridor.c: the first thing you go under, out 2050 to 2110),
@@ -1561,6 +1595,8 @@ static void mirror_decide(const corridor *passage)
 	mirror_across_max = passage->across_max;
 	mirror_pane(passage, pane, &centre);
 	mirror_on = frustum_classify(&level_view, pane, 4, FRUSTUM_SCREEN) != FRUSTUM_OUTSIDE;
+	mirror_depth = out * 3;
+	mirror_depth = mirror_depth < MIRROR_DEPTH_NEAR ? MIRROR_DEPTH_NEAR : mirror_depth > MIRROR_DEPTH ? MIRROR_DEPTH : mirror_depth;
 }
 
 /*
@@ -1603,15 +1639,48 @@ bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera,
 	if (!mirror_on || camera == JO_NULL)
 		return false;
 	frustum_reflect(&level_view, mirror_axis, mirror_at, &m);
-	// The glass's edges in place of the screen's (1 .. 4), the guard band's (5 .. 8) kept. The
-	// doorway's planes (from 9) were the real eye's: grey_portal_set adds the reflected eye's
+	/*
+	 * The glass's edges in place of the screen's (1 .. 4), the guard band's (5 .. 8) kept. The
+	 * doorway's planes (from 9) were the real eye's: grey_portal_set adds the reflected eye's.
+	 * But each side only where the glass's edge is inside the screen's: near the glass it's far
+	 * bigger than the screen, and the reflection cut to its edges ran far off the screen, VDP1
+	 * walking pixels nobody sees and its corners out of its 11-bit range: a garbled or black frame
+	 * walking up to it (the user, 2026-11-14: "in some cases, the whole screen glitches out";
+	 * mirror_slow.steps, 30 fps at 236 from it). So each glass edge is paired with the screen
+	 * edge it faces most nearly (its normal's nearest), and replaces it only if the glass edge's
+	 * two corners are inside that screen edge; else the screen's edge is the tighter, and stays
+	 */
 	for (int k = 0; k < 4; ++k)
 		guard[k] = m.planes[5 + k];
-	m.count = 1;
 	mirror_pane(passage, pane, &centre);
-	for (int k = 0; k < 4; ++k)
-		if (frustum_add_edge(&m, pane[k], pane[(k + 1) & 3], centre) == 0)
-			return false; // the reflected eye's on an edge's line: no reflection this frame
+	{
+		frustum glass = m; // the glass's four edges, worked out on their own
+		bool taken[5] = {false, false, false, false, false};
+
+		glass.count = 1;
+		for (int k = 0; k < 4; ++k)
+			if (frustum_add_edge(&glass, pane[k], pane[(k + 1) & 3], centre) == 0)
+				return false; // the reflected eye's on an edge's line: no reflection this frame
+		for (int k = 0; k < 4; ++k)
+		{
+			const frustum_plane *g = &glass.planes[1 + k];
+			int side = 1, best = -0x7FFFFFFF;
+
+			for (int j = 1; j <= 4; ++j)
+			{
+				const int facing = g->x * m.planes[j].x + g->y * m.planes[j].y + g->z * m.planes[j].z;
+
+				if (facing > best && !taken[j])
+				{
+					best = facing;
+					side = j;
+				}
+			}
+			taken[side] = true;
+			if (frustum_distance(&m, side, pane[k]) >= 0 || frustum_distance(&m, side, pane[(k + 1) & 3]) >= 0)
+				m.planes[side] = *g; // the glass's edge is the tighter there (or crosses the screen's)
+		}
+	}
 	for (int k = 0; k < 4; ++k)
 		m.planes[5 + k] = guard[k];
 	m.count = FRUSTUM_PORTAL_FIRST;
@@ -1622,7 +1691,7 @@ bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera,
 	{
 		const world_point origin = corridor_point(passage, 0, 0), one = corridor_point(passage, 1, 0);
 		const int dir = mirror_axis == 0 ? one.x - origin.x : one.y - origin.y; // 1 or -1
-		const int limit = mirror_at + dir * MIRROR_DEPTH;
+		const int limit = mirror_at + dir * mirror_depth;
 		const int eye = mirror_axis == 0 ? m.eye.x : m.eye.y;
 
 		m.planes[FRUSTUM_NEAR].x = mirror_axis == 0 ? -dir * FRUSTUM_ONE : 0;
@@ -2339,6 +2408,73 @@ static jo_color grey_top_colour(int height)
 
 static unsigned level_planes_rect(const frustum_point *a, const frustum_point *b, unsigned planes); // below
 
+/*
+ * The roofs the watchdog drone's scan line lights this frame (drone_draw_prepare: game/drone.h,
+ * drone_scan_lit), each the lit part of one roof, and their colour. The city's roof tops are drawn
+ * as faces of their own (grey_boxes_add), and VDP1 has no depth: a lit part drawn on its own would
+ * be sorted by its own middle, against the roof's, and could come out under it. So each is added
+ * straight after its roof, chained to it (JO_3D_SORT_PREVIOUS), cut to the view as the roof is
+ */
+static drone_box scan_lit[DRONE_LIT_MAX];
+static int scan_lit_count = 0;
+static jo_color scan_lit_colour;
+
+static skyline city_skyline; // this frame's towers that hide others (game/skyline.h)
+// What the roof you stand on hides this frame (game/floor_hides.h): below a height for each upright
+// column past it, worked out from where you look. Nothing when you're not on a roof
+static floor_hides stand_floor;
+
+/*
+ * Whether a box in the world (its middle, and half its size each way) could be seen this frame: in
+ * the view, and in the city not wholly behind a nearer, taller tower (the skyline the towers have
+ * just been drawn by: so only after draw_corridor_boxes). For things drawn on their own (the
+ * drone): jo transforms a mesh's every point whether any of it's on screen or not
+ */
+bool level_box_seen(frustum_point centre, frustum_point half)
+{
+	if (!level_view_on)
+		return true;
+	if (frustum_classify_box(&level_view, centre, half, FRUSTUM_SCREEN) == FRUSTUM_OUTSIDE)
+		return false;
+	if (portal.outside && city_skyline.count > 0)
+	{
+		const skyline_box b = {(short)(centre.x - half.x), (short)(centre.x + half.x), (short)(centre.y - half.y),
+							   (short)(centre.y + half.y), (short)(centre.z + half.z)};
+
+		if (skyline_hides(&city_skyline, &b))
+			return false;
+	}
+	return true;
+}
+
+void level_scan_set(const drone_box *lit, int count, jo_color colour)
+{
+	scan_lit_count = count < DRONE_LIT_MAX ? count : DRONE_LIT_MAX;
+	for (int i = 0; i < scan_lit_count; ++i)
+		scan_lit[i] = lit[i];
+	scan_lit_colour = colour;
+}
+
+// After roof r (at height) has been added: the lit parts on it, chained after it
+static void scan_lit_add(const world_rect *r, int height, unsigned planes)
+{
+	for (int i = 0; i < scan_lit_count; ++i)
+	{
+		const drone_box *l = &scan_lit[i];
+
+		if (l->top != height || l->x_min < r->x_min || l->x_max > r->x_max || l->y_min < r->y_min || l->y_max > r->y_max)
+			continue;
+		{
+			const frustum_point c[4] = {{l->x_min, l->y_min, height}, {l->x_max, l->y_min, height}, {l->x_max, l->y_max, height},
+										{l->x_min, l->y_max, height}};
+
+			level_face_add(&grey_out, c, 4, planes != 0 ? level_planes_rect(&c[0], &c[2], planes) : 0, scan_lit_colour,
+						   LEVEL_FOG_NONE, JO_3D_SORT_PREVIOUS, false);
+		}
+	}
+}
+
+
 static bool grey_stairs_profiled(int i, bool along_x, int line); // below
 
 // One side of box i: from what hides its foot (bottom: grey_side_bottom) to its top. test: the
@@ -2357,7 +2493,7 @@ static bool grey_stairs_profiled(int i, bool along_x, int line); // below
  */
 // (0: ended 900 under the eye, as before. Filmed both ways at the hub, hub.steps: no difference
 // that the films' own run-to-run swing, 36-60 fps view by view, didn't swamp)
-#define CITY_SIDES_TO_BOARD 1
+// (the pause menu's "City sides": game/settings.h)
 /*
  * And they end where the screen does. Down in the city (the CD block's hub, 1400 down) nearly every
  * tower stands a thousand or more above you: each side reached far past the screen's top, was cut
@@ -2369,7 +2505,6 @@ static bool grey_stairs_profiled(int i, bool along_x, int line); // below
  * still a rectangle: mostly no cut at all
  */
 static int city_slope_up = FRUSTUM_STEEP, city_slope_down = -FRUSTUM_STEEP;
-static skyline city_skyline; // this frame's towers that hide others (game/skyline.h)
 
 // Whether city box i can be seen from where you stand: seen is the patch's row of city_seen
 // (NULL: no table here, everything can)
@@ -2398,6 +2533,11 @@ static int city_reach(int x, int y)
 	if (dy < 0)
 		dy = -dy;
 	return dx > dy ? dx + (dy >> 1) : dy + (dx >> 1);
+}
+
+int level_reach(int x, int y)
+{
+	return city_reach(x, y);
 }
 
 /*
@@ -2435,7 +2575,7 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 
 		if (reach * 2 <= nearest * 3 && city_slope_up < FRUSTUM_STEEP && city_slope_down > -FRUSTUM_STEEP)
 			planes = test; // trimmed, and not close: no top or bottom plane to mind
-		if (!CITY_SIDES_TO_BOARD && bottom < level_view.eye.z - 900)
+		if (!settings_on(&game_settings, SETTING_CITY_SIDES) && bottom < level_view.eye.z - 900)
 			bottom = level_view.eye.z - 900;
 		/*
 		 * Each end's trimmed by its own distance (2026-11-13): the side's top and foot then run
@@ -2448,16 +2588,34 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 		 * way (up's 0 or more, down's 0 or less: frustum_slopes).
 		 * (a few units over, for the rounding. A reach is under 2^14 and a slope 2^12: 32 bits)
 		 */
+		/*
+		 * Each is offered as a whole line, end to end, and taken only if it's above the side's own
+		 * foot (or below its own top) at both ends: floor_hides_line has why. Not the higher of the
+		 * two at each end: where the line crosses the side's foot partway along, a straight line
+		 * between those cut a wedge out of the side (the user, 2026-11-15, 0650: a guard tower's side
+		 * standing on the lower roof next to yours, the street's depths showing under it)
+		 */
 		if (city_slope_up < FRUSTUM_STEEP)
 		{
-			top_from = JO_MIN(top, level_view.eye.z + ((one * city_slope_up) >> 8) + 8);
-			top_to = JO_MIN(top, level_view.eye.z + ((other * city_slope_up) >> 8) + 8);
+			// The top's the same, upside down: negated, a line at or below the top is one "above" it
+			int down_from = -top, down_to = -top;
+
+			floor_hides_line(-top, &down_from, &down_to, -(level_view.eye.z + ((one * city_slope_up) >> 8) + 8),
+							 -(level_view.eye.z + ((other * city_slope_up) >> 8) + 8));
+			top_from = -down_from;
+			top_to = -down_to;
 		}
 		if (city_slope_down > -FRUSTUM_STEEP)
-		{
-			bottom_from = JO_MAX(bottom, level_view.eye.z + ((one * city_slope_down) >> 8) - 8);
-			bottom_to = JO_MAX(bottom, level_view.eye.z + ((other * city_slope_down) >> 8) - 8);
-		}
+			floor_hides_line(bottom, &bottom_from, &bottom_to, level_view.eye.z + ((one * city_slope_down) >> 8) - 8,
+							 level_view.eye.z + ((other * city_slope_down) >> 8) - 8);
+		/*
+		 * The roof you stand on hides the side below a height at each end (game/floor_hides.h): it
+		 * starts there, not at the street 3000 below. This is most of what VDP1 was drawing under
+		 * your own roof, running across the city (tests/e2e/roof_cut_run.steps)
+		 */
+		floor_hides_line(bottom, &bottom_from, &bottom_to,
+						 along_x ? floor_hides_below(&stand_floor, from, line) : floor_hides_below(&stand_floor, line, from),
+						 along_x ? floor_hides_below(&stand_floor, to, line) : floor_hides_below(&stand_floor, line, to));
 		// An end with nothing left comes to a point; neither: no side
 		if (bottom_from > top_from)
 			bottom_from = top_from;
@@ -2758,6 +2916,8 @@ static void grey_boxes_add(void)
 {
 	const frustum_point *e = &level_view.eye;
 
+	floor_hides_none(&stand_floor); // (set below, if you're stood on a roof with the view worked out)
+
 	/*
 	 * What's seen from the patch of roof you're on (city.h, city_seen: worked out ahead): a tower
 	 * its bit's clear for is hidden from anywhere on that patch, and is left out with that one
@@ -2766,12 +2926,25 @@ static void grey_boxes_add(void)
 	 */
 	const unsigned char *seen = JO_NULL;
 	int roof = -1; // the roof you're stood on (city_towers' index), if you are
+	/*
+	 * Out in the city, stood on a roof the corridor's doorway can't see (city_seen_doorway: worked
+	 * out ahead, every point of the doorway up to CITY_DOORWAY_EYE against every tower), you can't
+	 * see into the corridor either: what's between hides it both ways. Then none of its boxes is
+	 * looked at, the yard's tower, stairs and crates (the first two groups): before, each was tested
+	 * against the view and cut to the doorway every frame, deep in the city where it can't be seen
+	 * (the user, 2026-11-14: slow at 0650-0630 and 0B40-0940, "check that objects hidden behind the
+	 * city are not drawn")
+	 */
+	bool corridor_hidden = false;
 
 	if (level_view_on && view_is_on_foot() && portal.outside)
 	{
 		roof = city_roof_under(level_eye_out, level_eye_across, e->z);
 		if (roof >= 0)
+		{
 			seen = city_seen[roof][city_seen_patch(&city_towers[roof], level_eye_out, level_eye_across)];
+			corridor_hidden = !((city_seen_doorway[roof >> 3] >> (roof & 7)) & 1);
+		}
 	}
 	/*
 	 * Inside the corridor, only what's seen through the doorway. Every tower was looked at from in
@@ -2795,6 +2968,20 @@ static void grey_boxes_add(void)
 		 * back from the CD block's hub. One division, once a frame; near an edge (d small) it's
 		 * steeper than the screen's and changes nothing
 		 */
+		floor_hides_none(&stand_floor);
+		if (roof >= 0 && FLOOR_HIDES)
+		{
+			// The roof's box, in the world's x and y (grey_city_order maps the boxes to city.h's towers)
+			for (int i = CORRIDOR_BOXES; i < GREY_BOXES; ++i)
+				if (grey_city_order[i - CORRIDOR_BOXES] == roof)
+				{
+					const world_rect *r = &grey_boxes[i].rect;
+
+					floor_hides_begin(&stand_floor, e->x, e->y, e->z, r->x_min, r->x_max, r->y_min, r->y_max,
+									  grey_boxes[i].height);
+					break;
+				}
+		}
 		if (roof >= 0)
 		{
 			const city_tower *t = &city_towers[roof];
@@ -2850,6 +3037,9 @@ static void grey_boxes_add(void)
 	{
 		const grey_group *group = &grey_groups[g];
 		const bool city = group->first >= CORRIDOR_BOXES;
+
+		if (!city && corridor_hidden)
+			continue; // the corridor's boxes, from a roof that can't see into it
 		// The screen's edges, and the doorway's if the group is in the other room from you (from
 		// the city, the corridor's boxes stand on its floor: only the planes that can hide that)
 		const unsigned planes =
@@ -2901,6 +3091,8 @@ static void grey_boxes_add(void)
 
 			if (city && !grey_city_seen(seen, i))
 				continue; // hidden from this patch of roof (city_seen)
+			if (city && floor_hides_box(&stand_floor, r->x_min, r->x_max, r->y_min, r->y_max, b->height))
+				continue; // all of it below your roof's edge, behind the roof (game/floor_hides.h)
 			if (crossed != 0)
 			{
 				const frustum_point middle = {b->centre.x, b->centre.y, b->middle};
@@ -2943,8 +3135,10 @@ static void grey_boxes_add(void)
 											  {r->x_max, r->y_max, b->height},
 											  {r->x_min, r->y_max, b->height}};
 
-				level_face_add(&grey_out, top, 4, (test | tall) != 0 ? level_planes_rect(&top[0], &top[2], test | tall) : 0,
-							   b->lit ? HUB_TOP : grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
+				if (level_face_add(&grey_out, top, 4, (test | tall) != 0 ? level_planes_rect(&top[0], &top[2], test | tall) : 0,
+								   b->lit ? HUB_TOP : grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false) &&
+					city && scan_lit_count > 0)
+					scan_lit_add(r, b->height, test | tall); // the drone's scan line on it
 			}
 			// A bar (its floor above the corridor's): its underside, from below it
 			if (b->floor > 0 && -view_z < b->floor)
@@ -3784,6 +3978,19 @@ static void body_build(bool own_eyes, bool in_job)
 		slave_draw_mesh(&body_mesh);
 }
 
+/*
+ * They move as a reflection's light does: each is a band GLINT_BAND tall, slanting up the glass,
+ * and how high it is on the glass goes with how far you are from it, so walking at the glass the
+ * streaks slide down it, and back up as you walk away (the user, 2026-11-14: "the mirror blue
+ * effect needs to scroll down when moving closer, rather than being fixed"). A unit nearer is half
+ * a unit down; the band goes up the glass and off its top, and after a gap comes up from below
+ * again, every GLINT_PERIOD of distance (a power of two: a mask, not a remainder). The second runs
+ * half a period behind the first. Each is cut to the pane's height; where it crosses the pane is
+ * the slant's across at those heights: the pane's ~506 high, taken as 512 (a shift, no division)
+ */
+#define GLINT_BAND 256
+#define GLINT_PERIOD 1024
+
 static void mirror_glints(const corridor *passage)
 {
 	// Each streak: a slanting band up the glass, from (bottom across, top across) in sixteenths of
@@ -3791,21 +3998,50 @@ static void mirror_glints(const corridor *passage)
 	static const unsigned char streaks[2][2] = {{3, 7}, {9, 12}};
 	const int width = passage->across_max - passage->across_min;
 	const int band = width >> 4; // a sixteenth across: the wider streak
+	world_point eye;
+	int eye_out;
 	level_mesh m;
 
+	eye.x = (short)level_view.eye.x;
+	eye.y = (short)level_view.eye.y;
+	eye_out = corridor_out(passage, eye);
 	level_mesh_begin(&m, glint_points, glint_polygons, glint_attributes, GLINT_POINTS, GLINT_QUADS);
 	for (int k = 0; k < 2; ++k)
 	{
 		const int bottom = passage->across_min + ((width * streaks[k][0]) >> 4);
 		const int top = passage->across_min + ((width * streaks[k][1]) >> 4);
 		const int wide = k == 0 ? band : band >> 1;
+		// The band's top, up from the glass's foot: half your distance, round the period
+		const int phase = ((eye_out >> 1) + k * (GLINT_PERIOD >> 1)) & (GLINT_PERIOD - 1);
+		int z_high = WALL_BOTTOM_Z + phase, z_low = z_high - GLINT_BAND;
+		/*
+		 * And across with it: the slant alone moved the band ~0.4 across for each unit down, nearly
+		 * straight down, where a real reflection's light slides diagonally (the user, 2026-11-14).
+		 * The whole slant drifts 3/8 of a unit across for each unit the band moves, the same way the
+		 * slant leans: ~0.8 across a unit down in all, about 40 degrees. Centred (less 3/16 of the
+		 * period), so it drifts either side of where it was drawn
+		 */
+		const int drift = ((phase * 3) >> 3) - ((GLINT_PERIOD * 3) >> 4);
 		frustum_point corners[4];
 		const int first = m.quad_count;
+		int at_low, at_high;
 
-		corners[0] = grey_point(corridor_point(passage, 1, bottom), WALL_BOTTOM_Z);
-		corners[1] = grey_point(corridor_point(passage, 1, bottom + wide), WALL_BOTTOM_Z);
-		corners[2] = grey_point(corridor_point(passage, 1, top + wide), CORRIDOR_TOP_ON_FOOT);
-		corners[3] = grey_point(corridor_point(passage, 1, top), CORRIDOR_TOP_ON_FOOT);
+		z_high = z_high > CORRIDOR_TOP_ON_FOOT ? CORRIDOR_TOP_ON_FOOT : z_high;
+		z_low = z_low < WALL_BOTTOM_Z ? WALL_BOTTOM_Z : z_low;
+		if (z_high - z_low < 8)
+			continue; // off the glass, or a sliver at its edge
+		// Across where the slant is at those heights, drifted; kept on the glass (a band past its
+		// side would shine on the wall)
+		at_low = bottom + drift + (((top - bottom) * (z_low - WALL_BOTTOM_Z)) >> 9);
+		at_high = bottom + drift + (((top - bottom) * (z_high - WALL_BOTTOM_Z)) >> 9);
+		at_low = at_low < passage->across_min ? passage->across_min : at_low;
+		at_high = at_high > passage->across_max - wide ? passage->across_max - wide : at_high;
+		if (at_low > passage->across_max - wide || at_high < passage->across_min)
+			continue; // drifted right off the glass
+		corners[0] = grey_point(corridor_point(passage, 1, at_low), z_low);
+		corners[1] = grey_point(corridor_point(passage, 1, at_low + wide), z_low);
+		corners[2] = grey_point(corridor_point(passage, 1, at_high + wide), z_high);
+		corners[3] = grey_point(corridor_point(passage, 1, at_high), z_high);
 		if (!level_face_add(&m, corners, 4, FRUSTUM_GUARD, JO_COLOR_RGB(70, 100, 150), LEVEL_FOG_NONE,
 							JO_3D_SORT_CENTER, false))
 			continue;
@@ -3906,13 +4142,19 @@ static bool sky_hidden(const frustum_point *c, int n)
 // A flat shape, cut to the view by the screen's edges it crosses (none: as it is; all outside
 // one: not at all), unless the corridor's walls hide it. (Cut only past the guard band, as the
 // towers are, VDP1 filled more off the screen and the corridor got slower: tried 2026-11-12)
-static void sky_face(level_mesh *m, const frustum_point *c, jo_color colour)
+// (and by any more planes: extra, their bits; a landmark's cut by the city's ring, landmark_ring_cut)
+static void sky_face_cut(level_mesh *m, const frustum_point *c, jo_color colour, unsigned extra)
 {
-	const unsigned crossed = frustum_classify(&level_view, c, 4, FRUSTUM_SCREEN);
+	const unsigned crossed = frustum_classify(&level_view, c, 4, FRUSTUM_SCREEN | extra);
 
 	if (crossed == FRUSTUM_OUTSIDE || sky_hidden(c, 4))
 		return;
 	level_face_add(m, c, 4, crossed, colour, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
+}
+
+static void sky_face(level_mesh *m, const frustum_point *c, jo_color colour)
+{
+	sky_face_cut(m, c, colour, 0);
 }
 
 /*
@@ -3966,6 +4208,15 @@ static void sky_face(level_mesh *m, const frustum_point *c, jo_color colour)
 #define SKYLINE_BELOW_CITY 400
 #define SKYLINE_CORRIDOR_FOOT 1500 // in the corridor: what's lower is behind its walls
 #define SKYLINE_BEYOND 4000		   // but not the strips this far out past the corridor's end (skyline_add)
+/*
+ * The city's ring as skyline_add drew it this frame, for the landmarks drawn after it
+ * (landmark_ring_cut): its centre, radius and foot. on: the near, tall ring round you in the city
+ */
+static struct
+{
+	bool on;
+	int cx, cy, r, foot;
+} sky_ring;
 static jo_3d_polygon_attribute skyline_attribute[2]; // the picture's left half, and its right
 // The ring's corners: cos and sin of 0, 11.25, 22.5 ... degrees, x1024 (skyline_load fills it in
 // from a quarter turn's worth)
@@ -4091,6 +4342,11 @@ static void skyline_add(level_mesh *m, int place, int side, int wall, int middle
 	const world_point out_point = corridor_point_behind(side, wall, 1024, middle);
 	const int out_x = out_point.x - wall_point.x, out_y = out_point.y - wall_point.y; // 1024 long
 
+	sky_ring.on = city && skyline_loaded && foot < top;
+	sky_ring.cx = cx;
+	sky_ring.cy = cy;
+	sky_ring.r = r;
+	sky_ring.foot = foot;
 	if (!skyline_loaded || foot >= top)
 		return;
 	for (int k = 0; k < SKYLINE_STRIPS; ++k)
@@ -4150,6 +4406,79 @@ static int ease_to(int now, int to)
 	return now < to - LANDMARK_EASE ? now + LANDMARK_EASE : now > to + LANDMARK_EASE ? now - LANDMARK_EASE : to;
 }
 
+/*
+ * A landmark beyond the city's ring is behind the city: below the ring's foot, nothing of it can
+ * be seen. But the ring's only a band of strips (its foot 400 under your eye, skyline_add), and
+ * under it there's nothing to hide what's further. Going up the lift the foot rises with you, and
+ * the sound chip's capacitors and their board showed under the skyline, stood on the black (the
+ * user, 2026-11-13: "The sound landmark goes in front of the background sky when going up
+ * elevator"; lift_sound.steps).
+ * So it's cut, as everything's cut to the screen: by one more plane, through your eye and the foot
+ * of the ring's strip it's seen over. Everything under the strip's foot, as you see it, goes; the
+ * neighbouring strips' feet are the same line within a few pixels. Which strip: the one the line
+ * from you to the landmark's foot crosses, in front of you (cross products' signs, multiplies
+ * only: under 2^15 each side, inside 32 bits). Not if the landmark's on your side of that strip:
+ * it's nearer than the ring, stood in the city.
+ * Returns the plane's bit, to cut with (level_view's count must be put back after: _end), or 0.
+ * The plane goes in the portal's first slot: out in the city the doorway's planes take the rest,
+ * and the sky doesn't use them; that slot's kept and put back
+ */
+static frustum_plane ring_cut_kept;
+static int ring_cut_count;
+
+static unsigned landmark_ring_cut(int fx, int fy)
+{
+	const frustum_point *e = &level_view.eye;
+	const int vx = fx - e->x, vy = fy - e->y;
+
+	if (!sky_ring.on)
+		return 0;
+	for (int k = 0; k < SKYLINE_STRIPS; ++k)
+	{
+		const int next = (k + 1) & (SKYLINE_STRIPS - 1);
+		const int x0 = sky_ring.cx + ((skyline_round[k][0] * sky_ring.r) >> 10), y0 = sky_ring.cy + ((skyline_round[k][1] * sky_ring.r) >> 10);
+		const int x1 = sky_ring.cx + ((skyline_round[next][0] * sky_ring.r) >> 10), y1 = sky_ring.cy + ((skyline_round[next][1] * sky_ring.r) >> 10);
+		// Which side of the line you-to-landmark each end of the strip is: the line passes between
+		const int side0 = vx * (y0 - e->y) - vy * (x0 - e->x), side1 = vx * (y1 - e->y) - vy * (x1 - e->x);
+		int you, it;
+
+		if ((side0 < 0) == (side1 < 0))
+			continue;
+		if (vx * (((x0 + x1) >> 1) - e->x) + vy * (((y0 + y1) >> 1) - e->y) <= 0)
+			continue; // the strip behind you, on the same line
+		// Which side of the strip you are, and the landmark: the same side, it's nearer
+		you = (x1 - x0) * (e->y - y0) - (y1 - y0) * (e->x - x0);
+		it = (x1 - x0) * (fy - y0) - (y1 - y0) * (fx - x0);
+		if ((you < 0) == (it < 0))
+			return 0;
+		{
+			const frustum_point a = {x0, y0, sky_ring.foot}, b = {x1, y1, sky_ring.foot};
+			const frustum_point above = {(x0 + x1) >> 1, (y0 + y1) >> 1, sky_ring.foot + 1000}; // the side kept
+			unsigned bit;
+
+			ring_cut_count = level_view.count;
+			ring_cut_kept = level_view.planes[FRUSTUM_PORTAL_FIRST];
+			level_view.count = FRUSTUM_PORTAL_FIRST;
+			bit = frustum_add_edge(&level_view, a, b, above);
+			if (bit == 0)
+			{
+				level_view.count = ring_cut_count;
+				level_view.planes[FRUSTUM_PORTAL_FIRST] = ring_cut_kept;
+			}
+			return bit;
+		}
+	}
+	return 0;
+}
+
+static void landmark_ring_cut_end(unsigned bit)
+{
+	if (bit == 0)
+		return;
+	level_view.planes[FRUSTUM_PORTAL_FIRST] = ring_cut_kept;
+	level_view.count = ring_cut_count;
+}
+
 static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place)
 {
 	const frustum_point *e = &level_view.eye;
@@ -4200,19 +4529,106 @@ static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place
 		if (sky_hidden(box, 4))
 			continue;
 		count = landmark_shapes(i, frame, shapes);
-		for (int s = 0; s < count; ++s)
 		{
-			frustum_point c[4];
+			const unsigned cut = landmark_ring_cut(fx, fy); // behind the city's ring: its foot hidden
 
-			for (int k = 0; k < 4; ++k)
+			for (int s = 0; s < count; ++s)
 			{
-				const int along = (shapes[s].along[k] * size) >> 8;
+				frustum_point c[4];
 
-				c[k].x = fx + along * ux;
-				c[k].y = fy + along * uy;
-				c[k].z = (shapes[s].up[k] * size) >> 8;
+				for (int k = 0; k < 4; ++k)
+				{
+					const int along = (shapes[s].along[k] * size) >> 8;
+
+					c[k].x = fx + along * ux;
+					c[k].y = fy + along * uy;
+					c[k].z = (shapes[s].up[k] * size) >> 8;
+				}
+				sky_face_cut(m, c, (jo_color)shapes[s].colour, cut);
 			}
-			sky_face(m, c, (jo_color)shapes[s].colour);
+			landmark_ring_cut_end(cut);
+		}
+	}
+}
+
+/*
+ * The A-bus: from Backup RAM's hub (the plan's 0B30, its way in) out over the city to Backup RAM
+ * itself, the cartridge on the horizon (landmarks.c), so the far landmark's tied to the place you
+ * reach it from (the user, 2026-11-14: "the landmark is far away"). On the Saturn the cartridge
+ * slot is on the SCU's A-bus, so that's the line here: a long dark strip, rising gently from the
+ * hub's roof to the cartridge's foot, data going out along it: a short lit packet sliding along
+ * it, out to the cartridge, and again. The cartridge is drawn pulled in towards you (landmarks_add:
+ * its near share, and its size), so the bus runs to where it's drawn, not where it stands.
+ * Two quads: the strip, the packet over it (chained after it: JO_3D_SORT_PREVIOUS, so it's never
+ * under it), each cut to the view as the landmarks are. Eight segments, the packet one of them,
+ * cost the approach in drone.steps 52-54 fps where it had been 57-60. Out in the city only.
+ * The strip's width is across its line: the line's length is found once a frame (a square root,
+ * frustum_isqrt, and a division: per object, not per point)
+ *
+ * Not joined to the city, for now (the user, 2026-11-15: "looks like it's accessible, when it needs
+ * to be blocked"): it starts ABUS_GAP out from the hub's middle, its roof's edge 250 out and then a
+ * gap far wider than a jump clears (~225, walker.h), so it reads as out of reach. When Backup RAM
+ * opens, set ABUS_GAP to 0 and it runs from the hub's roof again
+ */
+#define ABUS_GAP 900 // from the hub's middle to where the bus starts: its roof's half (250), then 650 of air
+#define ABUS_HALF 120						 // half its width (5.5 m wide)
+#define ABUS_DARK JO_COLOR_RGB(62, 74, 104)	 // the cartridge's slate, lighter: it reads over the dark city
+#define ABUS_LIT JO_COLOR_RGB(120, 240, 170) // the data on it: the cartridge's label's green
+#define ABUS_PACKET_SHIFT 4					 // the packet's a sixteenth of the bus long
+#define ABUS_RUN_SHIFT 8					 // and runs its length in 256 frames (~4 s)
+
+static void abus_add(level_mesh *m, int side, int wall, int middle, unsigned int frame)
+{
+	const city_tower *hub = city_tower_at(3, 11); // Backup RAM's
+	const world_point from = corridor_point_behind(side, wall, (hub->out_min + hub->out_max) >> 1,
+												   middle + ((hub->across_min + hub->across_max) >> 1));
+	const frustum_point *e = &level_view.eye;
+	int which = -1;
+
+	for (int i = 0; i < LANDMARK_COUNT; ++i)
+		if (landmarks[i].place == PLACE_BACKUP_RAM)
+			which = i;
+	if (which < 0)
+		return;
+	{
+		// The cartridge's foot as it's drawn now (landmarks_add's own sums)
+		const landmark *l = &landmarks[which];
+		const world_point at = corridor_point_behind(side, 0, l->out, l->across);
+		const int near = landmark_near[which];
+		const int to_x = e->x + (((at.x - e->x) * near) >> 8), to_y = e->y + (((at.y - e->y) * near) >> 8);
+		const int dx = to_x - from.x, dy = to_y - from.y;
+		const int length = frustum_isqrt((unsigned)(dx * dx + dy * dy)); // under 32 000 each way: fits
+		// Where the bus starts, x 256 of the way: ABUS_GAP out (a division, once a frame)
+		const int start = length > ABUS_GAP ? (ABUS_GAP << 8) / length : 256;
+		// Where the packet is: from the bus's start to its own length short of the far end, over 256
+		// frames, round again (a mask; never past the cartridge)
+		const int run = start + (int)(((frame & ((1 << ABUS_RUN_SHIFT) - 1)) * (240 - start)) >> 8);
+		int across_x, across_y;
+
+		if (length == 0 || start >= 240)
+			return;
+		across_x = (-dy * ABUS_HALF) / length; // square to the line, ABUS_HALF long
+		across_y = (dx * ABUS_HALF) / length;
+		for (int part = 0; part < 2; ++part)
+		{
+			// The strip from end to end; the packet from run / 256 of the way to a sixteenth on
+			const int t0 = part == 0 ? start : run, t1 = part == 0 ? 256 : run + (256 >> ABUS_PACKET_SHIFT);
+			const int ax = from.x + ((dx * t0) >> 8), ay = from.y + ((dy * t0) >> 8);
+			const int bx = from.x + ((dx * t1) >> 8), by = from.y + ((dy * t1) >> 8);
+			const int az = hub->height + (((-hub->height) * t0) >> 8), bz = hub->height + (((-hub->height) * t1) >> 8);
+			const frustum_point c[4] = {{ax - across_x, ay - across_y, az + 1}, {bx - across_x, by - across_y, bz + 1},
+										{bx + across_x, by + across_y, bz + 1}, {ax + across_x, ay + across_y, az + 1}};
+
+			if (part == 0)
+				sky_face(m, c, ABUS_DARK);
+			else
+			{
+				const int before = m->quad_count;
+
+				sky_face(m, c, ABUS_LIT);
+				for (int q = before; q < m->quad_count; ++q)
+					m->attributes[q].sort = (unsigned char)((m->attributes[q].sort & ~3) | JO_3D_SORT_PREVIOUS);
+			}
 		}
 	}
 }
@@ -4290,7 +4706,15 @@ static void disc_add(level_mesh *m, int side, int wall, int middle, unsigned int
 	// underground: drawn, it showed as a line down across the floor in front of the wall (the
 	// floor's VDP2, behind every polygon: film 2026-11-12). There it starts at the floor's height
 	const int hub_roof = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height;
-	const int roof = place == PLACE_ARENA && hub_roof < 0 ? 0 : hub_roof;
+	/*
+	 * And from inside the corridor (on foot, not out in the city), from its walls' top: the walls
+	 * hide everything under that, and the far end of the walls is near as far as the beam, so VDP1
+	 * (sorting by middles, no depth) can draw a low part of it over them (the user, 2026-11-14: "The
+	 * elevator beam from CD ROM drive is visible from the yard after crashing"; not caught on film)
+	 */
+	const int roof = place == PLACE_ARENA && hub_roof < 0 ? 0
+					 : place == PLACE_WORK_RAM && !portal.outside ? CORRIDOR_TOP_ON_FOOT
+																 : hub_roof;
 
 	for (int k = 0; k < 8; ++k)
 	{
@@ -4359,15 +4783,24 @@ static void disc_add(level_mesh *m, int side, int wall, int middle, unsigned int
  * seen by the reflected eye. They're far beyond the wall, and VDP1 would draw them first and the
  * wall over them: so each is chained to the wall (JO_3D_SORT_PREVIOUS: drawn straight after it,
  * in the order added). Not cut by the reflection's depth plane (the near plane's stand-in, at the
- * wall): only by the glass's four edges
+ * wall): only by the glass's four edges.
+ * And it's far wider than the corridor, and taller: the reflected corridor has openings at the
+ * side, and through them, where the wall didn't reach, the real world behind the glass showed: the
+ * pink of the sky's horizon and the video output's landmark (the user, 2026-11-13: "Fix Landmarks
+ * in mirror to be only of the CD Rom, the video output landmark is shown"; mirror_sky.steps,
+ * ms_01). Cut to the glass, only what's seen through it is drawn: one polygon however wide it is.
+ * Near the glass the glass's view of the wall spreads 2300 / (your distance) times its size, so
+ * it's MIRROR_SKY_WIDE either side: from 50 or more from the glass it fills the pane. Kept inside a
+ * short (world_point) wherever the corridor is
  */
-#define MIRROR_SKY_TOP 6000
+#define MIRROR_SKY_TOP 12000
+#define MIRROR_SKY_WIDE 6000
 
 static void mirror_far_wall(const corridor *passage)
 {
 	static const short round[8][2] = {{1024, 0}, {724, 724}, {0, 1024}, {-724, 724}, {-1024, 0}, {-724, -724}, {0, -1024}, {724, -724}};
-	const world_point a = corridor_point(passage, MIRROR_DEPTH, passage->across_min);
-	const world_point b = corridor_point(passage, MIRROR_DEPTH, passage->across_max);
+	const world_point a = corridor_point(passage, mirror_depth, passage->across_min - MIRROR_SKY_WIDE);
+	const world_point b = corridor_point(passage, mirror_depth, passage->across_max + MIRROR_SKY_WIDE);
 	const int middle = (passage->across_min + passage->across_max) >> 1;
 	const world_point centre = city_hub_point(passage->side, passage->wall, middle, 0, CITY_DISC_OFFSET);
 	const unsigned edges = FRUSTUM_SCREEN & ~(1u << FRUSTUM_NEAR);
@@ -4403,7 +4836,7 @@ static void mirror_far_wall(const corridor *passage)
 	jo_3d_mesh_draw(&far_mesh);
 }
 
-void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift)
+void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift, bool extras)
 {
 	level_mesh m;
 
@@ -4417,8 +4850,17 @@ void level_sky_draw(int side, int wall, int middle, unsigned int frame, int plac
 	if (!level_view_on && !view_arrival_frustum(&level_view))
 		return;
 	level_mesh_begin(&m, sky_points, sky_polygons, sky_attributes, SKY_POINTS, SKY_QUADS);
-	skyline_add(&m, place, side, wall, middle);
-	landmarks_add(&m, side, frame, place);
+	sky_ring.on = false; // (skyline_add sets it)
+	skyline_add(&m, place, side, wall, middle); // always: without it the sky's pink horizon shows
+	// The landmarks and the A-bus: what the draw budget may leave out (game/draw_budget.h). Not the
+	// skyline above, nor the CD block's disc below: those are the background itself, and leaving
+	// the skyline out showed VDP2's pink horizon where the city should be (the user, 2026-11-15)
+	if (extras)
+	{
+		landmarks_add(&m, side, frame, place);
+		if (place == PLACE_WORK_RAM && portal.outside)
+			abus_add(&m, side, wall, middle, frame); // out to Backup RAM
+	}
 	if (place != PLACE_CD_BLOCK)
 		disc_add(&m, side, wall, middle, frame, place, in_lift);
 	if (m.quad_count == 0)
@@ -4433,4 +4875,131 @@ void level_sky_draw(int side, int wall, int middle, unsigned int frame, int plac
 	 * corridor_still.steps, 2026-11-12), so the debug line's poly counts it
 	 */
 	jo_3d_mesh_draw(&sky_mesh);
+}
+
+/*
+ * The watchdog drone's scan (drone_draw.c): a sheet of light, level, and its edges.
+ *
+ * The sheet's a fan, `corners` points: its apex at the sensor, then its rays' ends across it
+ * (game/drone.h: each stops at the first tower in its way, so the fan's outline follows the tower
+ * faces it meets, and isn't convex). Drawn as a triangle between each two rays, each cut to the
+ * view as every face on foot is (level_face_add), with VDP1's mesh: only the pixels where x + y is
+ * even, a screen door you see through. That's the Saturn's own see-through, and the one that works
+ * here: VDP1's half-transparency blends only over pixels VDP1 has drawn (their MSB set: SKILLS.md),
+ * and behind a drone in the air there's mostly VDP2, the floor and the sky, where it would come out
+ * solid. And it reads the frame buffer, 6 times the cost a pixel; mesh writes half the pixels.
+ * Then its outline, solid: the two outer rays from the sensor and the line along the rays' ends,
+ * each a VDP1 line (one pixel wide however near or far), cut to the view by each of its planes in
+ * turn. That's where a cut line's new end is found: a division, but per line (~11 of them), once a
+ * frame, not per pixel
+ */
+#define SCAN_POINTS 128
+#define SCAN_QUADS 64
+static jo_pos3D_fixed scan_points[SCAN_POINTS];
+static jo_3d_polygon scan_polygons[SCAN_QUADS];
+static jo_3d_polygon_attribute scan_attributes[SCAN_QUADS];
+static jo_3d_mesh scan_mesh;
+
+// A line from a to b, cut to the view's planes in `planes`: false if none of it's in view
+static bool scan_line_cut(frustum_point *a, frustum_point *b, unsigned planes)
+{
+	for (int i = 0; i < FRUSTUM_PLANES_MAX; ++i)
+	{
+		int da, db;
+
+		if (!(planes & (1u << i)))
+			continue;
+		da = frustum_distance(&level_view, i, *a);
+		db = frustum_distance(&level_view, i, *b);
+		if (da < 0 && db < 0)
+			return false;
+		if (da < 0 || db < 0)
+		{
+			// The point where the line crosses the plane: a share da / (da - db) of the way from
+			// a to b (the one division, see above). The distances are x1024 (FRUSTUM_ONE): a
+			// line 1500 long is ~1.5 million, and times a difference of 3000 that's past 32 bits.
+			// So both are taken down 8 bits first: the share's the same, to a few units in 1500
+			frustum_point *out = da < 0 ? a : b;
+			const frustum_point from = *a, to = *b;
+			const int d = (da - db) >> 8;
+
+			da >>= 8;
+			if (d == 0)
+				continue; // the line lies along the plane: nothing to cut
+			out->x = from.x + (to.x - from.x) * da / d;
+			out->y = from.y + (to.y - from.y) * da / d;
+			out->z = from.z + (to.z - from.z) * da / d;
+		}
+	}
+	return true;
+}
+
+static void scan_line_add(level_mesh *m, frustum_point a, frustum_point b, jo_color colour)
+{
+	jo_3d_polygon *q;
+	jo_3d_polygon_attribute *at;
+
+	if (m->point_count + 2 > m->points_max || m->quad_count + 1 > m->quads_max || !scan_line_cut(&a, &b, FRUSTUM_SCREEN))
+		return;
+	m->points[m->point_count].x = jo_int2fixed(a.x);
+	m->points[m->point_count].y = jo_int2fixed(a.y);
+	m->points[m->point_count].z = jo_int2fixed(a.z);
+	m->points[m->point_count + 1].x = jo_int2fixed(b.x);
+	m->points[m->point_count + 1].y = jo_int2fixed(b.y);
+	m->points[m->point_count + 1].z = jo_int2fixed(b.z);
+	q = &m->polygons[m->quad_count];
+	at = &m->attributes[m->quad_count];
+	q->normal.x = JO_FIXED_0;
+	q->normal.y = JO_FIXED_0;
+	q->normal.z = JO_FIXED_1;
+	q->vertices[0] = q->vertices[3] = (unsigned short)m->point_count;
+	q->vertices[1] = q->vertices[2] = (unsigned short)(m->point_count + 1);
+	set_corridor_wall_attribute(at, colour);
+	// A line, not a polygon: VDP1's own command (its first two corners)
+	at->sort = JO_3D_SORT_CENTER | ((JO_VDP1_LINE >> 16) & 0x1c) | JO_3D_NO_OPTION;
+	at->draw_mode = (JO_VDP1_COLOR_MODE_RGB | JO_VDP1_NO_GOURAUD) | ((JO_VDP1_LINE >> 24) & 0xc0);
+	at->direction = JO_VDP1_LINE & 0x3f;
+	m->point_count += 2;
+	m->quad_count++;
+}
+
+void level_scan_draw(const frustum_point *fan, int corners, const frustum_point *rail, jo_color sheet, jo_color edge)
+{
+	level_mesh m;
+
+	if (!level_view_on)
+		return;
+	level_mesh_begin(&m, scan_points, scan_polygons, scan_attributes, SCAN_POINTS, SCAN_QUADS);
+	for (int k = 1; k + 1 < corners; ++k)
+	{
+		const frustum_point triangle[3] = {fan[0], fan[k], fan[k + 1]};
+		const unsigned crossed = frustum_classify(&level_view, triangle, 3, FRUSTUM_SCREEN);
+		const int first = m.quad_count;
+
+		/*
+		 * Not a triangle that reaches behind the eye (one the near plane would cut): that's you in
+		 * its fan, close, and it filled the screen as the sheet passed your eye (a ceiling or a
+		 * floor of light), 42 fps; left out, the approach in drone.steps went from 46-52 fps to
+		 * 54-59 (2026-11-14). The rest of the fan still shows, and the sensor and the red
+		 */
+		if (crossed != FRUSTUM_OUTSIDE && !(crossed & (1u << FRUSTUM_NEAR)) &&
+			level_face_add(&m, triangle, 3, crossed, sheet, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false))
+			for (int i = first; i < m.quad_count; ++i)
+				scan_attributes[i].draw_mode |= JO_VDP1_MESH; // the screen door
+	}
+	for (int k = 1; k + 1 < corners; ++k)
+		scan_line_add(&m, fan[k], fan[k + 1], edge); // along the rays' ends
+	scan_line_add(&m, fan[0], fan[1], edge);		   // the two outer rays
+	scan_line_add(&m, fan[0], fan[corners - 1], edge);
+	if (rail)
+		scan_line_add(&m, rail[0], rail[1], edge); // an upright line it rides
+	if (m.quad_count == 0)
+		return;
+	scan_mesh.data.points = scan_points;
+	scan_mesh.data.polygons = scan_polygons;
+	scan_mesh.data.attributes = scan_attributes;
+	scan_mesh.data.point_count = (unsigned short)m.point_count;
+	scan_mesh.data.polygon_count = (unsigned short)m.quad_count;
+	// Drawn by the master: handed to the slave it was worse out in the city (drone_draw.c)
+	jo_3d_mesh_draw(&scan_mesh);
 }

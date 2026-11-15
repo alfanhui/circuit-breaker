@@ -21,9 +21,12 @@ shot 03_unbounded
 press y
 wait 0.5
 shot 04_rebounded
-# Debug camera: R climbs until the ceiling (view z -4000), L drops to the floor (view z 0)
+# Paused (the debug camera): B held with up climbs until the ceiling (view z -4000), with down
+# drops to the floor (view z 0). (L and R were the height before they were the pause menu's)
 press start
-hold r 15
+keydown b
+hold up 15
 shot 05_ceiling
-hold l 18
+hold down 18
+keyup b
 shot 06_floor

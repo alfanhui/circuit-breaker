@@ -250,6 +250,15 @@ int walker_step_lag(const walker *w);
 int walker_sliding(const walker *w);
 
 /*
+ * Whether you've fallen off (the user, 2026-11-14: a wrong jump fell into a street, and on for
+ * ever): in the air with no roof at all under you, more than WALKER_LOST_DROP below where you fell
+ * from. A street has no floor, so it's the end: the process is terminated, and the level starts
+ * again (input.c). The drop's long enough to feel the fall first: ~50 frames
+ */
+#define WALKER_LOST_DROP 300
+int walker_fell_off(const walker *w, const walker_area *area);
+
+/*
  * The move you're in the middle of, for whoever shows it (game/body.h: where your hands go). It
  * starts the frame the move does: your feet are already on the top's near edge (walker_position,
  * walker_height: wherever and however high that top is, so nothing here knows a block's size), and

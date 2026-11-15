@@ -142,6 +142,13 @@ void body_update(body *b, const body_state *s)
 	body_point want_hand[2], want_foot[2];
 	body_point neck, pelvis;
 	int drop, lean;
+	/*
+	 * A side-step (strafing: walker.h, L / R). strafe: its share of a full one, 0 .. 256 (the
+	 * speed / 576, as x 114 >> 8: no division); way: 1 to your right, -1 left. Only on your feet
+	 */
+	const int side_speed = s->mode == BODY_MOVING ? (s->side < 0 ? -s->side : s->side) : 0;
+	const int strafe = side_speed >= WALKER_STRAFE_SPEED ? 256 : (side_speed * 114) >> 8;
+	const int way = s->side < 0 ? -1 : 1;
 
 	if (b->mode != s->mode)
 	{
@@ -183,7 +190,10 @@ void body_update(body *b, const body_state *s)
 	if (drop < 0)
 		drop = 0;
 	lean = frustum_isqrt((unsigned int)(U(BODY_TORSO) * U(BODY_TORSO) - drop * drop));
-	pelvis = point(0, neck.y + (s->mode == BODY_SLIDE ? lean : -lean), neck.z - drop);
+	// (side-stepping, you lean into it: the head leads and the hips trail, 3 units behind the way
+	// you go. The torso's 24 long: a lean of 3 shortens its drop by a fifth of a unit, inside the
+	// bones' rounding)
+	pelvis = point(-way * ((U(3) * strafe) >> 8), neck.y + (s->mode == BODY_SLIDE ? lean : -lean), neck.z - drop);
 	b->joint[BODY_CROWN] = point(0, 0, s->eye + U(BODY_EYE_TO_CROWN));
 	b->joint[BODY_BROW] = point(0, 0, s->eye + U(1));
 	b->joint[BODY_NECK] = neck;
@@ -194,7 +204,7 @@ void body_update(body *b, const body_state *s)
 		const int side = k == 0 ? -1 : 1; // left's -x
 		const int base = k * BODY_SIDE;
 		const body_point shoulder = point(side * U(BODY_SHOULDERS), neck.y, neck.z - U(2));
-		const body_point hip = point(side * U(BODY_HIPS), pelvis.y, pelvis.z);
+		const body_point hip = point(pelvis.x + side * U(BODY_HIPS), pelvis.y, pelvis.z);
 		// Arms hanging: the wrist a little out and forward of the shoulder, nearly straight down
 		const body_point hang = point(shoulder.x + side * U(3), shoulder.y + U(2), shoulder.z - U(26));
 
@@ -278,8 +288,25 @@ void body_update(body *b, const body_state *s)
 			const body_point running = point(shoulder.x - side * U(2), shoulder.y + U(3) + ((arm * U(17)) >> 10),
 											 shoulder.z - U(15) + ((up * U(15)) >> 10) + ((back * U(3)) >> 10));
 
-			want_foot[k] = point(side * U(BODY_HIPS), (swing * reach) >> 10, U(2) + (lift > 0 ? (lift * height) >> 10 : 0));
-			want_hand[k] = between(walking, running, run);
+			/*
+			 * The side-step: the same step turned a quarter. Each foot swings the way you go
+			 * (lifting as it does) and is carried back under you, the two half a turn apart, as
+			 * walking: so the leading foot steps out, and the trailing one closes up to it. 4
+			 * units each way, and the hips are 5 from the middle: the feet never cross (a shuffle,
+			 * not a grapevine: ready to go either way). With a walk it adds up to a diagonal step.
+			 * The arms come up a little from hanging, out and forward, elbows bent: a guard, for
+			 * balance, swaying against the feet. Not enough to rise into view: a run's pump
+			 * takes over from it as it does from the walk's swing
+			 */
+			const int step = (way * swing * ((U(4) * strafe) >> 8)) >> 10;
+			// (it lifts while it swings the way you go: step grows with swing either way, so that's
+			// the same half of the turn as a walk's lift)
+			const int step_up = lift > 0 ? (lift * ((U(3) * strafe) >> 8)) >> 10 : 0;
+			const body_point guard = point(hang.x + side * U(4) - ((way * swing * U(2)) >> 10), hang.y + U(5), hang.z + U(7));
+
+			want_foot[k] = point(side * U(BODY_HIPS) + step, (swing * reach) >> 10,
+								 U(2) + (lift > 0 ? (lift * height) >> 10 : 0) + step_up);
+			want_hand[k] = between(between(walking, guard, strafe), running, run);
 			break;
 		}
 		}

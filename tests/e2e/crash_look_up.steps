@@ -1,0 +1,32 @@
+# The pink horizon after looking up, the way it was played (the user, 2026-11-14): after the crash,
+# not booted on foot. Round 5's crash as breach.steps rides it (film it with
+# tests\e2e\film_round.ps1 -Round 5 -Steps crash_look_up.steps), up, then Y held to look up, let
+# go, and shots as the view comes back down and after
+wait_boot
+skip_prologue
+press start
+press z
+press start
+wait 0.5
+press left
+press c 6
+wait 15.6
+press b
+wait 2.0
+shot cl_00_up
+keydown y
+wait 1.0
+shot cl_01_looking_up
+keyup y
+wait 0.3
+shot cl_02
+wait 1.0
+shot cl_03_level_again
+hold left 0.6
+wait 0.5
+shot cl_04_turned
+keydown y
+wait 1.0
+keyup y
+wait 1.0
+shot cl_05_level_again

@@ -1,0 +1,26 @@
+# Up the CD block hub's lift looking north, at the sound chip's landmark (BOOT_AT_HUB 1 in
+# src/input.c): the user saw it in front of the sky going up the lift (2026-11-13). Level, then
+# looking up, all the way to the top
+wait_up
+wait 1.0
+hold up 0.45
+wait 0.3
+hold right 0.75
+wait 0.5
+shot ls_00_on_the_pad
+wait 1.5
+shot ls_01_rising
+wait 1.0
+shot ls_02_rising
+keydown y
+wait 0.8
+shot ls_03_looking_up
+wait 1.0
+shot ls_04_looking_up
+wait 1.0
+shot ls_05_looking_up
+keyup y
+wait 0.6
+shot ls_06_level
+wait 1.0
+shot ls_07_top

@@ -3,7 +3,9 @@
 #include "bot.h"
 
 // Each round's rivals (STORY.md). Rounds 4 and 5 are the Watchdog's: 1 for now, as it isn't built
-static const unsigned char round_rivals[ROUND_COUNT] = {1, 2, 3, 1, 1};
+// Round 4, the rooms: three, one in each of the other rooms (arena.h, arena_rival_start; the
+// user, 2026-11-13: "In Level 4 of area, add 3 other bots to each of the quadrants")
+static const unsigned char round_rivals[ROUND_COUNT] = {1, 2, 3, 3, 1};
 
 // Each round's arena (STORY.md): a different layout each time round, the last the first's again
 static const unsigned char round_layouts[ROUND_COUNT] = {ARENA_OPEN, ARENA_DONUT, ARENA_PILLARS, ARENA_ROOMS,
@@ -21,6 +23,7 @@ static void start_phase(rounds *r, int phase)
 {
 	r->phase = (unsigned char)phase;
 	r->frames = 0;
+	r->dead = 0;
 }
 
 void rounds_init(rounds *r)
@@ -42,7 +45,18 @@ int rounds_update(rounds *r, int rivals_alive)
 	{
 	case ROUND_PLAYING:
 		if (rivals_alive > 0)
+		{
+			r->dead = 0;
 			return ROUND_NOTHING;
+		}
+		// The last round: not won. The Watchdog restarts its rival (rounds.h)
+		if (r->number == ROUND_COUNT - 1)
+		{
+			if (++r->dead < ROUND_RESTART_FRAMES)
+				return ROUND_NOTHING;
+			r->dead = 0;
+			return ROUND_RESTARTS;
+		}
 		start_phase(r, ROUND_SINKING);
 		return ROUND_CLEARED;
 	case ROUND_SINKING:

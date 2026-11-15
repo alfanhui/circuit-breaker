@@ -1,0 +1,29 @@
+# The pause menu (START; src/game/settings.h, main.c draw_pause_menu): in play, START pauses and
+# the menu's up; R turns the debug text off (the cursor starts on it: the readout top left goes),
+# L three times to the cycle's shape and R makes it the next one (linked -> ribbon), START plays on
+# with the ribbon and no readout, and the menu's gone. Filmed from iso (DOWN), to see the cycle
+wait_boot
+skip_prologue
+press down
+wait 2.5
+shot pm_0_riding
+press start
+wait 0.6
+shot pm_1_paused
+press r
+wait 0.6
+shot pm_2_debug_text_off
+press l 3
+press r
+wait 0.6
+shot pm_3_ribbon
+# Flying the camera (the d-pad) puts the menu away; L brings it back (the cursor on to the next)
+hold up 0.4
+wait 0.3
+shot pm_3b_flying
+press l
+wait 0.5
+shot pm_3c_back
+press start
+wait 1.0
+shot pm_4_playing_on

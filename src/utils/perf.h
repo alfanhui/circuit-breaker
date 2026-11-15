@@ -13,9 +13,12 @@
 extern int perf_fps;
 extern int perf_cpu_average; // % of a display frame, averaged over the last second
 extern int perf_cpu_peak;	 // worst frame in the last second
-// Vblanks missed since boot (a frame that took 2 vblanks adds 1), from the frame timing. Never resets, so a single
-// hitch shows as a step, where the per-second fps average barely moves.
+extern int perf_frame_cpu;	 // the last frame's, alone (the benchmark's peak: game/bench.h)
+// Fields that showed VDP1's picture before again, since boot: jo's late count (jo_core_get_late_frame_count,
+// johannes-fetz/joengine#110). Never resets, so a single hitch shows as a step, where the per-second fps average
+// barely moves.
 extern int perf_late_frames;
+extern int perf_frame_late; // the last frame's alone: fields it repeated a picture (the benchmark's count)
 // How many vblanks the last frame took, to the nearest (1 at a steady 60; up to 4): the game
 // steps that many times next frame to keep its speed (input.c)
 extern int perf_last_frame_vblanks;
@@ -46,10 +49,39 @@ extern int perf_vdp1_version; // VDP1's chip version (MODR bits 15-12): Mednafen
 #define PERF_WALKER 8	// on foot: the walker's step, its roofs checked (input.c)
 #define PERF_GRID 9		// the floor's grid on VDP2: its rotation worked out (main.c)
 #define PERF_MIRROR 10	// on foot: the corridor drawn again in the mirror (main.c, level.h)
-#define PERF_PART_COUNT 11
+#define PERF_DRONE 11	   // on foot: the watchdog's drone flying and looking (input.c)
+#define PERF_DRONE_MODEL 12 // its model drawn (drone_draw.c)
+#define PERF_DRONE_SCAN 13  // its scan's sheet: the rays, and the sheet and lines cut and drawn (drone_draw.c)
+#define PERF_PART_COUNT 14
 extern int perf_part_peak[PERF_PART_COUNT]; // % of a display frame, the worst in the last second
 
 void perf_part_add(int part, int frc_before);
+
+/*
+ * Pixels VDP1 is given to draw, by part (SG-7/SG-8: VDP1's time is pixels, not polygons). jo
+ * estimates each polygon's pixels as it builds its command (JO_PROFILE_3D_PIXELS: lines x pixels
+ * a line, hidden or not), and keeps a running sum per CPU. Only in a profiler build
+ * (JO_COMPILE_WITH_PROFILER_MODULE = 1 in the makefile, which turns jo's count on): elsewhere
+ * perf_px_mark costs nothing and the figures stay 0.
+ *
+ * perf_px_mark(part) after a group of draws gives that part what the master CPU added since the
+ * last mark. What the slave CPU draws (the corridor's and city's floor and boxes, slave_draw.h)
+ * is counted on its own, as PX_SLAVE, at the frame's end (the slave's done by then). The debug
+ * line shows each part's worst frame in the last second, in thousands of pixels
+ */
+#define PX_OTHER 0	// before the first mark: the arena's floor plane setup, anything not marked
+#define PX_WORLD 1	// the corridor's and city's floor and boxes the master drew itself
+#define PX_ARENA 2	// the arena's walls
+#define PX_TRAILS 3 // the trails
+#define PX_SKY 4	// the landmarks and the CD block's disc (level_sky_draw)
+#define PX_DRONE 5	// the watchdog's drone and its scan
+#define PX_BODY 6	// your body, from your own eyes
+#define PX_MIRROR 7 // the mirror's second pass (the master's share)
+#define PX_SLAVE 8	// everything the slave CPU drew
+#define PX_TOTAL 9	// the frame's whole (both CPUs)
+#define PX_COUNT 10
+extern int perf_px_peak[PX_COUNT]; // thousands of pixels, the worst frame in the last second
+void perf_px_mark(int part);
 
 void perf_frame_start(void);
 void perf_frame_end(void);

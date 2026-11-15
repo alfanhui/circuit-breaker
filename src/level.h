@@ -8,6 +8,8 @@
 #include "game/wall_flicker.h"
 #include "game/corridor.h"
 #include "game/body.h"
+#include "game/frustum.h"
+#include "game/drone.h" // drone_box
 
 void load_arena_textures(void);
 // The broken glass over the hole behind you, from the disc: loaded in the hidden load at the
@@ -84,10 +86,34 @@ void draw_arena_surround(int rise, bool cutaway);
  * Only in the views that look out (1st person, on the cycle or on foot); between
  * slave_draw_begin and slave_draw_end, in the world's matrix
  */
-void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift);
+// extras: the landmarks and the A-bus too (false: the draw budget's left them out). The skyline and
+// the CD block's disc are always drawn
+void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift, bool extras);
 
 // Whether you're on foot out past the corridor's doorway, in the city (as of the frame last
 // drawn): the floor's the circuit board there (main.c), and the towers stand on it
 bool level_in_city(void);
+
+/*
+ * The watchdog drone's scan (drone_draw.c): a level fan of light, `corners` points round it (the
+ * apex first), drawn see-through (VDP1's mesh: a screen door) in `sheet`, its outline in solid
+ * lines of `edge`, and the rail it rides up and down (rail[0] to rail[1], a line too). Cut to
+ * this frame's view; in the world's matrix, on foot
+ */
+void level_scan_draw(const frustum_point *fan, int corners, const frustum_point *rail, jo_color sheet, jo_color edge);
+
+/*
+ * The roofs the drone's scan line lights this frame (game/drone.h, drone_scan_lit), coloured as
+ * they're drawn: set before the city's drawn (drone_draw_prepare). Each a lit part of one roof
+ */
+void level_scan_set(const drone_box *lit, int count, jo_color colour);
+
+// Whether a box (its middle, half its size each way) could be seen this frame: in the view, and in
+// the city not behind a nearer, taller tower. After the city's drawn (its skyline's built then)
+bool level_box_seen(frustum_point centre, frustum_point half);
+
+// How far (x, y) is from this frame's eye along the floor, no less (the longer way plus half the
+// shorter: up to 12% over, no square root). For a model's lighter version far off
+int level_reach(int x, int y);
 
 #endif

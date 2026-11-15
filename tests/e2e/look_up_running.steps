@@ -1,0 +1,33 @@
+# Looking up while running west across 0650, where frames run late (fps ~47-55, the debug line's
+# late count climbing), every frame recorded. The floor's fog used to be rebuilt 2 frames after the
+# camera moved: right only for frames on time, so here it was a frame out and a band of the circuit
+# floor showed unfogged under the horizon as the look began (the user, 2026-11-15: "the VDP2
+# circuit floor clips up"). Now each frame's fog is shown with its own picture (game/floor_fade.h,
+# floor_fade_tables). The flash check: a band there for a frame is a flash
+record
+boot_at 0660
+wait_up
+wait 1.5
+keydown up
+wait 0.6
+flashes_from
+keydown y
+wait 0.12
+shot lr_00
+wait 0.12
+shot lr_01
+wait 0.12
+shot lr_02
+wait 0.6
+keyup y
+wait 0.12
+shot lr_03
+wait 0.12
+shot lr_04
+wait 0.5
+keydown y
+wait 0.5
+keyup y
+wait 0.5
+flashes_to look_up_running
+keyup up

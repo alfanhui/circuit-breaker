@@ -92,8 +92,8 @@ itself.
 | 1 | A square | One bot | Nothing yet |
 | 2 | A square donut: a solid block in the middle | Two bots | One section of wall flickers; the HUD glitches on near misses |
 | 3 | A square with four square pillars | Three bots, and an ally pick-up | The flicker again, somewhere else |
-| 4 | Four rooms, a cross of walls between them with a gap (a door) in each arm | The Watchdog arrives: faster, and it copies itself (DMA) | The flicker grows |
-| 5 | A square again, the first round's, closing in | The Watchdog alone | The flicker is obvious |
+| 4 | Four rooms, a cross of walls between them with a gap (a door) in each arm | Three rivals, one in each of the other rooms (built 2026-11-14). To come: the Watchdog arrives: faster, and it copies itself (DMA) | The flicker grows |
+| 5 | A square again, the first round's, closing in | The Watchdog alone: killed, it restarts its process, every time (built 2026-11-14): the round can't be won | The flicker is obvious |
 
 - **Between rounds** the walls (and any pillars) sink into the ground. For a few seconds there's
   no edge: you ride on over the endless floor. Then the next layout rises around you. The world

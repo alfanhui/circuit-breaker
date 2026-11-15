@@ -95,19 +95,24 @@ static void the_walls_move_one_way_at_a_time(void)
 	CHECK(ok);
 }
 
-static void after_the_last_round_the_loop_goes_round(void)
+// (It went round to the first again, until the last round's rival was restarted: rounds.h)
+static void the_last_round_doesnt_end(void)
 {
 	rounds r;
 	int frames;
 
 	rounds_init(&r);
-	for (int round = 1; round <= ROUND_COUNT; ++round)
+	for (int round = 1; round < ROUND_COUNT; ++round)
 	{
 		rounds_update(&r, 0);
 		until_event(&r, 0, 1000, &frames); // rises
 		until_event(&r, 0, 1000, &frames); // begins
 	}
-	CHECK_EQ(0, r.number);
+	CHECK_EQ(ROUND_COUNT - 1, r.number);
+	for (int frame = 0; frame < 2000; ++frame)
+		rounds_update(&r, 0);
+	CHECK_EQ(ROUND_COUNT - 1, r.number);
+	CHECK_EQ(ROUND_PLAYING, r.phase);
 }
 
 static void each_round_has_its_rivals_and_title(void)
@@ -123,6 +128,36 @@ static void each_round_has_its_rivals_and_title(void)
 	until_event(&r, 0, 1000, &frames);
 	CHECK_EQ(2, rounds_rivals(&r));
 	CHECK(rounds_title(&r)[15] == '2');
+}
+
+// The last round can't be won: with no rival left it isn't cleared. The rival's restarted, a
+// second and a half later, every time it dies; the earlier rounds end as they did
+static void the_last_rounds_rival_is_restarted(void)
+{
+	rounds r;
+
+	rounds_init(&r);
+	r.number = ROUND_COUNT - 1;
+	for (int again = 0; again < 3; ++again)
+	{
+		for (int frame = 0; frame < 200; ++frame)
+			CHECK_EQ(ROUND_NOTHING, rounds_update(&r, 1)); // riding
+		for (int frame = 1; frame < ROUND_RESTART_FRAMES; ++frame)
+			CHECK_EQ(ROUND_NOTHING, rounds_update(&r, 0)); // dead: its trail sinks
+		CHECK_EQ(ROUND_RESTARTS, rounds_update(&r, 0));
+		CHECK_EQ(ROUND_PLAYING, r.phase);
+		CHECK_EQ(ROUND_COUNT - 1, r.number);
+	}
+	// Dead only a moment (the restart, or a debug kill, then alive again): the count starts over
+	for (int frame = 0; frame < ROUND_RESTART_FRAMES - 1; ++frame)
+		rounds_update(&r, 0);
+	rounds_update(&r, 1);
+	for (int frame = 1; frame < ROUND_RESTART_FRAMES; ++frame)
+		CHECK_EQ(ROUND_NOTHING, rounds_update(&r, 0));
+	CHECK_EQ(ROUND_RESTARTS, rounds_update(&r, 0));
+	// Any other round: cleared at once
+	rounds_init(&r);
+	CHECK_EQ(ROUND_CLEARED, rounds_update(&r, 0));
 }
 
 // A crash mid-round: the terminal screen starts the same round again
@@ -205,9 +240,9 @@ static void the_last_round_closes_in_lunges(void)
 		rounds_update(&r, 1);
 	CHECK_EQ(ROUND_CLOSE_MAX, rounds_closing(&r));
 	CHECK_EQ(0, rounds_rumble(&r));
-	// Won: it stops closing (input.c keeps the walls where they got to until they're down)
+	// Its rival dead: it isn't won (the rival's restarted, rounds.h), and stays closed
 	rounds_update(&r, 0);
-	CHECK_EQ(0, rounds_closing(&r));
+	CHECK_EQ(ROUND_CLOSE_MAX, rounds_closing(&r));
 	// A restart opens it out again
 	play_to_round(&r, ROUND_COUNT - 1);
 	for (int i = 0; i < 1000; ++i)
@@ -235,8 +270,9 @@ void run_rounds_tests(void)
 	the_walls_sink_lie_flat_then_rise();
 	rivals_dont_matter_between_rounds();
 	the_walls_move_one_way_at_a_time();
-	after_the_last_round_the_loop_goes_round();
+	the_last_round_doesnt_end();
 	each_round_has_its_rivals_and_title();
+	the_last_rounds_rival_is_restarted();
 	a_restart_keeps_the_round();
 	each_round_has_its_layout();
 	the_last_round_closes_in_lunges();

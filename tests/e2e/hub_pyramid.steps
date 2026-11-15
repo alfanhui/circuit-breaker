@@ -1,0 +1,36 @@
+# Stood by the CD block's lift (boot_at hub, facing west), turned to the pyramid (east), then
+# looking up and back, every frame recorded. Two of the user's reports, 2026-11-15:
+#  - "the pyramid does not show most of the time": the draw budget left out the arena, which on foot
+#    in the city is the pyramid (game/draw_budget.h). Every shot pm_0x must show the pyramid
+#  - "the circuit floor clips up, the fog doesn't hide it fast enough when starting to look up": the
+#    fog's rows were rebuilt 2 frames after the camera moved, a frame out when a frame ran late
+#    (game/floor_fade.h, floor_fade_tables). The flash check covers the look up. Held up 1.5 s, so
+#    the sky seen only looking up is in still frames too (or it reads as stray colours)
+record
+boot_at hub
+wait_up
+wait 1.0
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.8
+shot pm_00_east
+wait 0.5
+shot pm_01
+wait 0.5
+shot pm_02
+wait 0.5
+shot pm_03
+flashes_from
+keydown y
+wait 0.15
+shot pm_04_starting_up
+wait 0.15
+shot pm_05_up
+wait 1.5
+keyup y
+wait 0.6
+flashes_to hub_look_up
+shot pm_06_back

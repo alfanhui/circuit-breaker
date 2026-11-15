@@ -1,0 +1,21 @@
+# SG-6's flash check (tests/e2e/glitch.py) through a quick look up and back down, booted on 0020
+# facing north: the move that showed the pink horizon for a frame when VDP2's planes were one frame
+# ahead of VDP1's picture (jo before johannes-fetz/joengine#111; src/view.c VDP2_PLANE_DELAY). Every frame is recorded and checked, so the fault
+# is found without a shot having to land on it. The holes check needs the magenta back colour, so
+# run_e2e.ps1 builds this film with GLITCH_CHECK on
+record
+boot_at 0020
+wait_up
+wait 1.0
+hold left 0.6
+wait 1.0
+flashes_from
+holes_from
+wait 0.3
+keydown y
+wait 0.6
+keyup y
+wait 0.6
+flashes_to look_up
+holes_to look_up
+shot flash_00_end

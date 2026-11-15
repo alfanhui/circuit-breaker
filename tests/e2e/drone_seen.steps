@@ -1,0 +1,57 @@
+# The watchdog's drone catching you (game/drone.h: drone_sees): booted on foot, out onto the entry
+# as city.steps goes, then its run south over the street onto the next block (column 0, row 6, 60
+# lower), when the run carries you that far (it doesn't always: the entry's edge is in its fan
+# too). The drone waits up over the street at rows 6-7, its beam angled down at the roofs, the scan
+# line sweeping out across them, the roofs it crosses lit cyan. Turned right to face it, shots each
+# second from ~17 s to ~31 s. While the line's under you it's red, and its sensor white
+wait_up
+keydown up
+wait 8.5
+keyup up
+hold l 2.2
+wait 0.3
+keydown up
+wait 1.8
+keyup up
+wait 0.5
+hold left 0.7
+wait 0.5
+hold down 1.5
+wait 0.3
+keydown up
+wait 1.9
+keyup up
+wait 0.3
+hold right 0.4
+wait 0.3
+shot ds_00_landed
+wait 1.0
+shot ds_01
+wait 1.0
+shot ds_02
+wait 1.0
+shot ds_03
+wait 1.0
+shot ds_04
+wait 1.0
+shot ds_05
+wait 1.0
+shot ds_06
+wait 1.0
+shot ds_07
+wait 0.5
+shot ds_08
+wait 0.5
+shot ds_09
+wait 0.5
+shot ds_10
+wait 0.5
+shot ds_11
+wait 0.5
+shot ds_12
+wait 0.5
+shot ds_13
+wait 0.5
+shot ds_14
+wait 0.5
+shot ds_15

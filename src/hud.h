@@ -45,6 +45,13 @@ void hud_draw_burst(int cx, int cy, int inner, int outer);
 // to top + height - 1 from the screen's top, near black or pink, over everything
 void hud_draw_band(int top, int height, bool pink);
 
+// The pause menu's backing: a near-black box behind text cells column .. column + columns - 1,
+// row .. row + rows - 1 (the cells of jo_printf), so the menu reads over the floor's lines
+void hud_draw_panel(int column, int row, int columns, int rows);
+
+// The benchmark's verdict (game/bench.h): the whole screen green (pass) or red
+void hud_draw_verdict(int pass);
+
 // On foot, the head's lock on a target (game/target.h): an amber bracket round (cx, cy), in pixels
 // from the screen's centre (+y down)
 void hud_draw_lock(int cx, int cy);

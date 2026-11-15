@@ -1,6 +1,7 @@
 #ifndef __ARENA_H__
 #define __ARENA_H__
 
+#include <stdbool.h>
 #include "world.h"
 
 /*
@@ -87,6 +88,16 @@ int arena_unit(void);
 // Where a rider starts this layout (clear of every block), and which way it faces
 world_point arena_start(void);
 int arena_start_heading(void);
+/*
+ * Where a rival starts, if the layout has places of its own for them (returns false if not: they
+ * start round you, input.c). The rooms: you're in the south-west one, and the three rivals
+ * (which: 0 .. 2) each have one of the others, at its middle. Everyone sets off through a door
+ * into the next room round, the same way round as you (you ride north into the north-west room,
+ * its rider east into the north-east, and so on): nobody meets head on in a doorway, and the room
+ * you ride into has just been left
+ */
+#define ARENA_ROOM_RIVALS 3
+bool arena_rival_start(int which, world_point *at, int *heading);
 // p moved, if it has to be, so it's at least margin inside the walls and margin clear of every
 // block: for placing riders. Out of a block the shortest way
 world_point arena_clear_spot(world_point p, int margin);

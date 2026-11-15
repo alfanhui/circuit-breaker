@@ -40,9 +40,10 @@ Lines counted from the top (the layout as of 2026-11-04):
 | 5 | the first bot, the round |
 | 6 | the level's parts, worst frame each (`ar co sd tp fl gr bd wk`: utils/perf.h) |
 | 7 | VDP1's own gauge: `over` (frames it didn't finish), `busy` (% of frames it was still drawing when the CPU was done), `cmd` (its list's length), `v` (its chip version). See `game/vdp1_gauge.h` |
+| 8 | the drone (on foot, in the city): `dr` its flying and looking, `dm` its model, `ds` its scan (the beam and the lit roofs), % of a frame, worst in the last second (utils/perf.h); `at` the city tower you stand on, its address on `docs/images/work_ram_plan.svg` |
 
 Pad: Up boost (the cycle always drives) · Left/Right turn · Down 1st person / iso · A new trail · X worst-case trail ·
-Y arena boundary · Z turn camera compare · B/C speed · L/R arena size · Start debug camera.
+Y arena boundary · Z turn camera compare · B/C speed · L/R arena size · Start pause (the menu: L next, R change; the debug text can be switched off there).
 
 Read `cpu` at least ~2 seconds after changing anything: it averages over a second.
 
@@ -88,6 +89,7 @@ Result: ________
 | Fog jumps up and down from frame to frame | The row counter isn't latching when EXTEN is read (`current_row`), so the restart reads a stale value | Video |
 | Horizontal stripes, or the fade repeats down the screen | The DMA's read address drifts: hardware reads memory differently from Mednafen (the 4-byte entry rule) | Photo |
 | No fog at all, floor at full brightness everywhere | DMA not starting on HBlank, or jo rewrites the colour calculation registers | Photo |
+| Looking up or down on foot, the floor's lines flash bright under the horizon for a frame or two | The fog's table is switched a frame after the one VDP1 shows (`FOG_LEAD 1` in floor_fade_vdp2.c): measured in Mednafen, not explained by jo's code. On a Saturn try `FOG_LEAD 0` too | Video of a quick look up and back, each value |
 | The fog's top rows jump for a frame now and then | Since jo-engine 2026 the fog is on SCU DMA level 1 and jo copies the VDP1 commands on level 0, which goes first: an HBlank during the copy waits | Video |
 | Whole floor black, or one flat shade | DMA writing the wrong value, or once per frame instead of per row | Photo |
 | Fine normally, but the top of the screen flickers or goes wrong when the game slows down (X trail, test 3) | The once-per-frame restart ran late, after the picture had started, and was skipped (`floor_fade_vblank` returns early), so the DMA ran past the table | Video while holding X trail |

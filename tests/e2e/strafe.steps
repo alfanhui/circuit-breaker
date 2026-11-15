@@ -1,0 +1,50 @@
+# The side-step (game/body.h; L / R on the pad), in the mirror (BOOT_ON_FOOT 1 in src/input.c):
+# the half turn to the glass as mirror_sky.steps, up to it, then stepping right, left, and left
+# again looking down at your own feet
+wait_up
+wait 1.0
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.4
+hold left 0.4
+wait 0.8
+hold up 5.0
+wait 0.6
+shot st_00_stood
+keydown r
+wait 0.3
+shot st_01_right
+wait 0.1
+shot st_02_right
+wait 0.1
+shot st_03_right
+wait 0.1
+shot st_04_right
+keyup r
+wait 0.6
+shot st_05_stood
+keydown l
+wait 0.3
+shot st_06_left
+wait 0.1
+shot st_07_left
+wait 0.1
+shot st_08_left
+wait 0.1
+shot st_09_left
+keyup l
+wait 0.5
+keydown b
+wait 0.6
+keydown r
+wait 0.3
+shot st_10_down_right
+wait 0.1
+shot st_11_down_right
+wait 0.1
+shot st_12_down_right
+keyup r
+keyup b

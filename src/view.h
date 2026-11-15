@@ -145,4 +145,23 @@ extern int view_floor_shift;
 void view_follow(const cycle *c);
 void view_push_world_matrix(void);
 
+/*
+ * The camera VDP2's floor and sky planes are drawn with. Since jo applies the planes with the VDP1
+ * picture of their frame (johannes-fetz/joengine#111), it's this frame's (VDP2_PLANE_DELAY 0,
+ * view.c). Before, the planes ran 2 frames ahead and were drawn with the camera of 2 frames ago:
+ * on a quick look up the sky's pink showed under the city's skyline (the user, 2026-11-14;
+ * flash_look_up.steps). view_vdp2_frame: once a frame, before the planes (main.c); then their
+ * matrix and numbers from view_vdp2 / view_push_vdp2_matrix
+ */
+typedef struct
+{
+	jo_angle roll, rx, rz;
+	int x, y, z;
+	int sky_rise; // view_sky_rise's
+	int ground;	  // view_ground_height's
+} view_vdp2_camera;
+void view_vdp2_frame(void);
+const view_vdp2_camera *view_vdp2(void);
+void view_push_vdp2_matrix(void);
+
 #endif

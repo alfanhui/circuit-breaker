@@ -1,0 +1,24 @@
+# The pink horizon after looking up (the user, 2026-11-14, a screenshot at 0020 facing north: the
+# sky's pink band shows below the city's skyline once you let go of looking up). Booted on 0020
+# (facing back east), a quarter turn left to face north, then Y held to look up, let go, and shots
+# as the view comes back down and after it's level
+boot_at 0020
+wait_up
+wait 1.0
+hold left 0.6
+wait 1.0
+shot lu_00_level
+keydown y
+wait 1.0
+shot lu_01_up
+keyup y
+wait 0.15
+shot lu_02_coming_down
+wait 0.15
+shot lu_03
+wait 0.3
+shot lu_04
+wait 1.0
+shot lu_05_level_again
+wait 2.0
+shot lu_06_later

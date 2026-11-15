@@ -145,6 +145,18 @@ for k, t in towers.items():
         t.h = max(LOWEST, (TOP - STEP * dist[k] + (0 if t.entry else wobble(*k))) // 10 * 10)
     else:
         t.h = LOWEST  # out of reach on foot: a gated hub
+# Heights set by hand, after the walked ones (column, row): each one's reason. The game's table
+# (--c) and the moves checked below take them as they are
+HEIGHTS = {
+    # Level with the CD block's hub and the roof beside it, across the street from them: so from
+    # the hub you can jump back (a jump can't land higher than it left: 0020 was 50 up, 0120 60).
+    # The drops into them stay clean: 0030 -1310 to -1400 is 90, 0130 -1260 to -1360 is 100
+    # (the user, 2026-11-14: "When at the CD block, you cannot jump back to 0020 / 0120")
+    (2, 0): -1400,
+    (2, 1): -1360,
+}
+for k, h in HEIGHTS.items():
+    towers[k].h = h
 for t in towers.values():
     if t.guard:  # far above anything near it
         t.h = max([n.h for n in towers.values() if abs(n.col - t.col) + abs(n.row - t.row) <= 2
@@ -278,13 +290,18 @@ S = 0.08
 W = corner(15, 0)[0] + QUARTER
 H = corner(0, 11)[1] + QUARTER
 PAD, WEST, KEY_W = 50, 70, 440
-cw = round(PAD + WEST + W * S + 30 + KEY_W)
+cw = round(PAD + WEST + W * S + 90 + KEY_W)
 ch_ = round(max(2 * PAD + 70 + H * S, PAD + 70 + 26 + 14 * 23 + 20 + 22 + len(HUBS) * 32 + 12 + 30
                 + 9 * 14 + PAD))
 ox, oy = PAD + WEST, PAD + 70
 
 
-def X(v): return round(ox + v * S, 1)
+# Drawn as the game has it (2026-11-14): mirrored left to right. In the game "out" from the
+# corridor runs to the world's west (+x, corridor.c), so with north up the city lies west of the
+# corridor: the corridor comes in from the east (the right), and the plan's columns run leftwards.
+# World x here is the plan's own (east from the entry); only the drawing turns it round, so a
+# rectangle's left edge on the page is its east side (x1)
+def X(v): return round(ox + (W - v) * S, 1)
 def Y(v): return round(oy + v * S, 1)
 
 
@@ -300,18 +317,19 @@ svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw}" height="{ch_}" '
        f'<rect width="{cw}" height="{ch_}" fill="#07070d"/>',
        '<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" '
        'orient="auto"><path d="M0 0 8 4 0 8z" fill="context-stroke"/></marker></defs>',
-       f'<text x="{PAD}" y="{PAD}" fill="#e8e6f0" font-size="20">Work RAM: floor plan, draft 4 (wider streets, climbs)'
+       f'<text x="{PAD}" y="{PAD}" fill="#e8e6f0" font-size="20">Work RAM: floor plan, draft 5 (as the game has it, addressed)'
        f'</text>',
-       f'<text x="{PAD}" y="{PAD + 20}" fill="#7a789a" font-size="12">top down, north up. A grid of '
-       f'memory, as a spreadsheet; guard pages wall off the straight way. Roofs show their height'
+       f'<text x="{PAD}" y="{PAD + 20}" fill="#7a789a" font-size="12">top down, north up, as the game has '
+       f'it: the corridor comes in from the east. Each tower\'s address (row, column) at its foot: the '
+       f'debug text shows the one you stand on'
        f'</text>']
 
-lx1, hx0 = X(corner(7, 0)[0] + QUARTER), X(corner(8, 0)[0])
-svg.append(f'<text x="{X(0)}" y="{oy - 24}" fill="#9a98b8" font-size="13">LOW WORK RAM 0x0020_0000'
-           f'</text><text x="{X(0)}" y="{oy - 10}" fill="#5c5a78" font-size="11">slow DRAM: streets '
+lx1, hx0 = X(corner(8, 0)[0]), X(corner(7, 0)[0] + QUARTER)  # the channel's left and right, drawn
+svg.append(f'<text x="{hx0}" y="{oy - 24}" fill="#9a98b8" font-size="13">LOW WORK RAM 0x0020_0000'
+           f'</text><text x="{hx0}" y="{oy - 10}" fill="#5c5a78" font-size="11">slow DRAM: streets '
            f'200, jumps up to 225, climbs up to 100</text>')
-svg.append(f'<text x="{hx0}" y="{oy - 24}" fill="#9a98b8" font-size="13">HIGH WORK RAM 0x0600_0000'
-           f'</text><text x="{hx0}" y="{oy - 10}" fill="#5c5a78" font-size="11">fast: streets 200, '
+svg.append(f'<text x="{X(W)}" y="{oy - 24}" fill="#9a98b8" font-size="13">HIGH WORK RAM 0x0600_0000'
+           f'</text><text x="{X(W)}" y="{oy - 10}" fill="#5c5a78" font-size="11">fast: streets 200, '
            f'jumps up to 225 (longer: to come)</text>')
 cx = (lx1 + hx0) / 2
 svg.append(f'<rect x="{lx1}" y="{Y(0)}" width="{hx0 - lx1}" height="{H * S}" fill="#0b0b16"/>')
@@ -325,16 +343,16 @@ for col in range(16):
                f'{col:X}</text>')
 for row in range(len(MAP)):
     y = (Y(corner(0, row)[1]) + Y(corner(0, row)[1] + QUARTER)) / 2
-    svg.append(f'<text x="{X(0) - 8}" y="{y + 3}" fill="#4a4870" font-size="9" text-anchor="end">'
+    svg.append(f'<text x="{X(W) - 8}" y="{y + 3}" fill="#4a4870" font-size="9" text-anchor="end">'
                f'{row * 0x100:04X}</text>')
 # The corridor in
 e = entry
-svg.append(f'<rect x="{X(e.x0) - 60}" y="{Y(e.y0 + 300)}" width="60" height="{400 * S}" '
+svg.append(f'<rect x="{X(e.x0)}" y="{Y(e.y0 + 300)}" width="60" height="{400 * S}" '
            f'fill="#2a0612" stroke="#c8102e"/>')
 # Bridges
 for p, q in bridges:
     a, b = towers[p], towers[q]
-    svg.append(f'<rect x="{X(a.x1)}" y="{Y(a.y0 + 350)}" width="{X(b.x0) - X(a.x1)}" '
+    svg.append(f'<rect x="{X(b.x0)}" y="{Y(a.y0 + 350)}" width="{X(a.x1) - X(b.x0)}" '
                f'height="{300 * S}" fill="#0e3a4a" stroke="#38d0ff"/><text x="{cx}" '
                f'y="{Y(a.y0 + 350) - 4}" fill="#38d0ff" font-size="10" text-anchor="middle">data bus'
                f'</text>')
@@ -343,28 +361,32 @@ for row, line in enumerate(MAP):
     for col, c in enumerate(line):
         if c == ' ':
             x, y = corner(col, row)
-            svg.append(f'<rect x="{X(x) + 3}" y="{Y(y) + 3}" width="{QUARTER * S - 6}" '
+            svg.append(f'<rect x="{X(x + QUARTER) + 3}" y="{Y(y) + 3}" width="{QUARTER * S - 6}" '
                        f'height="{QUARTER * S - 6}" fill="none" stroke="#3a3858" '
                        f'stroke-dasharray="3 3"/>')
 # Towers
 for t in towers.values():
-    x, y, w = X(t.x0) + 1, Y(t.y0) + 1, QUARTER * S - 2
+    x, y, w = X(t.x1) + 1, Y(t.y0) + 1, QUARTER * S - 2
+    # Its address, as a spreadsheet cell's: the row's (0000 .. 0B00) and the column (0 .. F), at its
+    # foot. The debug text's "at" (main.c) is the same, for where a frame was slow
+    address = (f'<text x="{x + w / 2}" y="{y + w - 3}" fill="#8f8db0" font-size="7" '
+               f'text-anchor="middle">{t.row * 0x100 + t.col * 0x10:04X}</text>')
     if t.guard:
         svg.append(f'<rect x="{x}" y="{y}" width="{w}" height="{w}" fill="#000" stroke="#5a5880" '
                    f'stroke-width="2"/><line x1="{x}" y1="{y}" x2="{x + w}" y2="{y + w}" '
                    f'stroke="#5a5880"/><line x1="{x + w}" y1="{y}" x2="{x}" y2="{y + w}" '
-                   f'stroke="#5a5880"/>')
+                   f'stroke="#5a5880"/>' + address)
         continue
     stroke, sw = ('#ff3b5c', 3) if t.entry else (('#ffd23f', 3) if t.lift else ('#000', 1))
     if (t.col, t.row) in sealed:
         svg.append(f'<rect x="{x}" y="{y}" width="{w}" height="{w}" fill="#2a2840" stroke="#46446a" '
                    f'stroke-width="1"/><rect x="{x + 5}" y="{y + 5}" width="{w - 10}" height="{w - 10}" '
-                   f'fill="none" stroke="#46446a" stroke-dasharray="2 2"/>')
+                   f'fill="none" stroke="#46446a" stroke-dasharray="2 2"/>' + address)
         continue
     svg.append(f'<rect x="{x}" y="{y}" width="{w}" height="{w}" fill="{shade(t.h)}" '
                f'stroke="{stroke}" stroke-width="{sw}"/>')
     svg.append(f'<text x="{x + w / 2}" y="{y + w / 2 + 4}" fill="#f4f2ff" font-size="10" '
-               f'text-anchor="middle">{t.h}</text>')
+               f'text-anchor="middle">{t.h}</text>' + address)
     if t.hub or t.entry:
         label = 'ENTRY' if t.entry else t.hub[0]
         col = '#ff3b5c' if t.entry else '#ffd23f'
@@ -406,8 +428,36 @@ for loop in PATROLS:
     svg.append(f'<polygon points="{" ".join(pts)}" fill="none" stroke="#7cff6b" stroke-width="2" '
                f'stroke-dasharray="10 6" opacity="0.75"/>')
 
+# What's built in the game (src/game/city.c, city.h: CITY_COLUMNS x CITY_ROWS of this map, from
+# its north-west corner). The rest is dimmed: a plan, not yet a level
+BUILT_COLUMNS, BUILT_ROWS = 7, 12
+bx0, by0 = corner(0, 0)
+bx1, by1 = corner(BUILT_COLUMNS - 1, BUILT_ROWS - 1)
+bx1, by1 = bx1 + QUARTER, by1 + QUARTER
+svg.append(f'<rect x="{X(W) - 2}" y="{Y(0) - 2}" width="{X(bx1) - X(W) - 2}" height="{H * S + 4}" '
+           f'fill="#07070d" opacity="0.72"/>')
+svg.append(f'<rect x="{X(bx1) - 5}" y="{Y(by0) - 5}" width="{X(bx0) - X(bx1) + 10}" '
+           f'height="{Y(by1) - Y(by0) + 10}" fill="none" stroke="#5cf2ff" stroke-width="3"/>')
+svg.append(f'<text x="{X(bx1) - 5}" y="{Y(by1) + 38}" fill="#5cf2ff" font-size="12">BUILT in the game: '
+           f'columns 0-6, rows 0-11 (src/game/city.c). Dimmed: planned, not built</text>')
+# The watchdog's drone as built (city_drone_route): the street between columns 1 and 2, 40 in from
+# its middle, down three floors at the rows' meeting lines (6-7, 8-9, 10-11), and back up
+dx = (corner(1, 6)[0] + QUARTER + corner(2, 6)[0]) / 2 - 40
+stops = [corner(0, r)[1] + QUARTER for r in (6, 8, 10)]
+svg.append(f'<line x1="{X(dx)}" y1="{Y(stops[0])}" x2="{X(dx)}" y2="{Y(stops[2])}" stroke="#ff5a1f" '
+           f'stroke-width="4"/>')
+for y in stops:
+    svg.append(f'<circle cx="{X(dx)}" cy="{Y(y)}" r="6" fill="#ff5a1f"/>'
+               f'<path d="M{X(dx) + 6} {Y(y)} l14 -10 v20 z" fill="#5cf2ff" opacity="0.8"/>')
+svg.append(f'<text x="{X(bx1) - 5}" y="{Y(by1) + 54}" fill="#ff5a1f" font-size="12">Orange: the '
+           f'watchdog drone as built, waiting at 3 floors down the street, scanning west (cyan)</text>')
+# The game's view of it: mirrored, left to right (corridor.c: "out" runs to the world's west)
+svg.append(f'<text x="{X(bx1) - 5}" y="{Y(by1) + 70}" fill="#ffb03a" font-size="12">As the game has it: '
+           f'walking out of the corridor (west), the rows south (Backup RAM) are on your left, the CD '
+           f'block on your right</text>')
+
 # Key
-kx, ky = X(W) + 30, oy
+kx, ky = ox + W * S + 90, oy
 svg.append(f'<text x="{kx}" y="{ky}" fill="#e8e6f0" font-size="15">Key</text>')
 rows = [('roof', shade(500), 'roof: its height (lower is navy)'),
         ('roof', shade(3200), '...higher is pinker'),
@@ -421,7 +471,9 @@ rows = [('roof', shade(500), 'roof: its height (lower is navy)'),
         ('freed', '#3a3858', 'freed block: hollow, a fall'),
         ('lift', '#ffd23f', 'hub: a way out, and a lift up'),
         ('bus', '#38d0ff', 'data bus: the bridge between banks'),
-        ('patrol', '#7cff6b', "the watchdog's patrol")]
+        ('patrol', '#7cff6b', "the watchdog's patrol (planned)"),
+        ('built', '#5cf2ff', 'built in the game'),
+        ('drone', '#ff5a1f', "the watchdog's drone, as built")]
 for i, (kind, colr, text) in enumerate(rows):
     y = ky + 26 + i * 23
     if kind == 'roof':
@@ -442,6 +494,12 @@ for i, (kind, colr, text) in enumerate(rows):
     elif kind == 'lift':
         svg.append(f'<rect x="{kx}" y="{y - 12}" width="24" height="16" fill="{shade(900)}" '
                    f'stroke="{colr}" stroke-width="3"/>')
+    elif kind == 'built':
+        svg.append(f'<rect x="{kx}" y="{y - 12}" width="24" height="16" fill="none" stroke="{colr}" '
+                   f'stroke-width="3"/>')
+    elif kind == 'drone':
+        svg.append(f'<line x1="{kx}" y1="{y - 4}" x2="{kx + 24}" y2="{y - 4}" stroke="{colr}" '
+                   f'stroke-width="4"/>')
     elif kind == 'bus':
         svg.append(f'<rect x="{kx}" y="{y - 9}" width="24" height="10" fill="#0e3a4a" stroke="{colr}"/>')
     else:
@@ -459,8 +517,8 @@ svg.append(f'<text x="{kx}" y="{y}" fill="#e8e6f0" font-size="15">Check: the sho
            f'</text>')
 for i, line in enumerate(report):
     svg.append(f'<text x="{kx}" y="{y + 18 + i * 14}" fill="#9a98b8" font-size="10">{line}</text>')
-svg.append(f'<text x="{X(0)}" y="{Y(H) + 22}" fill="#5c5a78" font-size="11">scale: a tower 1000 x '
-           f'500 units (2 grid cells a side); the arena is 16000 across</text>')
+svg.append(f'<text x="{X(W)}" y="{Y(H) + 22}" fill="#5c5a78" font-size="11">scale: a tower {QUARTER} x '
+           f'{QUARTER} units (11.5 m); the arena is 16000 across</text>')
 svg.append('</svg>')
 
 here = os.path.dirname(os.path.abspath(__file__))

@@ -56,6 +56,12 @@ typedef struct
 	int over;
 	int busy_percent;
 	int commands;
+	// The frame before, as found at this frame's start: 1 if VDP1 didn't finish it (the benchmark
+	// counts these frame by frame: game/bench.h)
+	int last_unfinished;
+	// Every frame VDP1 didn't finish since boot: a film reads it at its end, to compare two runs of
+	// the same moves (over is per second, and a shot only sees the second it lands in)
+	int unfinished_total;
 } vdp1_gauge;
 
 void vdp1_gauge_init(vdp1_gauge *g);

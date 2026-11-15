@@ -1,5 +1,5 @@
 # Films one of the arena's rounds: builds the game booting straight into it (BOOT_ROUND in
-# src/input.c, 1 to 5 here), runs a step script against it in Docker, and makes a contact sheet
+# src/features.h, 1 to 5 here), runs a step script against it in Docker, and makes a contact sheet
 # of its shots. BOOT_ROUND is put back to 0 and the game rebuilt afterwards, even if a step fails.
 # Usage: tests\e2e\film_round.ps1 -Round 4 [-Steps layouts.steps]
 #   shots:  tests\build\e2e\round<Round>\    sheet: tests\build\e2e\round<Round>_sheet.png
@@ -10,21 +10,21 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $project = (Resolve-Path "$PSScriptRoot\..\..").Path
-$input_c = "$project\src\input.c"
+$features_h = "$project\src\features.h"
 $shots = "$project\tests\build\e2e"
 
-# Sets BOOT_ROUND (0-based) in input.c. Written back without a byte-order mark: PowerShell's own
+# Sets BOOT_ROUND (0-based) in features.h. Written back without a byte-order mark: PowerShell's own
 # Set-Content would add one (SKILLS.md)
 function Set-BootRound([int]$number, [int]$on_foot)
 {
-	$src = [System.IO.File]::ReadAllText($input_c)
+	$src = [System.IO.File]::ReadAllText($features_h)
 	$src = $src -replace "(?m)^#define BOOT_ROUND \d+", "#define BOOT_ROUND $number"
 	$src = $src -replace "(?m)^#define BOOT_ON_FOOT \d+", "#define BOOT_ON_FOOT $on_foot"
-	[System.IO.File]::WriteAllText($input_c, $src)
+	[System.IO.File]::WriteAllText($features_h, $src)
 }
 # The rounds are filmed from the arena: not booted on foot in the corridor (BOOT_ON_FOOT), which
 # is put back as it was afterwards
-$was_on_foot = if ([System.IO.File]::ReadAllText($input_c) -match "(?m)^#define BOOT_ON_FOOT (\d+)") { [int]$Matches[1] } else { 0 }
+$was_on_foot = if ([System.IO.File]::ReadAllText($features_h) -match "(?m)^#define BOOT_ON_FOOT (\d+)") { [int]$Matches[1] } else { 0 }
 
 function Build
 {

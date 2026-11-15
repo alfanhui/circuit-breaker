@@ -1,0 +1,43 @@
+# Looking up at the mirror from an angle and up close (mirror_look_up.steps and
+# mirror_look_moving.steps, straight on, found nothing wrong): turned round to the glass, walked
+# most of the way in, then with Y held, strafing and turning either way, shots as it goes
+wait_up
+wait 1.0
+hold left 0.6
+wait 0.3
+hold left 0.6
+wait 0.5
+hold up 2.5
+wait 0.3
+keydown y
+wait 0.5
+shot ma_00_up
+hold l 0.4
+shot ma_01_strafed_left
+hold l 0.4
+shot ma_02
+hold r 0.8
+shot ma_03_strafed_right
+hold r 0.8
+shot ma_04
+hold left 0.15
+shot ma_05_turned_left
+hold left 0.15
+shot ma_06
+hold left 0.15
+shot ma_07
+hold right 0.6
+shot ma_08_turned_right
+hold right 0.15
+shot ma_09
+hold up 0.3
+shot ma_10_closer
+hold up 0.3
+shot ma_11
+hold up 0.3
+shot ma_12
+hold up 0.3
+shot ma_13
+keyup y
+wait 0.4
+shot ma_14_level

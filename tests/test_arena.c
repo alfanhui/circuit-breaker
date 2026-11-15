@@ -243,6 +243,37 @@ static void every_start_is_clear_with_room_ahead(void)
 	arena_set_layout(ARENA_OPEN);
 }
 
+// The rooms' rivals: one in each room but yours, clear of the walls, and each with a clear ride
+// through its door to the next room's middle (8 units on); no places of their own elsewhere
+static void the_rooms_rivals_have_a_room_each(void)
+{
+	world_point you, at;
+	int heading, count, seen = 0;
+	const world_rect *b;
+
+	arena_set_layout(ARENA_OPEN);
+	CHECK(!arena_rival_start(0, &at, &heading));
+	arena_set_layout(ARENA_ROOMS);
+	you = arena_start();
+	b = arena_blocks(&count);
+	for (int i = 0; i < ARENA_ROOM_RIVALS; ++i)
+	{
+		CHECK(arena_rival_start(i, &at, &heading));
+		CHECK(!(at.x > 0 && at.y > 0)); // not yours (south-west: +x, +y)
+		CHECK(at.x != 0 && at.y != 0);
+		seen |= 1 << ((at.x > 0 ? 1 : 0) + (at.y > 0 ? 2 : 0));
+		for (int k = 0; k < count; ++k)
+			CHECK(!inside_grown(at, &b[k], 1000));
+		CHECK_EQ(8 * arena_unit(), collision_arena(at, heading, 8 * arena_unit(), 0, 0));
+		CHECK(at.x != you.x || at.y != you.y);
+	}
+	CHECK_EQ(1 + 2 + 4, seen); // rooms 0, 1 and 2: every room but yours (3), once each
+	CHECK(!arena_rival_start(ARENA_ROOM_RIVALS, &at, &heading));
+	// And your own ride north is as clear
+	CHECK_EQ(8 * arena_unit(), collision_arena(you, arena_start_heading(), 8 * arena_unit(), 0, 0));
+	arena_set_layout(ARENA_OPEN);
+}
+
 static void a_spot_in_a_block_is_moved_out(void)
 {
 	world_point p = {500, 2800}; // in the donut's block, near its south side (+y)
@@ -305,6 +336,7 @@ void run_arena_tests(void)
 	RUN(blocks_are_whole_pieces_at_every_size);
 	RUN(rooms_are_closed_but_for_the_doors);
 	RUN(every_start_is_clear_with_room_ahead);
+	RUN(the_rooms_rivals_have_a_room_each);
 	RUN(a_spot_in_a_block_is_moved_out);
 	RUN(inset_pulls_the_walls_in_smoothly);
 }

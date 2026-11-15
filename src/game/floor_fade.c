@@ -21,6 +21,51 @@ int floor_fade_ratio(int level)
 	return (level * FLOOR_FADE_RATIO_MAX + MAX_LEVEL / 2) / MAX_LEVEL;
 }
 
+void floor_fade_tables_init(floor_fade_tables *t)
+{
+	for (int i = 0; i < FLOOR_FADE_TABLES; ++i)
+		t->built[i] = 0;
+	t->showing = -1;
+}
+
+int floor_fade_tables_build(floor_fade_tables *t, unsigned int tag)
+{
+	int pick = -1;
+
+	for (int i = 0; i < FLOOR_FADE_TABLES; ++i)
+		if (t->built[i] && t->tag[i] == tag)
+			return i; // built again in the same frame: the same table
+	// Else one never built, or the oldest, but never the one on screen
+	for (int i = 0; i < FLOOR_FADE_TABLES; ++i)
+	{
+		if (i == t->showing)
+			continue;
+		if (!t->built[i])
+		{
+			pick = i;
+			break;
+		}
+		if (pick < 0 || (int)(t->tag[i] - t->tag[pick]) < 0)
+			pick = i;
+	}
+	t->built[pick] = 1;
+	t->tag[pick] = tag;
+	return pick;
+}
+
+int floor_fade_tables_show(floor_fade_tables *t, unsigned int shown)
+{
+	int best = -1;
+
+	for (int i = 0; i < FLOOR_FADE_TABLES; ++i)
+		// Built for that frame or one before it; of those, the newest
+		if (t->built[i] && (int)(shown - t->tag[i]) >= 0 && (best < 0 || (int)(t->tag[i] - t->tag[best]) > 0))
+			best = i;
+	if (best >= 0)
+		t->showing = best;
+	return t->showing;
+}
+
 void floor_fade_rows(const floor_fade_view *view, unsigned char *levels, int rows)
 {
 	for (int row = 0; row < rows; ++row)

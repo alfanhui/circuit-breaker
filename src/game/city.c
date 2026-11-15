@@ -11,8 +11,8 @@
 // The plan's towers and heights (city.h has them as a map). Generated: python
 // tools/work_ram_plan.py --c. Edit the plan's map, not this
 const city_tower city_towers[CITY_TOWERS] = {
-	TOWER(0, 0, -1460, CITY_ROOF), TOWER(1, 0, -1400, CITY_HUB), TOWER(2, 0, -1350, CITY_ROOF), TOWER(3, 0, -1310, CITY_ROOF), TOWER(4, 0, 400, CITY_GUARD), TOWER(5, 0, -970, CITY_SEALED), TOWER(6, 0, -750, CITY_SEALED), // row 0
-	TOWER(0, 1, -1400, CITY_ROOF), TOWER(1, 1, -1360, CITY_ROOF), TOWER(2, 1, -1300, CITY_ROOF), TOWER(3, 1, -1260, CITY_ROOF), TOWER(4, 1, 400, CITY_GUARD), TOWER(5, 1, -1090, CITY_SEALED), TOWER(6, 1, 400, CITY_GUARD), // row 1
+	TOWER(0, 0, -1460, CITY_ROOF), TOWER(1, 0, -1400, CITY_HUB), TOWER(2, 0, -1400, CITY_ROOF), TOWER(3, 0, -1310, CITY_ROOF), TOWER(4, 0, 400, CITY_GUARD), TOWER(5, 0, -970, CITY_SEALED), TOWER(6, 0, -750, CITY_SEALED), // row 0
+	TOWER(0, 1, -1400, CITY_ROOF), TOWER(1, 1, -1360, CITY_ROOF), TOWER(2, 1, -1360, CITY_ROOF), TOWER(3, 1, -1260, CITY_ROOF), TOWER(4, 1, 400, CITY_GUARD), TOWER(5, 1, -1090, CITY_SEALED), TOWER(6, 1, 400, CITY_GUARD), // row 1
 	TOWER(0, 2, -1280, CITY_SEALED), TOWER(1, 2, 400, CITY_GUARD), TOWER(2, 2, 400, CITY_GUARD), TOWER(3, 2, -1210, CITY_ROOF), TOWER(4, 2, 400, CITY_GUARD), TOWER(5, 2, -860, CITY_SEALED), TOWER(6, 2, -1150, CITY_ROOF), // row 2
 	TOWER(0, 3, 400, CITY_GUARD), TOWER(1, 3, 400, CITY_GUARD), TOWER(2, 3, 400, CITY_GUARD), TOWER(3, 3, -1160, CITY_ROOF), TOWER(4, 3, 400, CITY_GUARD), TOWER(5, 3, -980, CITY_SEALED), TOWER(6, 3, -1100, CITY_ROOF), // row 3
 	TOWER(0, 4, -60, CITY_ROOF), TOWER(1, 4, -100, CITY_ROOF), TOWER(2, 4, 400, CITY_GUARD), TOWER(3, 4, -1100, CITY_ROOF), TOWER(4, 4, -980, CITY_SEALED), TOWER(5, 4, -860, CITY_SEALED), TOWER(6, 4, 400, CITY_GUARD), // row 4
@@ -89,4 +89,48 @@ int city_walker_area_add(const corridor *c, walker_area *area)
 			return 0;
 	}
 	return 1;
+}
+
+void city_drone_route(const corridor *c, drone_stop *route)
+{
+	// Between the plan's columns 1 and 2: the street's middle (a shift: no division), less
+	// CITY_DRONE_IN: its tail clear of the guard pages, its nose out over column 1's lower roofs
+	const int out = ((city_tower_at(1, 6)->out_max + city_tower_at(2, 6)->out_min) >> 1) - CITY_DRONE_IN;
+	const int middle = (c->across_min + c->across_max) >> 1;
+	// Facing back the way the corridor came: its heading's opposite (side is a heading, outwards)
+	const unsigned char back = (unsigned char)((c->side + 2) & 3);
+	// Each floor's stop: across, where two rows of a block meet (the row's far edge), and how high.
+	// Rows 10-11: column 1's a guard page there, so column 0's edge (the rows line up)
+	static const signed char rows[3] = {6, 8, 10};
+	// High over the roofs it watches (the user, 2026-11-14: higher, its scan angled down at them):
+	// 300-400 over rows 6-11's roofs (-60 .. -400), each stop a little lower than the last
+	static const short heights[3] = {320, 170, 60};
+	static const unsigned char order[CITY_DRONE_STOPS] = {0, 1, 2, 1}; // down, and back up
+
+	for (int i = 0; i < CITY_DRONE_STOPS; ++i)
+	{
+		const int floor = order[i];
+		const world_point at = corridor_point(c, out, middle + city_tower_at(0, rows[floor])->across_max);
+
+		route[i].x = at.x;
+		route[i].y = at.y;
+		route[i].z = heights[floor];
+		route[i].heading = back;
+		route[i].wait = CITY_DRONE_WAIT;
+	}
+}
+
+void city_drone_boxes(const corridor *c, drone_box *boxes)
+{
+	for (int i = 0; i < CITY_TOWERS; ++i)
+	{
+		world_point a, b;
+
+		city_tower_corners(c, &city_towers[i], &a, &b);
+		boxes[i].x_min = a.x < b.x ? a.x : b.x;
+		boxes[i].x_max = a.x < b.x ? b.x : a.x;
+		boxes[i].y_min = a.y < b.y ? a.y : b.y;
+		boxes[i].y_max = a.y < b.y ? b.y : a.y;
+		boxes[i].top = city_towers[i].height;
+	}
 }

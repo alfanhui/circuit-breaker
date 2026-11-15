@@ -317,12 +317,56 @@ static int step_axis(walker *w, const walker_area *area, int x, int y, int rise)
 	return to > feet + WALKER_STEP_UP ? 3 : 1;
 }
 
+static int onto_top(const walker_area *area, int x, int y, int along_x, int sign, int height, int *px, int *py); // below
+
+/*
+ * Catching a ledge in the air (the user, 2026-11-14: you couldn't get back from the CD block to
+ * Backup RAM, as every street on the way down is a jump down, and a jump never landed higher than it
+ * left). Going into the side of a roof whose top's no more than WALKER_CLIMB above your feet, your
+ * hands catch its edge and you pull yourself up onto it: a climb, as from the ground (Mirror's Edge's
+ * catch). (x, y): where you'd have gone, into its side, the way along_x and sign say; feet: your
+ * feet's height before this frame's drop. Not a bar (it floats: there's no edge to pull up onto
+ * from below it). Returns whether you caught it: stood on its top, at a walk, the eye following
+ */
+static int catch_ledge(walker *w, const walker_area *area, int x, int y, int along_x, int sign, int feet)
+{
+	int top = -32768, px, py;
+
+	for (int i = 0; i < area->count; ++i)
+		if (area->heights[i] > feet && area->bottoms[i] < feet + WALKER_HEAD && on_roof(&area->rects[i], x, y, 0))
+		{
+			if (area->bottoms[i] > feet)
+				return 0; // a bar
+			top = area->heights[i] > top ? area->heights[i] : top;
+		}
+	if (top == -32768 || top > feet + WALKER_CLIMB)
+		return 0; // nothing there, or out of reach: you hit the side
+	// Only a ledge higher than you left (more than a kerb): a jump up. One no higher, a jump that
+	// falls short of it, isn't caught: a gap too far still holds you at its lip (vault_off refuses
+	// it), so how far you can jump is the same as it was
+	if (top <= w->take_off + WALKER_STEP_UP)
+		return 0;
+	if (!onto_top(area, x, y, along_x, sign, top, &px, &py))
+		return 0; // no room to stand on it
+	lag_by(w, top - feet);
+	w->x = px * WALKER_SUB;
+	w->y = py * WALKER_SUB;
+	w->z = top * WALKER_SUB;
+	w->falling = 0;
+	w->fall_speed = 0;
+	w->dip = 0;
+	if (w->forward > WALKER_FORWARD_SPEED)
+		w->forward = WALKER_FORWARD_SPEED;
+	w->move = WALKER_MOVE_CLIMB;
+	return 1;
+}
+
 /*
  * In the air: gravity, and the way you left the roof (air_dx, air_dy). Going up (a jump: the fall
- * speed's negative) the top's where the drop's measured from. You can't go into the side of a roof
- * higher than your feet (you'd hit it: you stop against it and fall on down its side); you land
- * on one once your feet reach it. How far you fell decides the landing. Returns false if you hit
- * a side this frame
+ * speed's negative) the top's where the drop's measured from. Going into the side of a roof higher
+ * than your feet, you catch its edge if it's in reach (catch_ledge) and climb up onto it; otherwise
+ * you hit it: you stop against it and fall on down its side. You land on a roof once your feet
+ * reach it. How far you fell decides the landing. Returns false if you hit a side this frame
  */
 static int fall(walker *w, const walker_area *area)
 {
@@ -343,11 +387,19 @@ static int fall(walker *w, const walker_area *area)
 	if (!solid_at(area, (w->x + w->air_dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, across, across + WALKER_HEAD))
 		w->x += w->air_dx;
 	else if (w->air_dx != 0)
+	{
+		if (catch_ledge(w, area, (w->x + w->air_dx) >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, 1, w->air_dx > 0 ? 1 : -1, across))
+			return 1; // caught: up on its top
 		clear = 0;
+	}
 	if (!solid_at(area, w->x >> WALKER_SUB_SHIFT, (w->y + w->air_dy) >> WALKER_SUB_SHIFT, across, across + WALKER_HEAD))
 		w->y += w->air_dy;
 	else if (w->air_dy != 0)
+	{
+		if (catch_ledge(w, area, w->x >> WALKER_SUB_SHIFT, (w->y + w->air_dy) >> WALKER_SUB_SHIFT, 0, w->air_dy > 0 ? 1 : -1, across))
+			return 1;
 		clear = 0;
+	}
 
 	// Landing: on the highest roof under you lower than where you fell from (not the one you
 	// stepped off, still under your middle for the first frame or two), and no higher than your
@@ -921,4 +973,13 @@ int walker_move(const walker *w)
 int walker_sliding(const walker *w)
 {
 	return w->slide > 0;
+}
+
+int walker_fell_off(const walker *w, const walker_area *area)
+{
+	const int feet = w->z >> WALKER_SUB_SHIFT;
+
+	// The cheap test first: only once you're that far down does it look under you (every roof)
+	return w->falling && feet < w->fall_from - WALKER_LOST_DROP &&
+		   roof_at(area, w->x >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, feet) < 0;
 }

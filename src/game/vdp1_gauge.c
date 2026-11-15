@@ -9,15 +9,19 @@ void vdp1_gauge_init(vdp1_gauge *g)
 	g->over = 0;
 	g->busy_percent = 0;
 	g->commands = 0;
+	g->last_unfinished = 0;
+	g->unfinished_total = 0;
 }
 
 void vdp1_gauge_frame_start(vdp1_gauge *g, unsigned short edsr, unsigned short lopr)
 {
 	int commands;
 
-	if (!(edsr & VDP1_EDSR_BEF))
+	g->last_unfinished = !(edsr & VDP1_EDSR_BEF);
+	if (g->last_unfinished)
 	{
 		++g->unfinished; // shown unfinished: LOPR is only how far it got, not the list's length
+		++g->unfinished_total;
 		return;
 	}
 	// Finished: the last command read was the end command. LOPR is its address / 8, and commands

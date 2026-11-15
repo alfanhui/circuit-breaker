@@ -35,12 +35,23 @@ extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trai
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)
 extern const trail *solid_trails[FIELD_TRAIL_COUNT];
 extern int solid_trail_count;
+// The watchdog's drone over the city (game/drone.h), from when you're up on foot: drone_draw.c draws it
+#include "game/city.h" // (and game/drone.h)
+extern drone watchdog;
+extern drone_box watchdog_boxes[CITY_TOWERS]; // the towers, for its sight and for its light to stop at
+// The address of the city tower you stand over, as the floor plan labels it (row << 8 | column << 4:
+// docs/images/work_ram_plan.svg), for the debug text; -1 off the city (or not on foot)
+int foot_tower_address(void);
+// The pause (START): the game frozen, the pause menu up (game/settings.h), and the camera free to
+// fly about (the debug camera, which it began as: the name's kept)
 extern bool debug_camera;
+// The pause menu's on screen: as it pauses, and after L or R; flying the camera puts it away
+extern bool pause_menu_up;
 // Debug: the game moves on 1 frame in DEBUG_SLOW_MOTION_FRAMES (the picture is still redrawn every frame)
 #define DEBUG_SLOW_MOTION_FRAMES 8
 extern bool debug_slow_motion;
-// Debug (debug camera, Z): a crash stops the cycle but doesn't terminate the player
-extern bool debug_no_termination;
+// (A crash that only stops the cycle, not terminating you, is the pause menu's "No termination",
+// or Z while paused: game/settings.h)
 // The prologue's loop (input.c): the strokes of "SEGA SATURN SH-2" written so far, each with
 // its word, and how tall each word's strokes stand (they sink once it's spelt)
 extern trail *attract_strokes; // the arena's memory (scene_memory.h): NULL once it's given back
@@ -71,5 +82,10 @@ int foot_feet_height(void);
 // you. false: nowhere yet
 bool foot_cd_hub(int *side, int *wall, int *middle, bool *in_lift);
 bool foot_body_state(body_state *s, int *yaw, int *feet); // your body: input.c has what
+
+// The benchmark's run (BENCH in features.h, game/bench.h): which view it's at and what each cost,
+// for main.c to show
+#include "game/bench.h"
+const bench_run *input_bench(void);
 
 #endif

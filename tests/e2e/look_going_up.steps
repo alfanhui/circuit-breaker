@@ -1,0 +1,44 @@
+# The pink while the look goes up (the user, 2026-11-14: "still there on the look going up"):
+# booted on 0020 facing north, Y pressed, shots every 0.05 s as the view tilts up, then let go and
+# the same on the way back down
+boot_at 0020
+wait_up
+wait 1.0
+hold left 0.6
+wait 1.0
+shot lg_00_level
+keydown y
+wait 0.05
+shot lg_01
+wait 0.05
+shot lg_02
+wait 0.05
+shot lg_03
+wait 0.05
+shot lg_04
+wait 0.05
+shot lg_05
+wait 0.05
+shot lg_06
+wait 0.05
+shot lg_07
+wait 0.05
+shot lg_08
+wait 0.5
+keyup y
+wait 0.05
+shot lg_11
+wait 0.05
+shot lg_12
+wait 0.05
+shot lg_13
+wait 0.05
+shot lg_14
+wait 0.05
+shot lg_15
+wait 0.05
+shot lg_16
+wait 0.05
+shot lg_17
+wait 0.05
+shot lg_18

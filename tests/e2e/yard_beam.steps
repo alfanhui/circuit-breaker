@@ -1,0 +1,30 @@
+# The CD block's lift beam seen from the corridor after the crash (the user, 2026-11-14: "visible
+# from the yard after crashing"): booted on foot, stood where the crash leaves you, looking up (Y
+# held) and turned round on the spot in eighths, a shot at each
+wait_up
+wait 1.0
+keydown y
+wait 0.6
+shot yb_0
+hold left 0.3
+wait 0.3
+shot yb_1
+hold left 0.3
+wait 0.3
+shot yb_2
+hold left 0.3
+wait 0.3
+shot yb_3
+hold left 0.3
+wait 0.3
+shot yb_4
+hold left 0.3
+wait 0.3
+shot yb_5
+hold left 0.3
+wait 0.3
+shot yb_6
+hold left 0.3
+wait 0.3
+shot yb_7
+keyup y

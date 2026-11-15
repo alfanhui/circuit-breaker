@@ -17,6 +17,9 @@ JO_PSEUDO_SATURN_KAI_SUPPORT = 1
 # boxes (src/slave_draw.h) while the master builds the rest. jo-engine 2026 does all of it on the
 # master otherwise: on foot that was ~40% of a frame more than under SGL, which shared it out
 JO_COMPILE_WITH_DUAL_CPU_MODULE = 1
+# 1 for jo's profiler: the debug line's VDP1 pixels by part (row 9, utils/perf.h) and the benchmark's
+# VDP1 drawing time. It costs ~2 us a polygon, so 0 to play (and to commit)
+JO_COMPILE_WITH_PROFILER_MODULE = 0
 JO_DEBUG = 1
 # 60 fps, VDP1's frame buffers swapped at every VBlank, and VDP1 erases the one it draws into
 # itself, free. A frame VDP1 can't finish in 1/60 s is shown with its nearest commands missing (it
@@ -24,6 +27,13 @@ JO_DEBUG = 1
 # (2026-11-08). JO_FRAMERATE_DYNAMIC = 1 swaps only finished frames (slowing down instead, as
 # SGL did), but jo then clears each frame with a whole-screen polygon: ~4 ms of VDP1's 16.7, and
 # on foot that made VDP1 the limit (48-52 fps in the yard, 60 now). BACKLOG: both, in jo
+# Tried again 2026-11-15 with jo v2026.3 (docs/BACKLOG.md, SG-2), which erases in the VBlank in
+# place of most of that polygon (johannes-fetz/joengine#107): still slower. With the manual change
+# VDP1 erases during the VBlank and starts drawing only after it, ~2.4 ms of its 16.7 lost a field,
+# so where it's near full it misses every change: the benchmark (tests/e2e/bench.steps) went from 2
+# views failing to 6, the CD block's hub 60 fps to 30 with 25 polygons (hub.steps). A view that's
+# late with this on has under ~2.4 ms of VDP1 to spare: set it to 1 to find those
+JO_FRAMERATE_DYNAMIC = 0
 JO_FRAMERATE = 1
 # 60Hz NTSC output: the target console is a Japanese Saturn (0 = 50Hz PAL)
 JO_NTSC = 1
@@ -78,6 +88,11 @@ SRCS=main.c \
 	src/game/walker.c \
 	src/game/target.c \
 	src/game/body.c \
+	src/game/settings.c \
+	src/game/drone.c \
+	src/game/bench.c \
+	src/game/draw_budget.c \
+	src/game/floor_hides.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
 	src/view.c \
@@ -86,6 +101,7 @@ SRCS=main.c \
 	src/trail_render.c \
 	src/slave_draw.c \
 	src/hud.c \
+	src/drone_draw.c \
 	src/sound.c
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler

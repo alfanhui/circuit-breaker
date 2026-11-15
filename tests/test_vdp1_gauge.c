@@ -33,6 +33,23 @@ static void an_easy_second_reads_all_clear(void)
 	CHECK_EQ(300, g.commands);
 }
 
+// Frame by frame (the benchmark's count, game/bench.h): whether the frame before was finished
+static void each_frame_says_if_the_one_before_was_finished(void)
+{
+	vdp1_gauge g;
+
+	vdp1_gauge_init(&g);
+	CHECK_EQ(0, g.last_unfinished);
+	frame(&g, 0, 0, 1);
+	CHECK_EQ(1, g.last_unfinished);
+	frame(&g, 1, 100, 1);
+	CHECK_EQ(0, g.last_unfinished);
+	// ...and the total since boot keeps the one that wasn't, past the second's figures
+	vdp1_gauge_second(&g);
+	frame(&g, 0, 0, 1);
+	CHECK_EQ(2, g.unfinished_total);
+}
+
 static void unfinished_frames_are_counted_and_not_measured(void)
 {
 	vdp1_gauge g;
@@ -93,6 +110,7 @@ void run_vdp1_gauge_tests(void)
 {
 	starts_at_zero();
 	an_easy_second_reads_all_clear();
+	each_frame_says_if_the_one_before_was_finished();
 	unfinished_frames_are_counted_and_not_measured();
 	busy_is_the_share_of_frames_vdp1_outlasted_the_cpu();
 	each_second_starts_afresh();
