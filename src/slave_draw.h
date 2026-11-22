@@ -52,4 +52,11 @@ void slave_draw_mesh_here(const jo_3d_mesh *mesh);
 // Wait for the slave to finish everything handed to it this frame
 void slave_draw_end(void);
 
+/*
+ * Wait for what the slave's been handed so far, and go on (more can be handed over after it). For
+ * shared state the master's about to change while the slave may still read it: the city's half on
+ * the slave reads level_view, which the sky's ring cut changes (main.c, before level_sky_draw)
+ */
+void slave_draw_wait(void);
+
 #endif /* !__SLAVE_DRAW_H__ */

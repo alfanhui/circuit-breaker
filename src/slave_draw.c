@@ -88,6 +88,12 @@ void slave_draw_mesh_here(const jo_3d_mesh *mesh)
 		jo_3d_mesh_draw((jo_3d_mesh *)mesh);
 }
 
+void slave_draw_wait(void)
+{
+	if (begun)
+		jo_core_wait_for_slave();
+}
+
 void slave_draw_end(void)
 {
 	if (!begun)
@@ -101,6 +107,10 @@ void slave_draw_end(void)
 
 // Without jo's dual CPU module: the master draws everything, as it's handed over
 void slave_draw_begin(void)
+{
+}
+
+void slave_draw_wait(void)
 {
 }
 

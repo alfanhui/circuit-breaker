@@ -1,0 +1,155 @@
+# Up the CD block hub's lift, looking round level all the way (the user, 2026-11-18: from the lift
+# "you cannot see much of the city, and the quads don't span the whole city - they also pop in /out
+# of view"; "the watchdogs are very visible - but the city paths which they patrol isn't"; the sound
+# landmark "too close, it needs to be behind the background city"). Booted 150 short of the pad facing
+# west; onto it, then a turn in steps as it rises (a shot after each), and a full turn at the top
+boot_at hub
+wait_up
+wait 1.0
+hold up 0.45
+wait 0.5
+hold right 0.25
+wait 0.15
+shot lc_00
+hold right 0.25
+wait 0.15
+shot lc_01
+hold right 0.25
+wait 0.15
+shot lc_02
+hold right 0.25
+wait 0.15
+shot lc_03
+hold right 0.25
+wait 0.15
+shot lc_04
+hold right 0.25
+wait 0.15
+shot lc_05
+hold right 0.25
+wait 0.15
+shot lc_06
+hold right 0.25
+wait 0.15
+shot lc_07
+hold right 0.25
+wait 0.15
+shot lc_08
+hold right 0.25
+wait 0.15
+shot lc_09
+hold right 0.25
+wait 0.15
+shot lc_10
+hold right 0.25
+wait 0.15
+shot lc_11
+hold right 0.25
+wait 0.15
+shot lc_12
+hold right 0.25
+wait 0.15
+shot lc_13
+hold right 0.25
+wait 0.15
+shot lc_14
+hold right 0.25
+wait 0.15
+shot lc_15
+hold right 0.25
+wait 0.15
+shot lc_16
+hold right 0.25
+wait 0.15
+shot lc_17
+hold right 0.25
+wait 0.15
+shot lc_18
+hold right 0.25
+wait 0.15
+shot lc_19
+hold right 0.25
+wait 0.15
+shot lc_20
+hold right 0.25
+wait 0.15
+shot lc_21
+hold right 0.25
+wait 0.15
+shot lc_22
+hold right 0.25
+wait 0.15
+shot lc_23
+wait 3.0
+hold right 0.25
+wait 0.15
+shot lc_24
+hold right 0.25
+wait 0.15
+shot lc_25
+hold right 0.25
+wait 0.15
+shot lc_26
+hold right 0.25
+wait 0.15
+shot lc_27
+hold right 0.25
+wait 0.15
+shot lc_28
+hold right 0.25
+wait 0.15
+shot lc_29
+hold right 0.25
+wait 0.15
+shot lc_30
+hold right 0.25
+wait 0.15
+shot lc_31
+hold right 0.25
+wait 0.15
+shot lc_32
+hold right 0.25
+wait 0.15
+shot lc_33
+hold right 0.25
+wait 0.15
+shot lc_34
+hold right 0.25
+wait 0.15
+shot lc_35
+hold right 0.25
+wait 0.15
+shot lc_36
+hold right 0.25
+wait 0.15
+shot lc_37
+hold right 0.25
+wait 0.15
+shot lc_38
+hold right 0.25
+wait 0.15
+shot lc_39
+hold right 0.25
+wait 0.15
+shot lc_40
+hold right 0.25
+wait 0.15
+shot lc_41
+hold right 0.25
+wait 0.15
+shot lc_42
+hold right 0.25
+wait 0.15
+shot lc_43
+hold right 0.25
+wait 0.15
+shot lc_44
+hold right 0.25
+wait 0.15
+shot lc_45
+hold right 0.25
+wait 0.15
+shot lc_46
+hold right 0.25
+wait 0.15
+shot lc_47

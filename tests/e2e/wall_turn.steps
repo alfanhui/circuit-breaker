@@ -1,0 +1,102 @@
+# SG-9 (BACKLOG.md): turning slowly within 40 of a guard page's side. Booted on 0680 (row 6, column 8)
+# facing east, turned right to face south: the guard page at (8, 7) stands against this roof. Walked
+# out to column 9 (facing W: +x, out), a quarter turn left to face S (+y: the guard page at (9, 7)),
+# into it (you stop WALKER_RADIUS, 40, from its side), then turned all the way round, a shot every
+# quarter second. Read fps and "vdp1 over" against a SCREEN_WALL 0 build: facing the wall, the city
+# behind it isn't drawn
+boot_at 0680
+wait_up
+wait 1.0
+hold right 1.0
+wait 0.5
+hold up 2.5
+wait 0.5
+hold left 0.6
+wait 0.5
+hold up 2.0
+wait 1.5
+shot wt_00
+hold left 0.12
+wait 0.13
+shot wt_01
+hold left 0.12
+wait 0.13
+shot wt_02
+hold left 0.12
+wait 0.13
+shot wt_03
+hold left 0.12
+wait 0.13
+shot wt_04
+hold left 0.12
+wait 0.13
+shot wt_05
+hold left 0.12
+wait 0.13
+shot wt_06
+hold left 0.12
+wait 0.13
+shot wt_07
+hold left 0.12
+wait 0.13
+shot wt_08
+hold left 0.12
+wait 0.13
+shot wt_09
+hold left 0.12
+wait 0.13
+shot wt_10
+hold left 0.12
+wait 0.13
+shot wt_11
+hold left 0.12
+wait 0.13
+shot wt_12
+hold left 0.12
+wait 0.13
+shot wt_13
+hold left 0.12
+wait 0.13
+shot wt_14
+hold left 0.12
+wait 0.13
+shot wt_15
+hold left 0.12
+wait 0.13
+shot wt_16
+hold left 0.12
+wait 0.13
+shot wt_17
+hold left 0.12
+wait 0.13
+shot wt_18
+hold left 0.12
+wait 0.13
+shot wt_19
+hold left 0.12
+wait 0.13
+shot wt_20
+hold left 0.12
+wait 0.13
+shot wt_21
+hold left 0.12
+wait 0.13
+shot wt_22
+hold left 0.12
+wait 0.13
+shot wt_23
+hold left 0.12
+wait 0.13
+shot wt_24
+hold left 0.12
+wait 0.13
+shot wt_25
+hold left 0.12
+wait 0.13
+shot wt_26
+hold left 0.12
+wait 0.13
+shot wt_27
+hold left 0.12
+wait 0.13
+shot wt_28

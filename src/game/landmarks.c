@@ -14,19 +14,27 @@
 #define SCAN LANDMARK_RGB(110, 125, 150)
 
 /*
- * Where each stands (the header has the frame). The city is out, to +out from 8000 to 14 000,
- * under the CD block's disc: the video output opposite, behind you as you leave the arena; the
- * sound chip and the cartridge to either side; the two video chips between those and
- * the video output they feed. Each is tall enough to show over the arena's walls from its middle
- * (a wall's top is 11 degrees up from there: 4500 at 23 000)
+ * Where each stands (the header has the frame), by where the Saturn has it round Work RAM
+ * (docs/WORK_RAM.md, "A bigger city"; game/city.h). Low Work RAM, the city, is out (+out, 12 500
+ * to 22 100), its rows across from -4800 (row 0, the plan's north: -across) to +4900 (row F); High
+ * Work RAM, planned, is the other side of the arena (-out). A place whose address is below a bank's
+ * stands beyond its row 0 edge, one above it beyond its row F edge, nearer its low or high columns
+ * by the address:
+ *   Backup RAM (0x0018_0000, below Low):  beyond Low's north edge, over its hub (row 0, column 4)
+ *   SCSP (0x05A0_0000, above Low):        beyond Low's south-east corner, past its hub (row E, column E)
+ *   VDP1, VDP2 (0x05C0_0000, 0x05E0_0000, below High): beyond High's north edge, VDP1 the nearer the arena
+ *   the video output (out of VDP2):        beyond High's south-west corner, the far end
+ * (The CD block, above Low too, is the disc over its hub: not in this table.) Each is tall enough to
+ * show over the arena's walls from its middle (a wall's top is 11 degrees up from there: 4500 at
+ * 23 000), and 16 000 to 26 000 from it, as before
  */
 const landmark landmarks[LANDMARK_COUNT] = {
-	{0, 0, 1, PLACE_ARENA, 1100, 7000},				 // the control tower, at the arena's middle
-	{2000, -23000, 0, PLACE_SCSP, 2600, 7800},
-	{3000, 23000, 0, PLACE_BACKUP_RAM, 4600, 6800}, // wide and low: a cartridge (landmark_shapes)
-	{-16500, -16500, 1, PLACE_VDP1, 2800, 7200},
-	{-16500, 16500, 1, PLACE_VDP2, 3600, 7300},
-	{-25000, 0, 1, PLACE_VIDEO, 4200, 8000},
+	{0, 0, 1, PLACE_ARENA, 1100, 7000},				   // the control tower, at the arena's middle
+	{23500, 13000, 1, PLACE_SCSP, 2600, 7800},		   // past Low's south-east corner
+	{15500, -20000, 0, PLACE_BACKUP_RAM, 4600, 6800}, // north of Low: a cartridge, wide and low (landmark_shapes)
+	{-14500, -20500, 0, PLACE_VDP1, 2800, 7200},	   // north of High, by the arena
+	{-20500, -16500, 0, PLACE_VDP2, 3600, 7300},	   // north of High, further out
+	{-23500, 13000, 1, PLACE_VIDEO, 4200, 8000},	   // past High's south-west corner: the way out
 };
 
 // A sine of 16 steps, +-12: everything that sways goes by it

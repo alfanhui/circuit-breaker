@@ -109,6 +109,11 @@ int object_fog_level(int x, int y)
 	return fog_on ? depth_fog_level(&fog, x, y) : 0;
 }
 
+bool object_fog_box_full(int x_min, int x_max, int y_min, int y_max)
+{
+	return fog_on && object_fog_enabled && depth_fog_box_full(&fog, x_min, x_max, y_min, y_max);
+}
+
 unsigned short object_fog_quad(int level0, int level1, int level2, int level3)
 {
 	int shared;

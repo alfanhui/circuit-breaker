@@ -92,6 +92,12 @@ SRCS=main.c \
 	src/game/drone.c \
 	src/game/bench.c \
 	src/game/draw_budget.c \
+	src/game/sky_slide.c \
+	src/game/near_first.c \
+	src/game/seen_glow.c \
+	src/game/jumps.c \
+	src/game/screen_wall.c \
+	src/utils/fastmath.c \
 	src/game/floor_hides.c \
 	src/floor_fade_vdp2.c \
 	src/object_fog_vdp1.c \
@@ -103,6 +109,12 @@ SRCS=main.c \
 	src/hud.c \
 	src/drone_draw.c \
 	src/sound.c
+# jo's PC sampling profiler (2026-11-19): PCPROF_FRAME=N in the environment starts it at frame N
+# (jo's core.c, JO_TEST_PCPROF_FRAME); tests/e2e's savestate step and tools/pcprof_report.py read
+# it back. Empty (always, to play and commit): no sampling
+ifneq ($(PCPROF_FRAME),)
+CCFLAGS += -DJO_TEST_PCPROF_FRAME=$(PCPROF_FRAME)
+endif
 JO_ENGINE_SRC_DIR=../../jo_engine
 COMPILER_DIR=../../Compiler
 include $(COMPILER_DIR)/COMMON/jo_engine_makefile

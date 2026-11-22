@@ -1,0 +1,29 @@
+# Low Work RAM, first look (2026-11-16): booted on the entry roof (0800: row 8, column 0, the page
+# 0x0028_0000), turned round slowly, then a run south off the entry into the maze. Read the debug
+# line: fps, vdp1 over N/T, px if a profiler build, and "at" the page you stand on
+boot_at 0800
+wait_up
+wait 1.5
+shot lr1_00
+hold left 0.5
+wait 0.4
+shot lr1_01
+hold left 0.5
+wait 0.4
+shot lr1_02
+hold left 0.5
+wait 0.4
+shot lr1_03
+hold left 0.5
+wait 0.4
+shot lr1_04
+keydown up
+wait 0.5
+shot lr1_05
+wait 0.5
+shot lr1_06
+wait 0.5
+shot lr1_07
+keyup up
+wait 1.0
+shot lr1_08

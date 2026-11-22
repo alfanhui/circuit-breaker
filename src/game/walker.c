@@ -1,4 +1,5 @@
 #include "walker.h"
+#include "../utils/fastmath.h" // ASR: shifts without libgcc's slow routines
 
 // sin x1024 for a quarter turn in 64 steps (0x4000 / 64 = 256 ANGLE each), and its end: worked
 // out once on the PC (round(1024 x sin(i x 90 / 64 degrees)))
@@ -22,7 +23,7 @@ int walker_sin(int angle)
 	i = within >> 8;
 	// In between two of the table's steps, a straight line: the share of the way (0..255) x the
 	// step, >> 8. The last entry (90 degrees exactly) has no step after it
-	value = i >= 64 ? quarter_sine[64] : quarter_sine[i] + (((quarter_sine[i + 1] - quarter_sine[i]) * (within & 0xFF)) >> 8);
+	value = i >= 64 ? quarter_sine[64] : quarter_sine[i] + (ASR((quarter_sine[i + 1] - quarter_sine[i]) * (within & 0xFF), 8));
 	// And the second half turn is the first's, upside down: sin(180 + a) = -sin(a)
 	return quadrant & 2 ? -value : value;
 }
@@ -441,23 +442,44 @@ static int fall(walker *w, const walker_area *area)
 #define WALKER_SLIDE_REACH (160 + 2 * WALKER_RADIUS)							 // a slide's ~155
 static walker_area near_area;
 
-static const walker_area *roofs_near(const walker_area *a, int x, int y, int reach)
+// The roofs of `a` within `reach` of (x, y), into `to`. `a` may be `to` itself, narrowed already
+// (run_on, then a flight or a slide within it): kept roofs only move down the list, so it's
+// narrowed again in place. Its count's read first
+static const walker_area *roofs_into(walker_area *to, const walker_area *a, int x, int y, int reach)
 {
-	// a may be near_area itself, narrowed already (run_on, then a flight or a slide within it): kept
-	// roofs only move down the list, so it's narrowed again in place. Its count's read first
 	const int count = a->count;
 
-	near_area.count = 0;
+	to->count = 0;
 	for (int i = 0; i < count; ++i)
 		if (on_roof(&a->rects[i], x, y, reach))
 		{
-			near_area.rects[near_area.count] = a->rects[i];
-			near_area.heights[near_area.count] = a->heights[i];
-			near_area.bottoms[near_area.count] = a->bottoms[i];
-			near_area.count++;
+			to->rects[to->count] = a->rects[i];
+			to->heights[to->count] = a->heights[i];
+			to->bottoms[to->count] = a->bottoms[i];
+			to->count++;
 		}
-	return &near_area;
+	return to;
 }
+
+static const walker_area *roofs_near(const walker_area *a, int x, int y, int reach)
+{
+	return roofs_into(&near_area, a, x, y, reach);
+}
+
+/*
+ * The roofs a frame can touch, once at its start (the user, 2026-11-18: the frames still missed
+ * jumping the city's streets, the CPU at 108-120% there). Out in the city the area's ~300 roofs,
+ * and a frame's step tested every one of them several times over: roof_at, wall_in_way and
+ * footprint_height on each axis, the lip and the run's moves. ~12% of a frame (the debug line's
+ * wk, less the drones' dr). Nothing a frame does looks further from you than run_on's narrowing:
+ * a flight's reach and onto_top's step on past an edge, from where this frame's step takes you (a
+ * run's 6, a fall's drift no more). So every test against these roofs gives just what it gave
+ * against all of them: the same walk, from a dozen roofs. In an area of its own, not near_area:
+ * the moves narrow that in place, and walk() goes on with this frame's afterwards
+ */
+#define WALKER_FRAME_REACH (WALKER_FLIGHT_REACH + WALKER_RADIUS + 2 * WALKER_FOOT + 32)
+static walker_area frame_area;
+int walker_frame_narrowing = 1; // (walker.h: the tests turn it off, to walk the same with all)
 
 /*
  * Running off a lip at full speed: a jump, if it lands clean. The whole flight's flown first, on
@@ -616,8 +638,8 @@ static void slide_frame(walker *w, const walker_area *area)
 	if (w->forward < 0)
 		w->forward = 0;
 	w->side = 0;
-	dx = (forward_x * w->forward) >> 10;
-	dy = (forward_y * w->forward) >> 10;
+	dx = ASR(forward_x * w->forward, 10);
+	dy = ASR(forward_y * w->forward, 10);
 	w->air_dx = dx;
 	w->air_dy = dy;
 	walk(w, dx, dy, area, 0);
@@ -707,8 +729,8 @@ static void kick_to_a_run(walker *w)
 	if (w->forward >= WALKER_RUN_SPEED)
 		return;
 	w->forward = WALKER_RUN_SPEED;
-	w->air_dx = (forward_x * w->forward + forward_y * w->side) >> 10; // as walker_update's dx, dy
-	w->air_dy = (forward_y * w->forward - forward_x * w->side) >> 10;
+	w->air_dx = ASR(forward_x * w->forward + forward_y * w->side, 10); // as walker_update's dx, dy
+	w->air_dy = ASR(forward_y * w->forward - forward_x * w->side, 10);
 }
 
 static int kicked_run_on(walker *w, const walker_area *area, int along_x, int d)
@@ -823,6 +845,12 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 	int forward_wanted, side_wanted, dx, dy;
 	const int forward_x = -walker_sin(w->yaw); // facing (x1024): north is -y, east -x (world.h)
 	const int forward_y = -walker_cos(w->yaw);
+	// No area at all: nowhere's off it, and it's all at height 0. Asked of the whole area, before
+	// it's narrowed to this frame's roofs: with none near, you're over nothing, not anywhere
+	const int no_area = area == 0 || area->count == 0;
+
+	if (!no_area && walker_frame_narrowing)
+		area = roofs_into(&frame_area, area, w->x >> WALKER_SUB_SHIFT, w->y >> WALKER_SUB_SHIFT, WALKER_FRAME_REACH);
 
 	// Sliding: the slide moves you, not the pad (slide_frame). The eye drops low, a quarter of the
 	// way a frame; afterwards it straightens back up as from the crash (below)
@@ -833,7 +861,7 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 		w->eye = (unsigned char)(w->eye > WALKER_EYE_SLIDE ? w->eye - (step > 0 ? step : 1) : w->eye);
 		w->turn_speed = 0;
 		ease_eye(w);
-		if (area != 0 && area->count > 0)
+		if (!no_area)
 			slide_frame(w, area);
 		else
 			w->slide = 0;
@@ -898,10 +926,9 @@ void walker_update(walker *w, walker_controls controls, const walker_area *area)
 	// The move: forwards along where you face, and sideways along your right, which is facing a
 	// quarter turn on: (-cos, sin), which is (forward_y, -forward_x). Facing north, your right is
 	// east, -x. x1024 x the speeds x256, >> 10: x256 again
-	dx = (forward_x * w->forward + forward_y * w->side) >> 10;
-	dy = (forward_y * w->forward - forward_x * w->side) >> 10;
-	// No area at all: nowhere's off it, and it's all at height 0
-	if (area == 0 || area->count == 0)
+	dx = ASR(forward_x * w->forward + forward_y * w->side, 10);
+	dy = ASR(forward_y * w->forward - forward_x * w->side, 10);
+	if (no_area) // (above)
 	{
 		w->x += dx;
 		w->y += dy;

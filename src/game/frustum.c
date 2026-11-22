@@ -1,4 +1,5 @@
 #include "frustum.h"
+#include "../utils/fastmath.h" // ASR: shifts without libgcc's slow routines
 
 int frustum_isqrt(unsigned int v)
 {
@@ -187,7 +188,9 @@ static frustum_point crossing(frustum_point a, frustum_point b, int da, int db)
 		span >>= 1;
 		da >>= 1;
 	}
-	share = span == 0 ? 0 : (da << 16) / span;
+	// (da >= 0 and span > 0 here, under 2^15: the SH-2's division unit, not libgcc's loop. One a
+	// cut edge: utils/fastmath.h)
+	share = span == 0 ? 0 : (int)fast_udiv((unsigned int)da << 16, (unsigned int)span);
 	p.x = a.x + (int)(((long long)(b.x - a.x) * share) >> 16);
 	p.y = a.y + (int)(((long long)(b.y - a.y) * share) >> 16);
 	p.z = a.z + (int)(((long long)(b.z - a.z) * share) >> 16);
@@ -251,7 +254,7 @@ void frustum_slopes(const frustum *f, int *up, int *down)
 			// The ray through that point of the screen's edge: forward, and aside and up by the
 			// edges' tans. x1024 (the directions) x1024 (the tans), back down to x1024
 			for (int k = 0; k < 3; ++k)
-				d[k] = f->forward[k] + ((a * f->tan_side * f->right[k] + b * f->tan_up * f->up[k]) >> 10);
+				d[k] = f->forward[k] + (ASR(a * f->tan_side * f->right[k] + b * f->tan_up * f->up[k], 10));
 			along = frustum_isqrt((unsigned int)(d[0] * d[0] + d[1] * d[1])); // along the floor
 			// Steeper than 16 in 1 (86 degrees): as good as straight up, and no division by ~0
 			if (along * 16 <= (d[2] < 0 ? -d[2] : d[2]))

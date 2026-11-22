@@ -1,0 +1,43 @@
+# Running from the first watchdog (step 2: the chase and the search). Booted on 0B00, inside its
+# loop, facing south as it comes up column 0 towards you (watchdogs.steps). As its beam reaches
+# you, turn and run north, then east along row A behind the guard page at column 1, row B: it
+# chases (wd C on the debug line's row 8), loses you, and searches (S), then goes back (R, P)
+boot_at 0B00
+wait_up
+wait 0.5
+hold right 0.5
+wait 12.5
+shot we_00_coming
+hold left 1.0
+keydown up
+wait 0.5
+shot we_01_run
+wait 0.5
+shot we_02
+wait 0.5
+shot we_03
+keydown left
+wait 0.5
+keyup left
+shot we_04_turned
+wait 0.5
+shot we_05
+wait 0.5
+shot we_06
+wait 0.5
+shot we_07
+keyup up
+wait 1.0
+shot we_08
+wait 1.0
+shot we_09
+wait 1.0
+shot we_10
+wait 2.0
+shot we_11
+wait 2.0
+shot we_12
+wait 3.0
+shot we_13
+wait 3.0
+shot we_14

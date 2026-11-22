@@ -47,6 +47,12 @@ void run_settings_tests(void);
 void run_drone_tests(void);
 void run_bench_tests(void);
 void run_draw_budget_tests(void);
+void run_sky_slide_tests(void);
+void run_near_first_tests(void);
+void run_seen_glow_tests(void);
+void run_jumps_tests(void);
+void run_screen_wall_tests(void);
+void run_fastmath_tests(void);
 void run_floor_hides_tests(void);
 
 int main(void)
@@ -95,6 +101,12 @@ int main(void)
 	run_drone_tests();
 	run_bench_tests();
 	run_draw_budget_tests();
+	run_sky_slide_tests();
+	run_near_first_tests();
+	run_seen_glow_tests();
+	run_jumps_tests();
+	run_screen_wall_tests();
+	run_fastmath_tests();
 	run_floor_hides_tests();
 
 	printf("\n%d checks, %d failed\n", test_checks, test_failures);

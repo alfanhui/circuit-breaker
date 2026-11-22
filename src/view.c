@@ -54,6 +54,13 @@
  */
 #define LOOK_UP_ANGLE JO_DEG_TO_ANGLE(25.0)
 #define LOOK_DOWN_ANGLE JO_DEG_TO_ANGLE(35.0)
+/*
+ * Locked onto a target (game/target.h), the head goes further up: you're looking at something,
+ * not glancing (the user, 2026-11-16: the CD block's lift's top, the hatch 1900 over its roof, was
+ * off the top of the screen at 25). 60 up leaves the bracket on screen from ~350 out (the screen
+ * shows ~28 more above the middle). The free look (Y) stays at LOOK_UP_ANGLE
+ */
+#define LOOK_LOCK_UP_ANGLE JO_DEG_TO_ANGLE(60.0)
 
 // Isometric (3rd person): fixed angle, camera follows the cycle 1:1.
 // (It used to follow at 5/6 of the movement, which in a large arena left the cycle
@@ -566,7 +573,7 @@ void view_head_aim(int head_yaw, int head_pitch)
 	const int yaw = head_yaw > LOOK_ANGLE ? LOOK_ANGLE : head_yaw < -LOOK_ANGLE ? -LOOK_ANGLE : head_yaw;
 	int pitch = -head_pitch;
 
-	pitch = pitch < -LOOK_UP_ANGLE ? -LOOK_UP_ANGLE : pitch > LOOK_DOWN_ANGLE ? LOOK_DOWN_ANGLE : pitch;
+	pitch = pitch < -LOOK_LOCK_UP_ANGLE ? -LOOK_LOCK_UP_ANGLE : pitch > LOOK_DOWN_ANGLE ? LOOK_DOWN_ANGLE : pitch;
 	look_target = yaw;
 	// A head turned aside dips a little (LOOK_PITCH_X256, added as the frame's drawn): taken off
 	// here, so once it's eased there the pitch is the target's. Easing, the two move together

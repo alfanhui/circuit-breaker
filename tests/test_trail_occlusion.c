@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stdbool.h>
 #include "../src/game/trail_occlusion.h"
 #include "../src/game/trail_pieces.h"
 
@@ -87,8 +88,9 @@ static void farther_or_other_side_or_crossing_hides_nothing(void)
 	one_occluder(pt(-100, -100), pt(-100, -3000));
 	CHECK_EQ(1, far_parts());
 	CHECK_EQ(3000, ends[0] - starts[0]);
-	// Running across, not alongside
-	one_occluder(pt(-1000, -500), pt(1000, -500));
+	// Running across, but only on the other side of the eye's line (x -1000 to -100): the line
+	// of sight to the far trail (at x 300) never passes it
+	one_occluder(pt(-1000, -500), pt(-100, -500));
 	CHECK_EQ(1, far_parts());
 	CHECK_EQ(3000, ends[0] - starts[0]);
 	// On the eye's own line (the player's own trail, behind it)
@@ -194,8 +196,80 @@ static void a_block_hides_what_is_behind_it(void)
 	CHECK_EQ(1, occ.along_x[0]);
 }
 
+/*
+ * Running across (the user, 2026-11-18: sections of trails across the view weren't culled). A trail
+ * across the view 500 ahead, from x -1000 to 1000, hides all of the far trail (x 300, running
+ * north) past it: only its first 500 or so shows. The hidden range is rounded inwards: a unit more
+ * may show, never less
+ */
+static void a_trail_across_hides_what_runs_on_behind_it(void)
+{
+	one_occluder(pt(-1000, -500), pt(1000, -500));
+	CHECK_EQ(1, far_parts());
+	CHECK_EQ(0, starts[0]);
+	CHECK(ends[0] >= 500 && ends[0] <= 503);
+}
+
+// A shorter one across, x 100 to 200, 500 ahead: the far trail (x 300) is behind it where the line
+// of sight crosses y -500 between x 100 and 200: from 300 x 500 / 200 = 750 to 300 x 500 / 100 =
+// 1500 ahead. Both ends rounded inwards
+static void a_short_one_across_hides_a_stretch(void)
+{
+	one_occluder(pt(100, -500), pt(200, -500));
+	CHECK_EQ(2, far_parts());
+	CHECK_EQ(0, starts[0]);
+	CHECK(ends[0] >= 750 && ends[0] <= 752);
+	CHECK(starts[1] >= 1498 && starts[1] <= 1500);
+	CHECK_EQ(3000, ends[1]);
+	// A far trail on the eye's other side (x -300) isn't behind it at all
+	CHECK_EQ(1, trail_occluders_visible(&occ, pt(-300, 0), pt(-300, -3000), 0, 3000, starts, ends,
+										TRAIL_VISIBLE_PARTS_MAX));
+	CHECK_EQ(3000, ends[0] - starts[0]);
+}
+
+// The rule against lines of sight, over many layouts: a point of a trail running across it is
+// left out only if the straight line from the eye to it crosses the near trail before it
+static void across_never_hides_what_is_seen(void)
+{
+	int checked = 0;
+
+	for (int a = -900; a <= 900; a += 150)
+		for (int len = 50; len <= 1200; len += 275)
+			for (int d1 = 60; d1 <= 1500; d1 += 290)
+			{
+				one_occluder(pt((short)a, (short)-d1), pt((short)(a + len), (short)-d1));
+				for (int c = -1400; c <= 1400; c += 233)
+				{
+					const int n = trail_occluders_visible(&occ, pt((short)c, 0), pt((short)c, -4000), 0, 4000, starts, ends,
+														  TRAIL_VISIBLE_PARTS_MAX);
+
+					for (int s = 0; s <= 4000; s += 37)
+					{
+						bool shown = false;
+
+						for (int k = 0; k < n; ++k)
+							shown = shown || (s >= starts[k] && s <= ends[k]);
+						if (!shown)
+						{
+							// Left out: the line from (0, 0) to (c, -s) must cross y = -d1 within the near
+							// trail, before it (exactly: c x d1 / s between a and a + len, and s > d1)
+							const long long x_cross_s = (long long)c * d1; // x where it crosses, times s
+							const bool hidden = s > d1 && x_cross_s >= (long long)a * s && x_cross_s <= (long long)(a + len) * s;
+
+							CHECK(hidden);
+							++checked;
+						}
+					}
+				}
+			}
+	CHECK(checked > 1000);
+}
+
 void run_trail_occlusion_tests(void)
 {
+	RUN(a_trail_across_hides_what_runs_on_behind_it);
+	RUN(a_short_one_across_hides_a_stretch);
+	RUN(across_never_hides_what_is_seen);
 	RUN(slopes_hide_what_division_does);
 	RUN(nearer_parallel_trail_hides_the_farther);
 	RUN(a_short_one_hides_the_middle);

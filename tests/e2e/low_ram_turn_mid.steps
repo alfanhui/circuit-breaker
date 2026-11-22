@@ -1,0 +1,28 @@
+# Low Work RAM: a turn all the way round at 0880 (2026-11-16)
+boot_at 0880
+wait_up
+wait 1.5
+shot lr_mid_0
+hold left 0.5
+wait 0.5
+shot lr_mid_1
+hold left 0.5
+wait 0.5
+shot lr_mid_2
+hold left 0.5
+wait 0.5
+shot lr_mid_3
+hold left 0.5
+wait 0.5
+shot lr_mid_4
+hold left 0.5
+wait 0.5
+shot lr_mid_5
+hold left 0.5
+wait 0.5
+shot lr_mid_6
+hold left 0.5
+wait 0.5
+shot lr_mid_7
+hold left 0.5
+wait 0.5

@@ -1,0 +1,28 @@
+# Low Work RAM: a turn all the way round at hub (2026-11-16)
+boot_at hub
+wait_up
+wait 1.5
+shot lr_hub_0
+hold left 0.5
+wait 0.5
+shot lr_hub_1
+hold left 0.5
+wait 0.5
+shot lr_hub_2
+hold left 0.5
+wait 0.5
+shot lr_hub_3
+hold left 0.5
+wait 0.5
+shot lr_hub_4
+hold left 0.5
+wait 0.5
+shot lr_hub_5
+hold left 0.5
+wait 0.5
+shot lr_hub_6
+hold left 0.5
+wait 0.5
+shot lr_hub_7
+hold left 0.5
+wait 0.5

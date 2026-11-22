@@ -13,6 +13,7 @@
 #include "sound.h"
 #include "features.h" // BOOT_SCENE, BOOT_ROUND, BOOT_ON_FOOT, BOOT_AT_HUB
 #include "game/settings.h" // the pause menu's switches
+#include "game/jumps.h"	   // and its "Jump to"'s places
 #include "utils/perf.h"
 #include "game/bench.h" // BENCH: the views, and their counts
 
@@ -326,6 +327,7 @@ static void slide_to_the_centre(void)
 	player1.bike.position.x = (short)(player1.bike.position.x + dx);
 	player1.bike.position.y = (short)(player1.bike.position.y + dy);
 	view_spectate_move(dx, dy);
+	level_sky_slide(dx, dy); // the sky with you: the landmarks don't jump (game/sky_slide.h)
 }
 
 // A direction pressed while spectating. Returns the presses, changed: the one that breaks the
@@ -658,6 +660,9 @@ static void between_rounds(void)
 		player1.bike.position.x = (short)(player1.bike.position.x + dx);
 		player1.bike.position.y = (short)(player1.bike.position.y + dy);
 		view_spectate_move(dx, dy); // the camera with you (in play it follows you anyway)
+		// ...and the sky: the landmarks, the disc and the skyline jumped by the slide on this frame
+		// (the user, 2026-11-16). Slid with you, then eased back unseen (game/sky_slide.h)
+		level_sky_slide(dx, dy);
 		trail_reset(&player1.wall, player1.bike.position);
 		remove_bots(); // their trails have sunk by now; gone for good
 		break;
@@ -694,8 +699,12 @@ void load_player_model(void); // main.c (main.h: not included here, it includes 
 
 bool pause_menu_up = false;
 
+static void jump_to(int place); // below, by boot_on_foot
+
 static void pause_menu_input(unsigned short struck)
 {
+	setting changed;
+
 	// Flying the camera about (the d-pad), the menu steps aside, out of the picture; L or R
 	// brings it back (that press acts on it too)
 	if (jo_is_pad1_key_pressed(JO_KEY_UP) || jo_is_pad1_key_pressed(JO_KEY_DOWN) ||
@@ -705,8 +714,14 @@ static void pause_menu_input(unsigned short struck)
 		pause_menu_up = true;
 	if (struck & DIGI_L)
 		settings_next(&game_settings);
-	if ((struck & DIGI_R) && settings_change(&game_settings) == SETTING_CYCLE_SHAPE)
+	if (!(struck & DIGI_R))
+		return;
+	changed = settings_change(&game_settings);
+	if (changed == SETTING_CYCLE_SHAPE)
 		load_player_model();
+	// "Jump to": there at once (still paused: START plays on from there)
+	if (changed == SETTING_JUMP)
+		jump_to(settings_value(&game_settings, SETTING_JUMP));
 }
 
 /*
@@ -825,13 +840,30 @@ bool foot_cd_hub(int *side, int *wall, int *middle, bool *in_lift)
 }
 
 /*
- * The watchdog's drone (game/drone.h): over the city's way down from the moment you're up. Its
- * route and the towers as its sight's boxes are worked out once, for where the corridor opened
- * (the city's placed by it). 84 boxes, 840 bytes
+ * The watchdogs' drones (game/drone.h): CITY_WATCHDOGS patrols over the way to the CD block from
+ * the moment you're up. Their routes and the towers as their sight's boxes are worked out once,
+ * for where the corridor opened (the city's placed by it). 256 boxes, 2.5 KB; a route of 8 stops
+ * 80 bytes
  */
-drone watchdog;
-static drone_stop watchdog_route[CITY_DRONE_STOPS];
+#if CITY_WATCHDOG
+drone watchdogs[CITY_WATCHDOGS];
+static drone_stop watchdog_routes[CITY_WATCHDOGS][DRONE_STOPS_MAX];
+static unsigned char watchdog_stops[CITY_WATCHDOGS];
+#endif
 drone_box watchdog_boxes[CITY_TOWERS];
+seen_glow watchdog_glow;
+
+// Each watchdog at its route's first stop. Seeds that differ, but the same every time: a restart, a
+// film, plays the same patrols
+static void watchdogs_init(void)
+{
+#if CITY_WATCHDOG
+	for (int i = 0; i < CITY_WATCHDOGS; ++i)
+		drone_init(&watchdogs[i], watchdog_routes[i], watchdog_stops[i], city_patrols[i].back_and_forth,
+				   0x5EED0000u + (unsigned int)i * 7919u);
+#endif
+	seen_glow_init(&watchdog_glow);
+}
 
 // Whether the watchdog's boxes are worked out (stand_up): the city's placed by the corridor
 static bool watchdog_ready = false;
@@ -858,31 +890,64 @@ int foot_tower_address(void)
 // Where you got up: the level's beginning, where a terminated process starts again (restart_on_foot)
 static walker feet_start;
 
+/*
+ * Your checkpoint (WORK_RAM.md: "back at the last checkpoint: the last place the watchdog was
+ * fed"): where you got up, until a lift takes you; then that lift's pad. Caught by a watchdog, or
+ * fallen off, you start again there. The lift's left waiting for you to step off its pad, or it
+ * would take you straight back up
+ */
+static walker feet_checkpoint;
+static bool checkpoint_at_lift = false;
+
+// A watchdog has caught you this frame (walk_step): terminated, as a fall is
+static bool watchdog_caught = false;
+
+static void checkpoint_take(void)
+{
+	feet_checkpoint = player_feet;
+	feet_checkpoint.forward = 0;
+	feet_checkpoint.side = 0;
+	feet_checkpoint.fall_speed = 0;
+	feet_checkpoint.falling = 0;
+	feet_checkpoint.eye = WALKER_EYE;
+	checkpoint_at_lift = true;
+}
+
 static void stand_up(void)
 {
-	city_drone_route(arena_corridor, watchdog_route);
+	// The towers' boxes always (the debug line's "at" goes by them); the watchdogs if there are any
+	// (city.h: CITY_WATCHDOGS)
 	city_drone_boxes(arena_corridor, watchdog_boxes);
-	drone_init(&watchdog, watchdog_route, CITY_DRONE_STOPS);
+#if CITY_WATCHDOG
+	for (int i = 0; i < CITY_WATCHDOGS; ++i)
+		watchdog_stops[i] = (unsigned char)city_drone_route(arena_corridor, i, watchdog_routes[i]);
+#endif
+	watchdogs_init();
 	watchdog_ready = true;
 	lift_init(&cd_lift, city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height, CITY_LIFT_TOP);
 	walker_init(&player_feet, player1.bike.position, player1.bike.heading * 0x4000);
 	feet_start = player_feet;
 	feet_start.eye = WALKER_EYE; // starting again you're stood up already
+	feet_checkpoint = feet_start;
+	checkpoint_at_lift = false;
 	corridor_walker_area(arena_corridor, &feet_area);
 	corridor_targets(arena_corridor, &feet_targets);
 	target_lock_init(&feet_lock);
 }
 
 /*
- * The level from its beginning (after a fall's terminated you: walker_fell_off): stood where you
- * got up after the crash, the watchdog back at its first stop, the lift down, nothing locked. Work
+ * The level again (after a fall or a watchdog's terminated you): stood at your checkpoint, the
+ * watchdogs back on their patrols from their first stops, the lift down, nothing locked. Work
  * RAM's loaded already (the hidden load was the breach's), so it's at once: no scene to enter
  */
 static void restart_on_foot(void)
 {
-	player_feet = feet_start;
-	drone_init(&watchdog, watchdog_route, CITY_DRONE_STOPS);
+	player_feet = feet_checkpoint;
+	watchdogs_init();
+	watchdog_caught = false;
 	lift_init(&cd_lift, city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW)->height, CITY_LIFT_TOP);
+	if (checkpoint_at_lift)
+		cd_lift.state = LIFT_ARRIVED; // you're on its pad: it waits for you to step off (game/lift.h)
 	target_lock_init(&feet_lock);
 	player1.bike.position = walker_position(&player_feet);
 	player1.bike.heading = (unsigned char)(((player_feet.yaw + 0x2000) >> 14) & 3);
@@ -957,10 +1022,16 @@ static void walk_step(unsigned short struck)
 		const bool on_pad = at.x >= pad.x - CITY_LIFT_PAD && at.x <= pad.x + CITY_LIFT_PAD && at.y >= pad.y - CITY_LIFT_PAD &&
 							at.y <= pad.y + CITY_LIFT_PAD && walker_height(&player_feet) == hub->height;
 
+		const bool was_carried = lift_carries(&cd_lift);
+
 		lift_update(&cd_lift, on_pad);
+		// Taken up: the lift's pad is your checkpoint now (WORK_RAM.md: the watchdog's fed there), as
+		// you are on it, at its foot
+		if (!was_carried && lift_carries(&cd_lift))
+			checkpoint_take();
 		if (lift_carries(&cd_lift))
 		{
-			const unsigned char count = feet_area.count;
+			const unsigned short count = feet_area.count;
 			const world_rect rect = feet_area.rects[0];
 			const short height = feet_area.heights[0], bottom = feet_area.bottoms[0];
 			const int up_now = lift_height(&cd_lift);
@@ -998,15 +1069,39 @@ static void walk_step(unsigned short struck)
 	view_on_foot(player_feet.yaw, controls.look_x, controls.look_y,
 				 walker_bob(&player_feet) + walker_dip(&player_feet) + walker_step_lag(&player_feet) -
 					 walker_height(&player_feet) - (walker_eye(&player_feet) - WALKER_EYE_RIDING));
-	// The drone flies its route, and its scan looks for your eye (after this frame's move). Seen,
-	// for now, only shows: its sheet turns red (drone_draw.c). Noise, alarm and the reset are next
+	/*
+	 * The drones fly, and their beams look for your eye (after this frame's move). Seen, the beam
+	 * turns red (drone_draw.c), the screen glows (main.c) and it chases you; kept in its beam long
+	 * enough, you're caught (game_step: terminated, back to your checkpoint). In the lift, or stood
+	 * on a hub's roof, you're out of their reach: none sees you, and a chase loses you there
+	 * (WORK_RAM.md: lifts and hubs are safe zones; city_on_hub)
+	 */
 	eye = feet_eye();
 	{
+		bool seen = false;
+#if CITY_WATCHDOG
 		const int drone_frc = jo_time_get_frc(); // the debug line's "dr" (utils/perf.h)
+		const bool in_lift = lift_carries(&cd_lift);
+		// On a hub's roof: a walk over the 256 towers, so asked only once a beam has you (most
+		// frames none does), and only once a frame. -1: not asked yet
+		int on_hub = -1;
 
-		drone_update(&watchdog);
-		watchdog.seen = drone_sees(&watchdog, eye.x, eye.y, eye.z, watchdog_boxes, CITY_TOWERS);
+		for (int i = 0; i < CITY_WATCHDOGS; ++i)
+		{
+			drone *d = &watchdogs[i];
+			bool sees;
+
+			drone_update(d, watchdog_boxes, CITY_TOWERS);
+			sees = !in_lift && drone_sees(d, eye.x, eye.y, eye.z, watchdog_boxes, CITY_TOWERS);
+			if (sees && on_hub < 0)
+				on_hub = city_on_hub(arena_corridor, walker_position(&player_feet), walker_height(&player_feet));
+			drone_notice(d, sees && on_hub == 0, eye.x, eye.y, eye.z);
+			seen |= d->seen;
+			watchdog_caught |= drone_caught(d);
+		}
 		perf_part_add(PERF_DRONE, drone_frc);
+#endif
+		seen_glow_update(&watchdog_glow, seen);
 	}
 	// Locked: the head aims at it from where you are now (after this frame's move)
 	if (target_aim(&feet_lock, &feet_targets, &eye, &head_yaw, &head_pitch))
@@ -1131,10 +1226,11 @@ static void breach_step(unsigned short struck)
 		walk_step(struck);
 		perf_part_add(PERF_WALKER, walker_frc);
 		view_follow(&player1.bike);
-		// Fallen off into a street: nothing below, for good. The process is terminated (the terminal
-		// screen from the next frame), and the level starts again (game_step). With "No termination"
-		// on (the pause menu), straight back to the start without the screen
-		if (walker_fell_off(&player_feet, &feet_area))
+		// Fallen off into a street (nothing below, for good), or caught by a watchdog: the process
+		// is terminated (the terminal screen from the next frame), and the level starts again from
+		// your checkpoint (game_step). With "No termination" on (the pause menu), straight back to
+		// it without the screen
+		if (walker_fell_off(&player_feet, &feet_area) || watchdog_caught)
 		{
 			if (settings_on(&game_settings, SETTING_NO_TERMINATION))
 				restart_on_foot();
@@ -1514,11 +1610,44 @@ static void boot_on_foot(void)
 		stand_on_tower(city_tower_at((BOOT_AT_TOWER >> 4) & 0xF, BOOT_AT_TOWER >> 8), 0,
 					   ((player1.bike.heading + 2) & 3) * 0x4000);
 	player_feet.eye = WALKER_EYE; // up already
+	// Booted on the city (a film's boot_at), that's your checkpoint: caught or fallen there, you start
+	// again there, not back in the corridor (as the pause menu's "Jump to": jump_to)
+	if (BOOT_AT_HUB || BOOT_AT_TOWER >= 0)
+		feet_checkpoint = player_feet;
 	if (BENCH)
 		bench_init(&bench); // its first view's placed on the first frame (bench_step)
 	// The round's title, typing on as round 5's entered: the breach stops the status line, so it
 	// would stay, cursor and all
 	status_init(&status);
+}
+
+/*
+ * The pause menu's "Jump to" (game/jumps.h): stood at that place, as if you'd started there. Not
+ * on foot yet (the race, the loop, the opening), first everything booting on foot does: round 5
+ * entered, the corridor open, Work RAM loaded (a moment's freeze, as the hidden load's). Then the
+ * place is your checkpoint (caught or fallen, you start again there, not back at the corridor), and
+ * the watchdogs start their patrols again, the lift down: each jump starts the same
+ */
+static void jump_to(int place)
+{
+	world_point at;
+	int height, yaw;
+
+	if (place == JUMP_NONE)
+		return;
+	if (arena_breach.phase != BREACH_ON_FOOT)
+	{
+		arena_rounds.number = ROUND_COUNT - 1; // as init_players does, booting on foot
+		enter_scene(SCENE_PLAY);
+		boot_on_foot();
+	}
+	if (!jump_where(arena_corridor, place, &at, &height, &yaw))
+		return;
+	walker_init_at(&player_feet, at, height, yaw);
+	player_feet.eye = WALKER_EYE; // up already
+	feet_checkpoint = player_feet;
+	checkpoint_at_lift = false;
+	restart_on_foot(); // the watchdogs, the lift, the lock: as starting again there
 }
 
 void init_players(void)

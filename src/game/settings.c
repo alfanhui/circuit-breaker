@@ -1,13 +1,14 @@
 #include "settings.h"
 #include "../features.h" // the defaults: SHOW_DEBUG_TEXT, SFX_ON, CYCLE_SHAPE ...
+#include "jumps.h"		 // "Jump to"'s places
 
 settings game_settings;
 
 // Each switch's name on the menu, and how many values it has (2: off / on)
 static const char *const names[SETTING_COUNT] = {
-	"Debug text", "Flight text", "Sound effects", "Cycle shape", "City sides", "No termination",
+	"Debug text", "Flight text", "Sound effects", "Cycle shape", "City sides", "No termination", "Jump to", "Wireframe",
 };
-static const unsigned char choices[SETTING_COUNT] = {2, 2, 2, 4, 2, 2};
+static const unsigned char choices[SETTING_COUNT] = {2, 2, 2, 4, 2, 2, JUMP_COUNT, 2};
 static const char *const off_on[2] = {"off", "on"};
 static const char *const shapes[4] = {"ribbon", "token", "cursor", "linked"}; // CYCLE_RIBBON ... CYCLE_LINKED
 
@@ -19,6 +20,8 @@ void settings_init(settings *s)
 	s->value[SETTING_CYCLE_SHAPE] = CYCLE_SHAPE;
 	s->value[SETTING_CITY_SIDES] = CITY_SIDES_TO_BOARD ? 1 : 0;
 	s->value[SETTING_NO_TERMINATION] = 0; // always on at boot: a crash terminates you
+	s->value[SETTING_JUMP] = JUMP_NONE;	  // stay: nowhere yet
+	s->value[SETTING_WIREFRAME] = 0;	  // a debug view: always off at boot
 	s->cursor = 0;
 }
 
@@ -46,7 +49,9 @@ setting settings_change(settings *s)
 void settings_line(const settings *s, setting which, char *out)
 {
 	const char *name = names[which];
-	const char *value = which == SETTING_CYCLE_SHAPE ? shapes[s->value[which] & 3] : off_on[s->value[which] ? 1 : 0];
+	const char *value = which == SETTING_CYCLE_SHAPE ? shapes[s->value[which] & 3]
+						: which == SETTING_JUMP		 ? jump_name(s->value[which])
+													 : off_on[s->value[which] ? 1 : 0];
 	int length = 0, at = 0;
 
 	while (value[length])

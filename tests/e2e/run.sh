@@ -193,6 +193,18 @@ while read -r command arg1 arg2; do
 		python3 /game/tests/e2e/glitch.py holes /out/film.mov "$holes_start" "$(frames_now)" /out "${arg1:-film}" || glitch_failed=1
 		;;
 	shot) import -window "$window" "/out/$arg1.png"; echo "shot $arg1" ;;
+	# Mednafen's save state (F5, slot 0) copied to /out/NAME.mc0: the whole machine at that moment,
+	# Work RAM included. For jo's PC sampling profiler (JO_TEST_PCPROF_FRAME: its histograms are
+	# at the top of Low Work RAM; tools/pcprof_report.py reads them back from the state)
+	savestate)
+		find / -xdev -name '*.mc0' -delete 2>/dev/null
+		xdotool windowfocus --sync "$window"
+		xdotool key F5 # (SDL reads only the focused window: no --window)
+		sleep 3
+		state=$(find / -xdev -name '*.mc0' 2>/dev/null | head -1)
+		[ -n "$state" ] && cp "$state" "/out/$arg1.mc0" && echo "savestate $arg1 ($state)" ||
+			{ echo "savestate: no state written (mednafen.log:)" >&2; tail -5 /out/mednafen.log >&2; }
+		;;
 	*) echo "unknown step: $command" >&2; exit 1 ;;
 	esac
 done <"$1"

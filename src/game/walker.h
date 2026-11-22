@@ -158,11 +158,13 @@
 // Most roofs go all the way down (a tower, a crate). A bar has a bottom too: it floats, and you
 // pass under it if your head clears its bottom (a duct, a pipe: walking, WALKER_HEAD; sliding,
 // WALKER_SLIDE_HEAD). Its top is a roof like any other
-#define WALKER_AREA_RECTS_MAX 128 // the corridor (5), its grey box (29) and the city's towers (84)
+// The corridor (5), its grey box (29) and Low Work RAM's towers (256): 290. 12 bytes each, 3.6 KB.
+// The walker narrows it to the roofs near you each time (walker.c, roofs_near): a bounds test each
+#define WALKER_AREA_RECTS_MAX 300
 
 typedef struct
 {
-	unsigned char count;
+	unsigned short count; // (more than 255 since Low Work RAM)
 	world_rect rects[WALKER_AREA_RECTS_MAX];
 	short heights[WALKER_AREA_RECTS_MAX];
 	short bottoms[WALKER_AREA_RECTS_MAX]; // WALKER_NO_FLOOR: all the way down
@@ -225,6 +227,9 @@ void walker_init_at(walker *w, world_point at, int z, int yaw);
 // One frame: turn, then move, sliding along any edge of the area rather than stopping at it
 // (each axis is tried on its own: walking into a wall at an angle slides you along it)
 void walker_update(walker *w, walker_controls controls, const walker_area *area);
+// 1 (always, in the game): each frame tests only the roofs it can reach (walker.c has why). The
+// tests set it to 0 to walk the same walk against every roof, and compare
+extern int walker_frame_narrowing;
 
 // Where you are, in whole world units
 world_point walker_position(const walker *w);

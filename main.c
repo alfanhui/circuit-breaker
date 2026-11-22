@@ -288,6 +288,19 @@ void debug_3d(bool show)
 			  compass[bots[0].bike.heading], bots[0].bike.gauge, arena_rounds.number + 1, arena_rounds.phase,
 			  "EMH"[bot_skill_now()]);
 	jo_printf(0, 8, "mwait %d sidle %d   ", jo_core_master_wait_time(), jo_core_slave_idle_time());
+#if CITY_WATCHDOG
+	// The watchdogs (game/drone.h): each one's mood (P patrol, R returning to it, C chase, S search)
+	// and its catch count (caught at DRONE_CATCH_FRAMES)
+	if (view_is_on_foot())
+	{
+		static const char mood[3] = {'P', 'C', 'S'};
+
+		jo_printf(24, 8, "wd");
+		for (int i = 0; i < CITY_WATCHDOGS && i < 3; ++i)
+			jo_printf(27 + i * 4, 8, "%c%-3d", watchdogs[i].returning ? 'R' : mood[watchdogs[i].mode],
+					  watchdogs[i].held);
+	}
+#endif
 #ifdef JO_COMPILE_WITH_PROFILER_SUPPORT
 	// VDP1's pixels, thousands, worst frame (utils/perf.h): the whole, the slave's (the city's floor
 	// and boxes), then the master's: world, arena, trails, sky, drone, body, mirror, the rest
@@ -303,15 +316,26 @@ void debug_3d(bool show)
 	// ...and bg: how many parts the draw budget has left out this frame (game/draw_budget.h)
 	jo_printf(0, 7, "dr%d dm%d ds%d bg%d     ", perf_part_peak[PERF_DRONE], perf_part_peak[PERF_DRONE_MODEL],
 			  perf_part_peak[PERF_DRONE_SCAN], budget.dropped);
-	// Where you are in the city: the tower's address on the floor plan (work_ram_plan.svg), to name
-	// where a frame was slow
+	// SG-9: how deep the wall that covers the screen is (level_screen_wall_limit: nothing further is
+	// drawn), "sw-" when none does. Row 10: under the profiler's row 9
+	if (level_screen_wall >= 0)
+		jo_printf(0, 10, "sw%-5d", level_screen_wall);
+	else
+		jo_printf(0, 10, "sw-    ");
+	// Where you are in the city: the page you stand on in Low Work RAM (city.h; the plan,
+	// ram_banks_plan.svg), to name where a frame was slow. (foot_tower_address is the short code
+	// the films' boot_at takes: row << 8 | column << 4)
 	{
 		const int address = foot_tower_address();
 
 		if (address >= 0)
-			jo_printf(22, 7, "at %04X ", address);
+		{
+			const unsigned int page = city_tower_address((address >> 4) & 15, address >> 8);
+
+			jo_printf(22, 7, "at %04X_%04X ", page >> 16, page & 0xFFFF);
+		}
 		else
-			jo_printf(22, 7, "        ");
+			jo_printf(22, 7, "             ");
 	}
 	// VDP1's own figures (game/vdp1_gauge.h): frames it didn't finish this last second, % of frames
 	// it was still drawing when the CPU was done (high with a low cpu: VDP1 limits the frame
@@ -761,6 +785,29 @@ static void screen_point(const jo_pos3D_fixed *world, int *x, int *y)
 }
 
 /*
+ * The screen's red glow while a watchdog's beam has you (game/seen_glow.h): VDP2's colour offset,
+ * as the breach's tint, so nothing more is drawn. The breach is in the arena and the glow on foot,
+ * so the two never want the offset at once. Turned off once when it's faded
+ */
+static void apply_seen_glow(void)
+{
+	static bool glowing = false;
+	int red, green, blue;
+
+	seen_glow_offset(&watchdog_glow, &red, &green, &blue);
+	if (view_is_on_foot() && (red | green | blue))
+	{
+		jo_set_screen_color_filter_a(JO_ALL_SCROLL_SCREEN, red, green, blue);
+		glowing = true;
+	}
+	else if (glowing)
+	{
+		jo_disable_screen_color_filter(JO_ALL_SCROLL_SCREEN);
+		glowing = false;
+	}
+}
+
+/*
  * The presses breaking the prologue's loop (game/loop_break.h): the burst of light round the
  * cycle, and the whole screen flashing towards white. The flash is VDP2's colour offset: every
  * screen's colours (the floor, the sprites, the text) have the same amount added, by the hardware,
@@ -792,7 +839,15 @@ void draw_3d(void)
 	// perf_frame_start (an earlier callback) has just read whether VDP1 finished the frame before
 	if (DRAW_BUDGET)
 		draw_budget_frame(&budget, perf_vdp1.last_unfinished);
+	/*
+	 * The pause menu's "Wireframe" (the user, 2026-11-18: "can that be togglable from debug menu?"):
+	 * jo draws every polygon as its outline, in green (jo_3d_set_wireframe; jo turns the frame's
+	 * commands into polylines as it sends them). So what's drawn behind what shows, live: the
+	 * layers LEVELS.md checks for, without a build of its own. Read once a frame, a flag: free
+	 */
+	jo_3d_set_wireframe(settings_on(&game_settings, SETTING_WIREFRAME));
 	apply_breach_glitch();
+	apply_seen_glow();
 	set_floor_colours(view_is_on_foot()					 ? (level_in_city() ? FLOOR_BOARD : FLOOR_BLACK)
 					  : arena_breach.phase != BREACH_NONE ? FLOOR_WHITE
 														  : FLOOR_AS_LOADED);
@@ -892,10 +947,13 @@ void draw_3d(void)
 		if (!spectating)
 		{
 			level_view_begin(arena_corridor, debug_camera); // the planes everything on foot is cut to
-			// The roofs the watchdog's scan lights, coloured as the city's drawn (drone_draw.h)
+			level_screen_wall_limit(); // SG-9: before anything's drawn (the slave starts at once)
+			// The roofs the nearest watchdog's scan lights, coloured as the city's drawn (drone_draw.h)
+#if CITY_WATCHDOG
 			if (view_is_on_foot() && level_in_city())
-				drone_draw_prepare(&watchdog, watchdog_boxes, CITY_TOWERS);
+				drone_draw_prepare(watchdogs, CITY_WATCHDOGS, watchdog_boxes, CITY_TOWERS);
 			else
+#endif
 				level_scan_set(JO_NULL, 0, 0);
 			draw_corridor_floor(arena_corridor, clip);
 			perf_part_add(PERF_FLOOR, floor_frc);
@@ -1022,14 +1080,21 @@ void draw_3d(void)
 
 		// The landmarks are the first thing to go when VDP1 is short (game/draw_budget.h): on the
 		// horizon, the farthest. The skyline behind the towers always stays
+		// The slave's share of the city (level.c, grey_slave_job) reads level_view; the sky's ring
+		// cut changes it: the slave's done first. Only when it has one (level_city_shared)
+		if (level_city_shared)
+			slave_draw_wait();
 		if (foot_cd_hub(&side, &wall, &middle, &in_lift))
 			level_sky_draw(side, wall, middle, sky_frame++, view_is_on_foot() ? PLACE_WORK_RAM : PLACE_ARENA, in_lift,
 						   draw_budget_allows(&budget, BUDGET_LANDMARKS));
 		perf_px_mark(PX_SKY);
-		// The watchdog's drone and its scan (drone_draw.h): out in the city only. From inside the
-		// corridor its walls would hide it, and VDP1 has no depth to know that
+		// The watchdogs' drones and their beams (drone_draw.h): out in the city only. From inside the
+		// corridor its walls would hide them, and VDP1 has no depth to know that
+#if CITY_WATCHDOG
 		if (view_is_on_foot() && level_in_city())
-			drone_draw(&watchdog, watchdog_boxes, CITY_TOWERS, sky_frame);
+			for (int i = 0; i < CITY_WATCHDOGS; ++i)
+				drone_draw(&watchdogs[i], sky_frame);
+#endif
 		perf_px_mark(PX_DRONE);
 	}
 	// Your body (game/body.h), once you have one (from the crash on): posed once here, then drawn
@@ -1056,6 +1121,9 @@ void draw_3d(void)
 		}
 	}
 	slave_draw_end(); // everything handed to the slave is drawn
+	// SG-9's depth limit (level_screen_wall_limit) was the world's, this frame's: none for the mirror
+	// (its reflection is deeper than its glass) or the HUD (jo tests sprites against it too)
+	jo_3d_set_depth_limit(-1);
 	// The mirror over the hole you broke through (level.h): the corridor again, reflected in it.
 	// After the slave's done with the meshes: the second pass fills them again
 	{
@@ -1471,7 +1539,12 @@ void jo_main(void)
 	// zone for jo_malloc it's only used once the first (in high Work RAM, makefile) is full, so the
 	// heap can't run short now that zone's smaller. (SCU DMA can't reach it, so data DMA'd to the
 	// VDPs is better kept in high RAM: it is, while the first zone has room)
+#ifdef JO_TEST_PCPROF_FRAME
+	// (a profiling build: jo's PC sampler keeps its histograms in the top 128 KB, 0x002E0000 on)
+	jo_add_memory_zone((unsigned char *)0x00200000, 0xE0000);
+#else
 	jo_add_memory_zone((unsigned char *)0x00200000, 0x100000);
+#endif
 	// VDP1's pixels by part on the debug line (utils/perf.h): only a profiler build counts them
 	jo_profile_count_pixels(true);
 	jo_set_tga_palette_handling(my_tga_palette_handling);

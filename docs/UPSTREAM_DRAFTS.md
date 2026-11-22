@@ -35,6 +35,40 @@ tests use), on the PC. **Not on a Saturn.**
 
 ---
 
+## U-7: new issue (sent)
+
+**Posted 2026-11-18** with the user's go-ahead ("Issue first": CLAUDE.md's rule for a design question,
+over sending a PR unasked) as [johannes-fetz/joengine#114](https://github.com/johannes-fetz/joengine/issues/114).
+Checked first: no splash or logo code in `upstream/master` `5437a7f`'s `jo_engine/`, and no issue or PR
+(`gh search issues` for splash, logo, boot logo, startup logo). The 16-colour claim was looked at before
+sending: the sphere bands, so the text says so. Waiting on the author's choice of 1, 2, 3 or neither. **Reply (2026-11-18, the author):** thanks; still thinking whether a splash belongs in the engine, and in which form. Meanwhile, three "made with Jo Engine" intro videos (A, B, C: 4 s, 320 x 224, mono) in `Logos/made with Jo Engine video intro/`, each a `.CPK` for the video module (`jo_video_open_file()`, `jo_video_play()`) and an `.mp4` preview; `Samples/demo - video` plays one. So a game can show one at startup today, with no engine change.
+
+**Title:** An optional "made with Jo Engine" splash screen at startup?
+
+Hello, a feature question this time. We'd like to know whether you want it, and how, before offering anything.
+
+**The idea.** An optional "made with Jo Engine" splash screen at startup: jo's own logo, shown for a moment when a program boots, before its first frame. A game could credit the engine without each one drawing the logo itself, and players would see what it's built on.
+
+**What we checked.** jo has no splash screen today (`upstream/master` at `5437a7f`: no splash or logo code in `jo_engine/`), and we found no issue or pull request asking for one. The repository has your logos in `Logos/`: `logo-mark.png` is 240 x 160, which fits the 320 x 224 screen as it is.
+
+**What it would cost a program that turns it on:**
+- **Its image.** `logo-mark.png` has ~2900 colours (a shaded sphere, antialiased edges). At 16 colours (4 bits, 19.2 KB plus a 32-byte palette) the sphere's shading shows visible steps; at 256 (8 bits) it's 38.4 KB; at 16 bits a pixel, 77 KB. Which is worth it is a question of how you want the logo to look.
+- **VDP1 memory while it shows.** The same size as the image, freed before the program's own sprites are loaded.
+- **Time.** About 2 seconds of boot, skippable with START.
+
+**Where it would run.** It has to come before the program loads anything, so either inside `jo_core_init()` (a short loop of its own: fade in, hold, fade out, using `jo_set_screen_color_filter_a()`), or as a call the program makes itself right after `jo_core_init()`.
+
+**Three ways we could see:**
+1. **A makefile option, off by default** (`JO_COMPILE_WITH_SPLASH_SCREEN = 1`): `jo_core_init()` shows it. Nothing changes for existing programs, and a program that doesn't turn it on doesn't carry the image.
+2. **A public call**, `jo_core_show_splash_screen()`, with the image compiled only when it's used. The program decides when, for example after its own publisher logo.
+3. **On by default with an option to turn it off.** Every jo program would show it, which is a bigger decision and yours to make.
+
+We'd be glad to write 1 or 2 as a pull request, tested in Mednafen and in the test ROM, with the image made from `Logos/logo-mark.png` by a script in `Compiler/COMMON` so it can be made again if the logo changes. Or neither, if you'd rather jo stayed out of what a program shows at boot. If you'd want a different look (the wide logo, a background colour, a sound), tell us and we'll follow it.
+
+Thanks again for jo, for setting us straight on #110, and for the fix to #111.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
 ## U-6: new issue
 
 **Title:** `jo_core_get_fps()` and `jo_core_get_late_frame_count()` don't see a frame of 1 to 2 fields

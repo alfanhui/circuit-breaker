@@ -1,0 +1,69 @@
+# The pause menu's "Jump to" (src/game/jumps.h): from the opening (not on foot yet) START pauses,
+# L six times to "Jump to", R jumps to the corridor's start (booting on foot first: a moment's
+# freeze), START plays on there. Then each place in turn: START, R, START, a shot of the menu and of
+# the place. At the CD hub, stood a while with its watchdog round the lift: a hub's safe, so its
+# beam never turns red and the debug line's wd stays P (game/city.h: city_on_hub)
+wait_boot
+press start
+wait 0.6
+press l 6
+press r
+wait 2.0
+shot jp_00_menu_start
+press start
+wait 1.5
+shot jp_01_start
+press start
+wait 0.6
+press r
+wait 0.6
+shot jp_02_menu_yard
+press start
+wait 1.5
+shot jp_03_yard
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_04_stairs
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_05_entry
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_06_drone_1
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_07_drone_2
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_08_cd_hub
+wait 4.0
+shot jp_09_cd_hub_later
+wait 4.0
+shot jp_10_cd_hub_later
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_11_backup
+press start
+wait 0.6
+press r
+press start
+wait 1.5
+shot jp_12_scsp

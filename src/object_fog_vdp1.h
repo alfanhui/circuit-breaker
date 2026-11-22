@@ -36,6 +36,9 @@ void object_fog_set_camera(world_point eye, int forward_x, int forward_y);
 
 // The fog level of a corner on (or above) the floor at x, y
 int object_fog_level(int x, int y);
+// Whether all of a box on the floor (x_min .. x_max, y_min .. y_max) is in full fog: its nearest
+// corner along the view as well. Never while the fog's off
+bool object_fog_box_full(int x_min, int x_max, int y_min, int y_max);
 
 // A Gouraud table for one quad, its corners' levels in the quad's vertex order (vertices[0..3]).
 // Returns the value for that quad's jo_3d_polygon_attribute.gouraud_table.

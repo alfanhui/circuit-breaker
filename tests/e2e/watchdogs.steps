@@ -1,0 +1,64 @@
+# The first watchdog's patrol (city.c, patrol_entry: a loop round the block south of the entry),
+# seen from inside its loop: booted on 0B00 (row B, column 0, the loop's west side). Its first stop
+# is over 0A00, just north: turned left to face it, looking up a little, shots as it waits and
+# flies its loop, its beam a square pyramid of light on the roofs (2026-11-17). It flies down this
+# side last, over you: its beam finds you (red beam, red glow)
+boot_at 0B00
+wait_up
+wait 0.5
+hold left 0.5
+wait 0.3
+shot wd_00_north
+wait 1.0
+shot wd_01
+hold right 0.5
+wait 0.5
+shot wd_02_out
+wait 1.5
+shot wd_03
+hold right 0.5
+wait 0.5
+shot wd_04_south
+wait 1.5
+shot wd_05
+wait 1.5
+shot wd_06
+wait 1.5
+shot wd_07
+wait 1.5
+shot wd_08
+wait 1.5
+shot wd_09
+wait 1.5
+shot wd_10
+wait 1.5
+shot wd_11
+wait 0.5
+shot wd_12
+wait 0.5
+shot wd_13
+wait 0.5
+shot wd_14
+wait 0.5
+shot wd_15
+wait 0.5
+shot wd_16
+wait 0.5
+shot wd_17
+wait 1.0
+shot wd_18
+wait 1.0
+shot wd_19
+# Stood still in its beam: it chases (holding back, you in its beam), and after 2 s in it you're
+# caught: the terminal screen, then back at your checkpoint, the entry roof (step 2: the debug
+# line's row 8, "wd", is each watchdog's mood and catch count)
+wait 1.0
+shot wd_20
+wait 1.0
+shot wd_21
+wait 1.0
+shot wd_22
+wait 2.0
+shot wd_23
+wait 2.0
+shot wd_24

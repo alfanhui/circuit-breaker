@@ -46,6 +46,11 @@ void depth_fog_set_camera(depth_fog *f, world_point eye, int forward_x, int forw
 // doesn't count). Per corner: no division.
 int depth_fog_level(const depth_fog *f, int x, int y);
 
+// Whether all of a box on the floor (x_min .. x_max, y_min .. y_max: lined up with the axes) is in
+// full fog. Its nearest corner along the view is the one that decides: one binary search, no
+// division (level.c leaves out the city's blocks that are, under your eye: the user, 2026-11-16)
+int depth_fog_box_full(const depth_fog *f, int x_min, int x_max, int y_min, int y_max);
+
 /*
  * VDP1's Gouraud shading colour for a level. Each Gouraud colour channel is 0..31, and VDP1
  * adds (channel - 16) to the polygon's own colour: 16 leaves it alone, 0 takes 16 off. So a

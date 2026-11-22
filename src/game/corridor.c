@@ -377,8 +377,14 @@ void corridor_walker_area(const corridor *c, walker_area *area)
 
 	walker_area_clear(area);
 	walker_area_add(area, from.x, from.y, to.x, to.y);
-	add_wall(c, area, -100, c->across_min - 100, CORRIDOR_LENGTH + 100, c->across_min); // a side
-	add_wall(c, area, -100, c->across_max, CORRIDOR_LENGTH + 100, c->across_max + 100); // the other
+	/*
+	 * The sides, ending where the corridor does (its faces: corridor_faces). They went on 100 past it,
+	 * onto the entry's roof, and there they were walls you couldn't see: by the yard's wall, stepping
+	 * left off the entry (onto (0, 9), 90 down) you met one instead (the user, 2026-11-17: "You cannot
+	 * drop down from yard to city on the left, when next to the yard wall")
+	 */
+	add_wall(c, area, -100, c->across_min - 100, CORRIDOR_LENGTH, c->across_min); // a side
+	add_wall(c, area, -100, c->across_max, CORRIDOR_LENGTH, c->across_max + 100); // the other
 	// The far end: its left half (the right's the way out, onto the city's entry roof)
 	add_wall(c, area, CORRIDOR_LENGTH, c->across_min, CORRIDOR_LENGTH + 100, (c->across_min + c->across_max) >> 1);
 	add_wall(c, area, -100, c->across_min, 0, c->across_max); // the hole
@@ -417,7 +423,14 @@ void corridor_targets(const corridor *c, target_list *list)
 	add_target(c, list, 4300, 4, 300, TARGET_CLUSTER); // its face, high up
 	// The way out: the doorway in the far end's right half, onto the city
 	add_target(c, list, CORRIDOR_LENGTH - 10, 12, 60, TARGET_SIGHT);
-	// The city's hubs (city.h): where you're going, lit. Their roofs' middles
+	/*
+	 * The city's hubs (city.h): where you're going, lit. Their roofs' middles; but the CD block's
+	 * at the top of its lift, the pickup's hatch it rises to (city.h, CITY_PICKUP_BOTTOM), over its
+	 * pad: the lift itself you can see, and locked on, the head looks up to where it takes you (the
+	 * user, 2026-11-16)
+	 */
+	const city_tower *const cd_hub = city_tower_at(CITY_HUB_COLUMN, CITY_HUB_ROW);
+
 	for (int i = 0; i < CITY_TOWERS; ++i)
 		if (city_towers[i].kind == CITY_HUB)
 		{
@@ -425,6 +438,6 @@ void corridor_targets(const corridor *c, target_list *list)
 			const int middle = (c->across_min + c->across_max) >> 1;
 			const world_point p = corridor_point(c, (t->out_min + t->out_max) >> 1, middle + ((t->across_min + t->across_max) >> 1));
 
-			target_list_add(list, p.x, p.y, t->height, TARGET_SIGHT);
+			target_list_add(list, p.x, p.y, t == cd_hub ? CITY_PICKUP_BOTTOM : t->height, TARGET_SIGHT);
 		}
 }

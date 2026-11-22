@@ -35,10 +35,15 @@ extern const trail *const field_trails[FIELD_TRAIL_COUNT]; // every rider's trai
 // The trails that stop cycles and can hide others: only live riders' (a dead bot's sinks away)
 extern const trail *solid_trails[FIELD_TRAIL_COUNT];
 extern int solid_trail_count;
-// The watchdog's drone over the city (game/drone.h), from when you're up on foot: drone_draw.c draws it
+// The watchdogs' drones over the city (game/drone.h), from when you're up on foot: drone_draw.c
+// draws them
 #include "game/city.h" // (and game/drone.h)
-extern drone watchdog;
-extern drone_box watchdog_boxes[CITY_TOWERS]; // the towers, for its sight and for its light to stop at
+#include "game/seen_glow.h"
+#if CITY_WATCHDOG
+extern drone watchdogs[CITY_WATCHDOGS];
+#endif
+extern drone_box watchdog_boxes[CITY_TOWERS]; // the towers, for their sight and for their light to stop at
+extern seen_glow watchdog_glow;				  // the screen's red while a beam has you (main.c)
 // The address of the city tower you stand over, as the floor plan labels it (row << 8 | column << 4:
 // docs/images/work_ram_plan.svg), for the debug text; -1 off the city (or not on foot)
 int foot_tower_address(void);

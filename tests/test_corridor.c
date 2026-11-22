@@ -1,5 +1,6 @@
 #include "test.h"
 #include "../src/game/corridor.h"
+#include "../src/game/city.h"
 
 #define HALF 8000
 
@@ -414,9 +415,38 @@ static void targets_are_in_the_corridor(void)
 	CHECK(target_press_side(&lock, &list, &eye, &area, 1));
 }
 
+// The CD block hub's mark is at the top of its lift: the pickup's hatch, over the pad in the middle
+// of its roof (the user, 2026-11-16). The other hubs' are on their roofs
+static void the_cd_hub_mark_is_at_the_lift_top(void)
+{
+	corridor c;
+	target_list list;
+	world_point pad;
+	int at_top = 0, at_backup = 0;
+
+	open_round_five(&c);
+	corridor_targets(&c, &list);
+	pad = city_hub_middle(c.side, c.wall, (c.across_min + c.across_max) >> 1);
+	for (int i = 0; i < list.count; ++i)
+	{
+		const target_marker *m = &list.markers[i];
+
+		if (m->x == pad.x && m->y == pad.y)
+		{
+			CHECK_EQ(CITY_PICKUP_BOTTOM, m->z); // over the pad, at the hatch
+			++at_top;
+		}
+		else if (m->z == city_tower_at(CITY_BACKUP_COLUMN, CITY_BACKUP_ROW)->height)
+			++at_backup;
+	}
+	CHECK_EQ(1, at_top);
+	CHECK(at_backup >= 1); // Backup RAM's hub: still on its roof
+}
+
 void run_corridor_tests(void)
 {
 	RUN(targets_are_in_the_corridor);
+	RUN(the_cd_hub_mark_is_at_the_lift_top);
 	RUN(the_grey_box_climbs_and_drops);
 	RUN(the_start_teaches_the_moves);
 	RUN(no_way_round_the_moves);

@@ -10,6 +10,10 @@
 #include "game/occluder.h"
 #include "game/skyline.h"
 #include "game/floor_hides.h" // what the roof you stand on hides
+#include "game/sky_slide.h"   // the sky slid with you as a round rises
+#include "game/near_first.h"  // the city's blocks nearest first
+#include "game/screen_wall.h" // SG-9: a wall that covers the screen
+#include "utils/fastmath.h"    // ASR, BIT_SET: shifts without libgcc's slow routines
 #include "features.h"           // FLOOR_HIDES
 #include "game/landmarks.h"
 #include "object_fog_vdp1.h"
@@ -520,8 +524,8 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 		const int dx1 = jo_fixed2int(band->points[rb].x) - camera->eye.x;
 		const int dy1 = jo_fixed2int(band->points[rb].y) - camera->eye.y;
 		// How far in front of the camera each column is (d), and aside (s)
-		const int d0 = (dx0 * camera->forward_x + dy0 * camera->forward_y) >> 10;
-		const int d1 = (dx1 * camera->forward_x + dy1 * camera->forward_y) >> 10;
+		const int d0 = ASR(dx0 * camera->forward_x + dy0 * camera->forward_y, 10);
+		const int d1 = ASR(dx1 * camera->forward_x + dy1 * camera->forward_y, 10);
 		int s0, s1, tall0, tall1, taller, shorter, wide;
 
 		if (d0 <= 0 || d1 <= 0 || d0 > LAY_FLAT_REACH || d1 > LAY_FLAT_REACH)
@@ -530,8 +534,8 @@ static void lay_wide_pieces_flat(block_band *band, int first_polygon, bool along
 		// columns' heights on the screen go as 1 / d)
 		if ((d0 > d1 ? d0 : d1) * 4 > (d0 > d1 ? d1 : d0) * 5)
 			continue;
-		s0 = (dx0 * camera->forward_y - dy0 * camera->forward_x) >> 10;
-		s1 = (dx1 * camera->forward_y - dy1 * camera->forward_x) >> 10;
+		s0 = ASR(dx0 * camera->forward_y - dy0 * camera->forward_x, 10);
+		s1 = ASR(dx1 * camera->forward_y - dy1 * camera->forward_x, 10);
 		tall0 = (jo_fixed2int(band->points[lt].z) - jo_fixed2int(band->points[lb].z)) * d1;
 		tall1 = (jo_fixed2int(band->points[rt].z) - jo_fixed2int(band->points[rb].z)) * d0;
 		taller = tall0 > tall1 ? tall0 : tall1;
@@ -603,8 +607,8 @@ static void draw_side_run(const wall_side *side, wall_strip *low, wall_strip *hi
 	// out of the floor, its grid rows spreading apart as it does (VDP1 stretches each texture over
 	// its quad). A multiply and a shift a side, not a vertex
 	{
-		int split = (WALL_SPLIT_Z * rise) >> 8;
-		int top = (WALL_TOP_Z * rise) >> 8;
+		int split = ASR(WALL_SPLIT_Z * rise, 8);
+		int top = ASR(WALL_TOP_Z * rise, 8);
 
 		draw_strip(low, columns, count, WALL_BOTTOM_Z, split, camera, LOW_MIN_FORWARD);
 		draw_strip(high, columns, count, split, top, camera, HIGH_MIN_FORWARD);
@@ -649,8 +653,8 @@ static void add_flicker_section(const wall_side *side, const wall_flicker *flick
 								const wall_clip_camera *camera, bool cutaway, int rise)
 {
 	const int wall = side->fixed * arena_half();
-	const int split = (WALL_SPLIT_Z * rise) >> 8;
-	const int top = (WALL_TOP_Z * rise) >> 8;
+	const int split = ASR(WALL_SPLIT_Z * rise, 8);
+	const int top = ASR(WALL_TOP_Z * rise, 8);
 	const int across_min = side->along_x ? view->y_min : view->x_min;
 	const int across_max = side->along_x ? view->y_max : view->x_max;
 	int along_min, along_max;
@@ -758,8 +762,8 @@ static void add_block_face(bool along_x, int wall, int start, int dir, int lengt
 		return;
 	}
 	{
-		int split = (WALL_SPLIT_Z * rise) >> 8;
-		int top = (WALL_TOP_Z * rise) >> 8;
+		int split = ASR(WALL_SPLIT_Z * rise, 8);
+		int top = ASR(WALL_TOP_Z * rise, 8);
 
 		block_band_add(&block_low, &low_attributes[0], columns, count, WALL_BOTTOM_Z, split, camera,
 					   LOW_MIN_FORWARD);
@@ -958,9 +962,9 @@ static void cap_band_tops(block_band *band, int first, const wall_clip_camera *c
 	{
 		const int dx = jo_fixed2int(band->points[i].x) - camera->eye.x;
 		const int dy = jo_fixed2int(band->points[i].y) - camera->eye.y;
-		const int forward = (dx * camera->forward_x + dy * camera->forward_y) >> 10;
+		const int forward = ASR(dx * camera->forward_x + dy * camera->forward_y, 10);
 		const int bottom = jo_fixed2int(band->points[i - 1].z);
-		int highest = eye_height + 4 + ((reach16 * (forward > 0 ? forward : 0)) >> 4);
+		int highest = eye_height + 4 + (ASR(reach16 * (forward > 0 ? forward : 0), 4));
 
 		if (highest <= bottom)
 			highest = bottom + 1;
@@ -1003,7 +1007,7 @@ static int bottom_cap_reach16(void)
 // The plane's height `forward` in front of the camera
 static int bottom_cap_at(int forward, int reach16)
 {
-	return -view_z - 4 - ((reach16 * (forward > 0 ? forward : 0)) >> 4); // -view_z: the eye's height
+	return -view_z - 4 - (ASR(reach16 * (forward > 0 ? forward : 0), 4)); // -view_z: the eye's height
 }
 
 // The plane's height at column `point` (a band's point: its top's the next), but never up to its
@@ -1012,7 +1016,7 @@ static int band_bottom_cap(const block_band *band, int point, const wall_clip_ca
 {
 	const int dx = jo_fixed2int(band->points[point].x) - camera->eye.x;
 	const int dy = jo_fixed2int(band->points[point].y) - camera->eye.y;
-	const int lowest = bottom_cap_at((dx * camera->forward_x + dy * camera->forward_y) >> 10, reach16);
+	const int lowest = bottom_cap_at(ASR(dx * camera->forward_x + dy * camera->forward_y, 10), reach16);
 	const int top = jo_fixed2int(band->points[point + 1].z);
 
 	return lowest >= top ? top - 1 : lowest;
@@ -1108,12 +1112,13 @@ typedef struct
 #define GREY_GROUPS (2 + GREY_BLOCK_COLUMNS * GREY_BLOCK_ROWS)
 typedef struct
 {
-	unsigned char first, last; // its boxes, first to last
+	unsigned short first, last; // its boxes, first to last (up to GREY_BOXES: 285, past a byte)
 	frustum_point middle, half; // the box round them all: its middle, and half its size each way
 	short lowest;				// its lowest box's top (the city's blocks as hiders: grey_boxes_add)
+	bool hub;					// a hub's in it (lit: never left out for the fog)
 } grey_group;
 static world_rect grey_corridor_floor; // the corridor's floor, for grey_side_bottom
-static unsigned char grey_city_order[CITY_TOWERS]; // the city's towers (city.h's index) in block order
+static unsigned char grey_city_order[CITY_TOWERS]; // the city's towers (city.h's index, 0 .. 255) in block order
 static int grey_boxes_for = -1; // the corridor they're for: its wall and side (-1: none yet)
 
 /*
@@ -1121,8 +1126,10 @@ static int grey_boxes_for = -1; // the corridor they're for: its wall and side (
  * breach starts, given back when the arena starts again. NULL meanwhile: nothing's drawn
  */
 // The boxes' faces, sides and tops, each cut to the view: most a quad, some up to 7 (draw_corridor_boxes)
-#define GREY_POINTS_MAX 1000 // 640 and 288 with the city's first 21 towers; it's 84 now (city.h)
-#define GREY_QUADS_MAX 448
+#define GREY_POINTS_MAX 1400 // 640 and 288 with the city's first 21 towers; it's 256 now (city.h).
+// Up the lift every far tower's top is a quad of its own (grey_block_lid): ~250, 1000 points, and
+// the near towers' sides with them (2026-11-18: was 1000 and 448, and the furthest went)
+#define GREY_QUADS_MAX 640
 typedef struct
 {
 	jo_pos3D_fixed points[CORRIDOR_POINTS_MAX]; // the glass floor's
@@ -1133,7 +1140,7 @@ typedef struct
 	jo_3d_polygon_attribute grey_attributes[GREY_QUADS_MAX];
 	grey_box boxes[GREY_BOXES];
 	grey_group groups[GREY_GROUPS];
-	unsigned char block_first[GREY_GROUPS]; // each group's first box (the city's: by block)
+	unsigned short block_first[GREY_GROUPS]; // each group's first box (the city's: by block)
 	frustum_point stairs_ramp[4], stairs_side[4]; // the stairs far off: grey_stairs_ramp
 	short stairs_open_line, stairs_open_out; // their open side: its line (x or y), and outside it, +1 or -1
 	bool stairs_open_along_x;				 // the open side runs along x (it's at y = line)
@@ -1146,6 +1153,23 @@ static corridor_memory *corridor_meshes = JO_NULL;
 #define grey_mesh_points (corridor_meshes->grey_points)
 #define grey_mesh_polygons (corridor_meshes->grey_polygons)
 #define grey_mesh_attributes (corridor_meshes->grey_attributes)
+/*
+ * The slave's share of the city's faces (grey_slave_job): a block of its own, taken after the
+ * corridor's. In corridor_memory it made that 108 888 bytes, too big for what's left of High Work
+ * RAM's heap: jo put it all in Low Work RAM (0x0020_0008), half as quick to read, and the corridor's
+ * own views lost frames on the bench (2026-11-19). Apart, the corridor's stays in High Work RAM;
+ * this one goes where there's room (the slave has time to spare). NULL: no room, no share
+ */
+typedef struct
+{
+	jo_pos3D_fixed points[GREY_POINTS_MAX];
+	jo_3d_polygon polygons[GREY_QUADS_MAX];
+	jo_3d_polygon_attribute attributes[GREY_QUADS_MAX];
+} grey_slave_memory;
+static grey_slave_memory *grey_slave_meshes = JO_NULL;
+#define grey_slave_points (grey_slave_meshes->points)
+#define grey_slave_polygons (grey_slave_meshes->polygons)
+#define grey_slave_attributes (grey_slave_meshes->attributes)
 #define grey_boxes (corridor_meshes->boxes)
 #define grey_groups (corridor_meshes->groups)
 #define grey_block_first (corridor_meshes->block_first)
@@ -1166,6 +1190,7 @@ void corridor_meshes_take(void)
 		return;
 	}
 	jo_memset(corridor_meshes, 0, sizeof(corridor_memory));
+	grey_slave_meshes = (grey_slave_memory *)jo_malloc(sizeof(grey_slave_memory)); // (after: see its type)
 	grey_boxes_for = -1; // worked out again, into the new memory
 	// The corridor's floor, as the surround's (init_arena_walls)
 	for (int q = 0; q < CORRIDOR_QUADS_MAX; ++q)
@@ -1185,6 +1210,9 @@ void corridor_meshes_release(void)
 {
 	if (corridor_meshes == JO_NULL)
 		return;
+	if (grey_slave_meshes != JO_NULL)
+		jo_free(grey_slave_meshes);
+	grey_slave_meshes = JO_NULL;
 	jo_free(corridor_meshes);
 	corridor_meshes = JO_NULL;
 }
@@ -1243,11 +1271,16 @@ static void grey_boxes_work_out(const corridor *passage)
 		for (int block_row = 0; block_row < GREY_BLOCK_ROWS; ++block_row)
 			for (int block_column = 0; block_column < GREY_BLOCK_COLUMNS; ++block_column)
 			{
-				grey_block_first[g++] = (unsigned char)i;
+				grey_block_first[g++] = (unsigned short)i;
 				for (int row = block_row * 2; row < block_row * 2 + 2; ++row)
 					for (int column = block_column * 2; column < block_column * 2 + 2 && column < CITY_COLUMNS; ++column)
 						grey_city_order[i++ - CORRIDOR_BOXES] = (unsigned char)(row * CITY_COLUMNS + column);
 			}
+		// The seen rows go by this order (city.h: city_seen_bit): each box's bit is its place here.
+		// Said once, when the boxes are listed: if the two ever differ, towers vanish
+		for (int k = 0; k < CITY_TOWERS; ++k)
+			if (city_seen_bit(grey_city_order[k]) != k)
+				jo_core_error("grey_city_order isn't city_seen_bit's order");
 	}
 	for (int i = 0; i < GREY_BOXES; ++i)
 	{
@@ -1310,7 +1343,7 @@ static void grey_boxes_work_out(const corridor *passage)
 		int x_min = 32000, x_max = -32000, y_min = 32000, y_max = -32000, z_min = 32000, z_max = -32000;
 
 		group->first = grey_block_first[g];
-		group->last = (unsigned char)((g + 1 < GREY_GROUPS ? grey_block_first[g + 1] : GREY_BOXES) - 1);
+		group->last = (unsigned short)((g + 1 < GREY_GROUPS ? grey_block_first[g + 1] : GREY_BOXES) - 1);
 		for (int i = group->first; i <= group->last; ++i)
 		{
 			const grey_box *b = &grey_boxes[i];
@@ -1329,9 +1362,13 @@ static void grey_boxes_work_out(const corridor *passage)
 		group->half.y = ((y_max - y_min) >> 1) + 1;
 		group->half.z = ((z_max - z_min) >> 1) + 1;
 		group->lowest = 32000;
+		group->hub = false;
 		for (int i = group->first; i <= group->last; ++i)
+		{
 			if (grey_boxes[i].height < group->lowest)
 				group->lowest = grey_boxes[i].height;
+			group->hub |= grey_boxes[i].lit;
+		}
 	}
 	for (int i = 0; i < GREY_BOXES; ++i)
 	{
@@ -1628,6 +1665,64 @@ void level_view_begin(const corridor *passage, bool free_camera)
 	grey_boxes_work_out(passage);
 	grey_portal_set(passage);
 	mirror_decide(passage);
+}
+
+/*
+ * SG-9 (game/screen_wall.h; the user, 2026-11-18: "Start SG-9"). Only the boxes' sides near you
+ * are looked at: a side further than SCREEN_WALL_NEAR can't cover the screen (a tower's 500 wide,
+ * and the screen's sides spread 0.77 a unit out: at 330 one face is just the screen's width). The
+ * stairs aren't: far off they're drawn as one ramp, and their open side as a profile, not as their
+ * boxes. Sides facing you only, as grey_boxes_add draws them, from their foot (bottom[]) to their
+ * top. A few compares a box, and screen_wall_depth for the handful near you: once a frame
+ */
+#define SCREEN_WALL_NEAR 400
+#define SCREEN_WALL_MARGIN 16 // world units past the wall: errs towards drawing
+int level_screen_wall = -1;	  // this frame's (level.h: the debug line's sw)
+
+void level_screen_wall_limit(void)
+{
+	const frustum_point *e = &level_view.eye;
+	int nearest = -1;
+
+	if (SCREEN_WALL && level_view_on && view_is_on_foot() && corridor_meshes != JO_NULL && grey_boxes_for != -1)
+		for (int i = GREY_STAIRS; i < GREY_BOXES; ++i)
+		{
+			const grey_box *b = &grey_boxes[i];
+			const world_rect *r = &b->rect;
+			const bool city = i >= CORRIDOR_BOXES;
+			int depth = -1;
+
+			if (e->x < r->x_min - SCREEN_WALL_NEAR || e->x > r->x_max + SCREEN_WALL_NEAR ||
+				e->y < r->y_min - SCREEN_WALL_NEAR || e->y > r->y_max + SCREEN_WALL_NEAR || b->height <= e->z)
+				continue; // far off, or under your eye (its top's on the screen)
+			for (int which = 0; which < 4; ++which)
+			{
+				const bool along_x = which >= GREY_Y_MIN;
+				const int line = which == GREY_X_MIN ? r->x_min : which == GREY_X_MAX ? r->x_max
+								 : which == GREY_Y_MIN ? r->y_min : r->y_max;
+				const int eye_across = along_x ? e->y : e->x;
+				// Facing you: you're on its outside (grey_boxes_add's test)
+				const bool facing = (which == GREY_X_MIN || which == GREY_Y_MIN) ? eye_across < line : eye_across > line;
+				int bottom = b->bottom[which];
+				int d;
+
+				if (!facing)
+					continue;
+				// (as grey_side_add: with "City sides" off a tower's side stops 900 under your eye)
+				if (city && !settings_on(&game_settings, SETTING_CITY_SIDES) && bottom < e->z - 900)
+					bottom = e->z - 900;
+				d = screen_wall_depth(&level_view, along_x, line, along_x ? r->x_min : r->y_min,
+									  along_x ? r->x_max : r->y_max, bottom, b->height);
+				if (d >= 0 && (depth < 0 || d < depth))
+					depth = d;
+			}
+			if (depth >= 0 && (nearest < 0 || depth < nearest))
+				nearest = depth;
+		}
+	// jo's depths are the world's over VIEW_WORLD_SCALE (view_push_world_matrix): a shift. -1: none
+	_Static_assert(VIEW_WORLD_SCALE == 4, "the depth limit's >> 2 is VIEW_WORLD_SCALE");
+	level_screen_wall = nearest;
+	jo_3d_set_depth_limit(nearest < 0 ? -1 : (nearest + SCREEN_WALL_MARGIN + VIEW_WORLD_SCALE - 1) >> 2);
 }
 
 bool level_mirror_begin(const corridor *passage, const wall_clip_camera *camera, wall_clip_camera *mirrored)
@@ -2166,10 +2261,10 @@ static int glass_tile_place(const wall_clip_camera *camera, world_point centre, 
 {
 	const int dx = centre.x - camera->eye.x;
 	const int dy = centre.y - camera->eye.y;
-	const int forward = (dx * camera->forward_x + dy * camera->forward_y) >> 10;
-	const int side = (dx * camera->forward_y - dy * camera->forward_x) >> 10;
+	const int forward = ASR(dx * camera->forward_x + dy * camera->forward_y, 10);
+	const int side = ASR(dx * camera->forward_y - dy * camera->forward_x, 10);
 	// The view's half width there, and wider looking down from up high (below_reach)
-	const int reach = (((forward > 0 ? forward : 0) * camera->view_width) >> 4) + below_reach;
+	const int reach = (ASR((forward > 0 ? forward : 0) * camera->view_width, 4)) + below_reach;
 
 	if (forward + CORRIDOR_HEX_R < 0 || forward > GLASS_DETAIL)
 		return 0;
@@ -2264,6 +2359,25 @@ static void level_mesh_begin(level_mesh *m, jo_pos3D_fixed *points, jo_3d_polygo
 #define LEVEL_FOG_NONE 0
 #define LEVEL_FOG_FLAT 1
 #define LEVEL_FOG_CORNERS 2
+/*
+ * Or flat, but never past LEVEL_FOG_CAP: far off it stays a dim shape against the black, not lost
+ * in it. Up the CD block's lift the city below (the user, 2026-11-18: "you cannot see much of the
+ * city") and the watchdogs over it: they're fogged alike (level_fog_capped), so a far drone fades
+ * as much as the roofs it patrols ("the watchdogs are very visible - but the city paths which they
+ * patrol isn't. The balance is not right"). 9 of the 16 levels: ~40% of its colour left
+ */
+#define LEVEL_FOG_CAPPED 3
+#define LEVEL_FOG_CAP 9
+
+int level_fog_capped(int x, int y)
+{
+	int level;
+
+	if (!object_fog_enabled)
+		return 0;
+	level = object_fog_level(x, y);
+	return level > LEVEL_FOG_CAP ? LEVEL_FOG_CAP : level;
+}
 
 /*
  * One face (n corners in order round it) into mesh m, cut by the planes in `planes` (0: none, as
@@ -2302,7 +2416,7 @@ static bool level_face_add(level_mesh *m, const frustum_point *corners, int n, u
 		int nearest = 255;
 		// One level for a flat quad: its two columns' (corners 0 and 2 are one in each, listed
 		// upright or lying), the fog going by the distance along the floor
-		const int step = fog == LEVEL_FOG_FLAT && n == 4 ? 2 : 1;
+		const int step = (fog == LEVEL_FOG_FLAT || fog == LEVEL_FOG_CAPPED) && n == 4 ? 2 : 1;
 
 		for (int k = 0; k < n; k += step)
 		{
@@ -2310,7 +2424,9 @@ static bool level_face_add(level_mesh *m, const frustum_point *corners, int n, u
 			if (levels[k] < nearest)
 				nearest = levels[k];
 		}
-		if (fog == LEVEL_FOG_FLAT)
+		if (fog == LEVEL_FOG_CAPPED && nearest > LEVEL_FOG_CAP)
+			nearest = LEVEL_FOG_CAP;
+		if (fog == LEVEL_FOG_FLAT || fog == LEVEL_FOG_CAPPED)
 			colour = object_fog_flat_colour(colour, nearest);
 	}
 	else
@@ -2368,14 +2484,14 @@ static bool level_side_lies(const frustum_point *c)
 	dy0 = c[0].y - v->eye.y;
 	dx1 = c[3].x - v->eye.x;
 	dy1 = c[3].y - v->eye.y;
-	d0 = (dx0 * v->forward[0] + dy0 * v->forward[1] + (c[0].z - v->eye.z) * v->forward[2]) >> 10;
-	d1 = (dx1 * v->forward[0] + dy1 * v->forward[1] + (c[3].z - v->eye.z) * v->forward[2]) >> 10;
+	d0 = ASR(dx0 * v->forward[0] + dy0 * v->forward[1] + (c[0].z - v->eye.z) * v->forward[2], 10);
+	d1 = ASR(dx1 * v->forward[0] + dy1 * v->forward[1] + (c[3].z - v->eye.z) * v->forward[2], 10);
 	if (d0 <= 0 || d1 <= 0 || d0 > 4096 || d1 > 4096)
 		return false;
 	if ((d0 > d1 ? d0 : d1) * 4 > (d0 > d1 ? d1 : d0) * 5)
 		return false; // tapered: upright
-	s0 = (dx0 * v->right[0] + dy0 * v->right[1]) >> 10;
-	s1 = (dx1 * v->right[0] + dy1 * v->right[1]) >> 10;
+	s0 = ASR(dx0 * v->right[0] + dy0 * v->right[1], 10);
+	s1 = ASR(dx1 * v->right[0] + dy1 * v->right[1], 10);
 	wide = s1 * d0 - s0 * d1;
 	if (wide < 0)
 		wide = -wide;
@@ -2456,7 +2572,7 @@ void level_scan_set(const drone_box *lit, int count, jo_color colour)
 }
 
 // After roof r (at height) has been added: the lit parts on it, chained after it
-static void scan_lit_add(const world_rect *r, int height, unsigned planes)
+static void scan_lit_add(level_mesh *m, const world_rect *r, int height, unsigned planes)
 {
 	for (int i = 0; i < scan_lit_count; ++i)
 	{
@@ -2468,7 +2584,7 @@ static void scan_lit_add(const world_rect *r, int height, unsigned planes)
 			const frustum_point c[4] = {{l->x_min, l->y_min, height}, {l->x_max, l->y_min, height}, {l->x_max, l->y_max, height},
 										{l->x_min, l->y_max, height}};
 
-			level_face_add(&grey_out, c, 4, planes != 0 ? level_planes_rect(&c[0], &c[2], planes) : 0, scan_lit_colour,
+			level_face_add(m, c, 4, planes != 0 ? level_planes_rect(&c[0], &c[2], planes) : 0, scan_lit_colour,
 						   LEVEL_FOG_NONE, JO_3D_SORT_PREVIOUS, false);
 		}
 	}
@@ -2510,9 +2626,13 @@ static int city_slope_up = FRUSTUM_STEEP, city_slope_down = -FRUSTUM_STEEP;
 // (NULL: no table here, everything can)
 static bool grey_city_seen(const unsigned char *seen, int i)
 {
-	const int tower = grey_city_order[i - CORRIDOR_BOXES];
+	// The rows are in the boxes' own order (city.h, city_seen_bit): box i's bit is its place among
+	// the city's boxes. Before, each read went through grey_city_order to the tower first
+	const unsigned int bit = (unsigned int)(i - CORRIDOR_BOXES);
 
-	return seen == JO_NULL || ((seen[tower >> 3] >> (tower & 7)) & 1) != 0;
+	// (a mask from a table, not a shift by bit & 7: a variable count is a call on the SH-2,
+	// utils/fastmath.h; up to ~600 reads a frame)
+	return seen == JO_NULL || BIT_SET(seen[bit >> 3], bit & 7);
 }
 
 static skyline_box grey_skyline_box(const grey_box *b)
@@ -2550,7 +2670,7 @@ int level_reach(int x, int y)
  * stand from 3000 below to far above you), and testing every tower and then every face against
  * them, twice a face, was most of the boxes' 50% of a frame at the CD block's hub (2026-11-13)
  */
-static void grey_side_add(int i, int which, bool along_x, int line, int from, int to, unsigned test, unsigned tall)
+static void grey_side_add(level_mesh *m, int i, int which, bool along_x, int line, int from, int to, unsigned test, unsigned tall)
 {
 	const grey_box *b = &grey_boxes[i];
 	frustum_point c[4];
@@ -2600,14 +2720,14 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 			// The top's the same, upside down: negated, a line at or below the top is one "above" it
 			int down_from = -top, down_to = -top;
 
-			floor_hides_line(-top, &down_from, &down_to, -(level_view.eye.z + ((one * city_slope_up) >> 8) + 8),
-							 -(level_view.eye.z + ((other * city_slope_up) >> 8) + 8));
+			floor_hides_line(-top, &down_from, &down_to, -(level_view.eye.z + (ASR(one * city_slope_up, 8)) + 8),
+							 -(level_view.eye.z + (ASR(other * city_slope_up, 8)) + 8));
 			top_from = -down_from;
 			top_to = -down_to;
 		}
 		if (city_slope_down > -FRUSTUM_STEEP)
-			floor_hides_line(bottom, &bottom_from, &bottom_to, level_view.eye.z + ((one * city_slope_down) >> 8) - 8,
-							 level_view.eye.z + ((other * city_slope_down) >> 8) - 8);
+			floor_hides_line(bottom, &bottom_from, &bottom_to, level_view.eye.z + (ASR(one * city_slope_down, 8)) - 8,
+							 level_view.eye.z + (ASR(other * city_slope_down, 8)) - 8);
 		/*
 		 * The roof you stand on hides the side below a height at each end (game/floor_hides.h): it
 		 * starts there, not at the street 3000 below. This is most of what VDP1 was drawing under
@@ -2646,7 +2766,7 @@ static void grey_side_add(int i, int which, bool along_x, int line, int from, in
 		colour = along_x ? GREY_SIDE_Y_ALT : GREY_SIDE_X_ALT;
 	else
 		colour = along_x ? GREY_SIDE_Y : GREY_SIDE_X;
-	level_face_add(&grey_out, c, 4, planes, colour, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, level_view_on && level_side_lies(c));
+	level_face_add(m, c, 4, planes, colour, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, level_view_on && level_side_lies(c));
 }
 
 /*
@@ -2731,7 +2851,8 @@ static bool grey_stairs_profile_on = false; // this frame: the steps' open sides
 // Whether a step's side (box i, on a line) is the open side the profile stands in for this frame
 static bool grey_stairs_profiled(int i, bool along_x, int line)
 {
-	return grey_stairs_profile_on && i < GREY_STAIRS && along_x == grey_stairs_open_along_x &&
+	// (the index first: a city tower's side, on either CPU, never reads the flag the master sets)
+	return i < GREY_STAIRS && grey_stairs_profile_on && along_x == grey_stairs_open_along_x &&
 		   line == grey_stairs_open_line;
 }
 
@@ -2751,13 +2872,13 @@ static bool grey_stairs_far(const grey_group *group, const frustum_point *e)
 }
 
 // The ramp's two faces, tested against the planes the stairs' group crosses (0: none)
-static void grey_stairs_ramp(unsigned crossed)
+static void grey_stairs_ramp(level_mesh *m, unsigned crossed)
 {
 	const frustum_point *ramp = grey_stairs_ramp_corners, *side = grey_stairs_side_corners;
 
-	level_face_add(&grey_out, ramp, 4, crossed != 0 ? level_planes_rect(&ramp[0], &ramp[2], crossed) : 0,
+	level_face_add(m, ramp, 4, crossed != 0 ? level_planes_rect(&ramp[0], &ramp[2], crossed) : 0,
 				   GREY_STAIRS_SLOPE, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
-	level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
+	level_face_add(m, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
 				   GREY_SIDE_Y, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
 }
 
@@ -2912,6 +3033,330 @@ static void arena_pyramid_add(const corridor *passage)
 	jo_3d_mesh_draw(&pyramid_mesh);
 }
 
+/*
+ * Whether any of a group's towers is seen from your patch of roof (city_seen; true off a roof, and
+ * for the corridor's groups). A block none of whose towers is seen is left out before anything
+ * else: before, it was still tested against the view and the hiders, and offered as a hider,
+ * every frame. From a roof patch ~70 of 256 towers are seen, so most blocks have none (the user,
+ * 2026-11-16: the towers' work in the streets). Only the seen table's bytes are read, not the
+ * boxes: they're 285 of them, more than the SH-2's 4 KB cache holds. A block's towers are four bits
+ * side by side in the row (city_seen_bit), starting on a nibble: one byte read, one mask (2026-11-18:
+ * a loop of four, each through the order table, was read twice a frame for all 64 blocks)
+ */
+static bool grey_group_seen(const unsigned char *seen, const grey_group *group)
+{
+	if (seen == JO_NULL || group->first < CORRIDOR_BOXES)
+		return true;
+	{
+		const unsigned int bit = (unsigned int)(group->first - CORRIDOR_BOXES); // a multiple of 4 (grey_boxes_work_out)
+		const int count = group->last - group->first + 1; // 4 (2 at an odd last column: none now)
+		const unsigned int byte = seen[bit >> 3];
+		// Its nibble, the byte's low or high half: picked, not shifted by a variable count (a call
+		// on the SH-2, utils/fastmath.h). (A shift by the constant 4 is two shlr2)
+		const unsigned int nibble = (bit & 4) != 0 ? byte >> 4 : byte & 15;
+
+		return (nibble & (count == 4 ? 15u : 3u)) != 0;
+	}
+}
+
+/*
+ * The far city from high up, as lids (the user, 2026-11-17: "With the elevator going up and city
+ * below, do a draw distance trick ... I should still understand how big the city is"). Up the CD
+ * block's lift every tower is under you and none hides another, so every block is drawn: four
+ * towers, each a top and the sides facing you, ~250 faces, more than the mesh holds, and the far
+ * ones were dropped. From up there a far block's sides are slivers. So past GREY_LID_REACH a block
+ * is its towers' tops only, flat quads in their heights' roof colours (2026-11-17 one lid at the
+ * four's average; 2026-11-18 each tower's own, below). The streets between the blocks stay open,
+ * so the grid reads to the city's edge: you see how big it is. A hub's block keeps its towers
+ * (lit: it's where you're going).
+ * Returns whether the block was drawn as tops (then its towers aren't)
+ */
+// The top of boxes a to b (touching, one height: one box if a is b) as one flat quad, from high up
+static void grey_top_add(level_mesh *m, const grey_box *a, const grey_box *b, unsigned crossed)
+{
+	const int x0 = JO_MIN(a->rect.x_min, b->rect.x_min), x1 = JO_MAX(a->rect.x_max, b->rect.x_max);
+	const int y0 = JO_MIN(a->rect.y_min, b->rect.y_min), y1 = JO_MAX(a->rect.y_max, b->rect.y_max);
+	const frustum_point top[4] = {{x0, y0, a->height}, {x1, y0, a->height}, {x1, y1, a->height}, {x0, y1, a->height}};
+
+	level_face_add(m, top, 4, crossed != 0 ? level_planes_rect(&top[0], &top[2], crossed) : 0,
+				   grey_top_colour(a->height), LEVEL_FOG_CAPPED, JO_3D_SORT_CENTER, false);
+}
+
+#define GREY_LID_EYE 900	// the eye this far over the corridor's floor: over every roof (400) by 500
+#define GREY_LID_REACH 2500 // blocks further than this along the floor (level_reach) are tops only
+#define GREY_TOPS_REACH 6000 // and further than this, one lid a block
+static bool grey_block_lid(level_mesh *m, const grey_group *group, const frustum_point *e, unsigned crossed)
+{
+	const int reach = level_reach(group->middle.x, group->middle.y);
+
+	if (e->z < GREY_LID_EYE || group->hub || group->first < CORRIDOR_BOXES || reach < GREY_LID_REACH)
+		return false;
+	/*
+	 * Beyond GREY_TOPS_REACH, one lid at the four's average height: a block's a few pixels there,
+	 * and its towers' tops cost too much. Every far block as tops took the boxes from 27-49% of a
+	 * frame to 71-94% looking out over the city from the lift (38-46 fps, lift_city.steps)
+	 */
+	if (reach >= GREY_TOPS_REACH)
+	{
+		int sum = 0, count = 0;
+
+		for (int i = group->first; i <= group->last; ++i, ++count)
+			sum += grey_boxes[i].height;
+		// The average: a block's 4 towers (2 at the plan's last column): a shift, not a division
+		sum = count == 4 ? sum >> 2 : count == 2 ? sum >> 1 : grey_boxes[group->first].height;
+		{
+			const int x0 = group->middle.x - group->half.x, x1 = group->middle.x + group->half.x;
+			const int y0 = group->middle.y - group->half.y, y1 = group->middle.y + group->half.y;
+			const frustum_point lid[4] = {{x0, y0, sum}, {x1, y0, sum}, {x1, y1, sum}, {x0, y1, sum}};
+
+			level_face_add(m, lid, 4, crossed != 0 ? level_planes_rect(&lid[0], &lid[2], crossed) : 0,
+						   grey_top_colour(sum), LEVEL_FOG_CAPPED, JO_3D_SORT_CENTER, false);
+		}
+		return true;
+	}
+	/*
+	 * Each tower's own top, not one lid at the four's average (the user, 2026-11-18: from the lift
+	 * "the city paths which they patrol isn't" visible): a block's two lanes and its guard pages
+	 * are different heights, so different roof colours (grey_top_colour), and the maze the
+	 * watchdogs fly over reads from up there. Flat quads, no sides: one each, ~250 for the city.
+	 * Fogged, but never past LEVEL_FOG_CAP: the far city stays a dim grid on the black ("you cannot
+	 * see much of the city"), out to its edges (the full fog no longer leaves blocks out up here,
+	 * grey_boxes_add: they came and went as you turned)
+	 */
+	/*
+	 * Towers side by side at the same height share one quad: the whole block if all four are one
+	 * height, else pairs (a row's two, or a column's), else each its own. Every tower's top is a
+	 * quad of its own was ~250 quads and 1000 points up the lift: 136-163% of a frame looking out
+	 * over the city (lift_city.steps), against 110-130% with one lid a block. The maze still
+	 * reads: only towers of one height are joined. A block's boxes are (c, r), (c + 1, r),
+	 * (c, r + 1), (c + 1, r + 1) (grey_boxes_work_out); the plan's last column's are two
+	 */
+	{
+		const int first = group->first, count = group->last - group->first + 1;
+		bool done[4] = {false, false, false, false};
+		// The pairs that can join, in the order tried: a row's, then a column's
+		static const unsigned char pairs[4][2] = {{0, 1}, {2, 3}, {0, 2}, {1, 3}};
+
+		if (count == 4 && grey_boxes[first].height == grey_boxes[first + 1].height &&
+			grey_boxes[first].height == grey_boxes[first + 2].height && grey_boxes[first].height == grey_boxes[first + 3].height)
+		{
+			grey_top_add(m, &grey_boxes[first], &grey_boxes[first + 3], crossed);
+			return true;
+		}
+		if (count == 4)
+			for (int k = 0; k < 4; ++k)
+			{
+				const int a = pairs[k][0], b = pairs[k][1];
+
+				if (!done[a] && !done[b] && grey_boxes[first + a].height == grey_boxes[first + b].height)
+				{
+					grey_top_add(m, &grey_boxes[first + a], &grey_boxes[first + b], crossed);
+					done[a] = done[b] = true;
+				}
+			}
+		for (int k = 0; k < count && k < 4; ++k)
+			if (!done[k])
+				grey_top_add(m, &grey_boxes[first + k], &grey_boxes[first + k], crossed);
+	}
+	return true;
+}
+
+/*
+ * The groups' faces into mesh m, nearest first (grey_frame_order: grey_boxes_add's, this frame's).
+ * part -1: every group. 0 or 1: a CPU's share (the user, 2026-11-19: "What next big hitter to
+ * reduce late frames to 0?"). jo's PC sampler showed the slave CPU idle 62-87% of a frame in the
+ * city while the master ran at 100-120%, most of it here and in what it calls. So the city's blocks
+ * are split between them, every other one in order, each CPU into its own mesh (grey_slave_job).
+ * Everything read here is set before the slave's job is queued and not changed until it's done
+ * (main.c waits for it before the sky, whose ring cut changes level_view): the view, the hiders
+ * (city_skyline), the floor hiding (stand_floor), the seen row, the boxes, the fog's tables, the
+ * scan line's roofs. Written: only m. The stairs' profile flag (grey_stairs_profile_on) is the
+ * corridor's groups', and they're the master's
+ */
+static const unsigned char *grey_frame_seen = JO_NULL;
+bool level_city_shared = false; // level.h
+static bool grey_frame_corridor_hidden = false;
+static unsigned char grey_frame_order[GREY_GROUPS];
+
+static void grey_groups_draw(level_mesh *m, int part)
+{
+	const frustum_point *e = &level_view.eye;
+	const unsigned char *seen = grey_frame_seen;
+	const bool corridor_hidden = grey_frame_corridor_hidden;
+	int city_rank = 0;
+
+	for (int o = 0; o < GREY_GROUPS; ++o)
+	{
+		const int g = grey_frame_order[o];
+		const grey_group *group = &grey_groups[g];
+		const bool city = group->first >= CORRIDOR_BOXES;
+
+		// Which CPU's (part): the corridor's groups the master's, the city's blocks turn about in
+		// nearest-first order (each CPU gets near ones and far ones alike). Before any test, so the
+		// share doesn't depend on what's seen
+		if (part >= 0 && (city ? (city_rank++ & 1) != part : part != 0))
+			continue;
+		if (!city && corridor_hidden)
+			continue; // the corridor's boxes, from a roof that can't see into it
+		/*
+		 * The far city, simplified away (the user, 2026-11-16): a block wholly in full fog and all
+		 * of it under your eye is drawn near black (its colour 16 steps darker: 2-4 of 31) against
+		 * the floor, which is black there (the floor's fog: the same distances). Nothing of it
+		 * shows, so none of it's worked out. A block standing over your eye stays: against the sky
+		 * its outline shows. Up the CD block's lift that's nearly all of the far city; in the
+		 * streets, the lower blocks. Measured: leaving out all beyond 4000 saved 10-20% of a frame
+		 * in the streets (0880)
+		 */
+		if (!grey_group_seen(seen, group))
+			continue; // none of its towers is seen from this patch of roof (city_seen)
+		if (city && !group->hub && e->z < GREY_LID_EYE && group->middle.z + group->half.z < e->z &&
+			object_fog_box_full(group->middle.x - group->half.x, group->middle.x + group->half.x,
+								group->middle.y - group->half.y, group->middle.y + group->half.y))
+			continue;
+		// The screen's edges, and the doorway's if the group is in the other room from you (from
+		// the city, the corridor's boxes stand on its floor: only the planes that can hide that)
+		const unsigned planes =
+			FRUSTUM_SCREEN | (city ? (portal.inside ? portal.planes : 0) : (portal.outside ? portal.floor_planes : 0));
+		// The planes the group crosses (0: it's all in view)
+		unsigned crossed = 0;
+
+		if (level_view_on)
+		{
+			crossed = frustum_classify_box(&level_view, group->middle, group->half, planes);
+			if (crossed == FRUSTUM_OUTSIDE)
+				continue; // none of it can be seen from here
+			if (city)
+			{
+				// The whole block behind a nearer, taller one: none of it's drawn
+				const skyline_box block = {(short)(group->middle.x - group->half.x + 1), (short)(group->middle.x + group->half.x - 1),
+										   (short)(group->middle.y - group->half.y + 1), (short)(group->middle.y + group->half.y - 1),
+										   (short)(group->middle.z + group->half.z)};
+
+				if (skyline_hides(&city_skyline, &block))
+					continue;
+			}
+			if (g == 0 && grey_stairs_far(group, e))
+			{
+				grey_stairs_ramp(m, crossed); // the stairs (the first group), far off
+				continue;
+			}
+			if (city && grey_block_lid(m, group, e, crossed))
+				continue; // far off and far below: one lid, not its towers
+		}
+		grey_stairs_profile_on = false;
+		if (g == 0 && level_view_on && grey_group_distance(group, e) > GREY_STAIRS_PROFILE &&
+			((grey_stairs_open_along_x ? e->y : e->x) - grey_stairs_open_line) * grey_stairs_open_out > 0)
+		{
+			const frustum_point *side = grey_stairs_side_corners;
+
+			grey_stairs_profile_on = true; // you're outside the open side: its profile, once
+			level_face_add(m, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
+						   GREY_SIDE_Y, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
+		}
+		for (int i = group->first; i <= group->last; ++i)
+		{
+			const grey_box *b = &grey_boxes[i];
+			const world_rect *r = &b->rect;
+			// What its faces are tested against: only the planes it crosses (none if it's all in view)
+			unsigned test = 0;
+			// A city tower: the screen's top and bottom are left out of its test, and its sides'
+			// (grey_side_add has why). One wholly above or below the view isn't turned away here:
+			// its sides come out with no height once they're trimmed, and its top is tested with them
+			unsigned tall = 0;
+
+			if (city && !grey_city_seen(seen, i))
+				continue; // hidden from this patch of roof (city_seen)
+			if (city && floor_hides_box(&stand_floor, r->x_min, r->x_max, r->y_min, r->y_max, b->height))
+				continue; // all of it below your roof's edge, behind the roof (game/floor_hides.h)
+			if (city && !b->lit && e->z < GREY_LID_EYE && b->height < e->z && object_fog_box_full(r->x_min, r->x_max, r->y_min, r->y_max))
+				continue; // under your eye in full fog: near black on the black floor (as its block, above)
+			if (crossed != 0)
+			{
+				const frustum_point middle = {b->centre.x, b->centre.y, b->middle};
+				const frustum_point half = {((r->x_max - r->x_min) >> 1) + 1, ((r->y_max - r->y_min) >> 1) + 1,
+											((b->height - b->floor) >> 1) + 1};
+				unsigned against = crossed;
+
+				if (city && city_slope_up < FRUSTUM_STEEP && city_slope_down > -FRUSTUM_STEEP)
+				{
+					tall = crossed & FRUSTUM_TOP_BOTTOM;
+					against = crossed & ~(unsigned)FRUSTUM_TOP_BOTTOM;
+				}
+				if (against != 0)
+				{
+					test = frustum_classify_box(&level_view, middle, half, against);
+					if (test == FRUSTUM_OUTSIDE)
+						continue; // none of it can be seen from here
+				}
+			}
+			if (city && level_view_on)
+			{
+				const skyline_box tower = grey_skyline_box(b);
+
+				if (skyline_hides(&city_skyline, &tower))
+					continue; // behind a nearer, taller tower
+			}
+
+			if (e->x < r->x_min || !level_view_on)
+				grey_side_add(m, i, GREY_X_MIN, false, r->x_min, r->y_min, r->y_max, test, tall);
+			if (e->x > r->x_max || !level_view_on)
+				grey_side_add(m, i, GREY_X_MAX, false, r->x_max, r->y_min, r->y_max, test, tall);
+			if (e->y < r->y_min || !level_view_on)
+				grey_side_add(m, i, GREY_Y_MIN, true, r->y_min, r->x_min, r->x_max, test, tall);
+			if (e->y > r->y_max || !level_view_on)
+				grey_side_add(m, i, GREY_Y_MAX, true, r->y_max, r->x_min, r->x_max, test, tall);
+			if (-view_z > b->height)
+			{
+				const frustum_point top[4] = {{r->x_min, r->y_min, b->height},
+											  {r->x_max, r->y_min, b->height},
+											  {r->x_max, r->y_max, b->height},
+											  {r->x_min, r->y_max, b->height}};
+
+				if (level_face_add(m, top, 4, (test | tall) != 0 ? level_planes_rect(&top[0], &top[2], test | tall) : 0,
+								   // (fogged as the sides are: a far roof stayed lit, up the lift a grey
+								   // field to the screen's top, the user, 2026-11-16. Flat: free)
+								   b->lit ? HUB_TOP : grey_top_colour(b->height), b->lit ? LEVEL_FOG_NONE : LEVEL_FOG_FLAT,
+								   JO_3D_SORT_CENTER, false) &&
+					city && scan_lit_count > 0)
+					scan_lit_add(m, r, b->height, test | tall); // the drone's scan line on it
+			}
+			// A bar (its floor above the corridor's): its underside, from below it
+			if (b->floor > 0 && -view_z < b->floor)
+			{
+				const frustum_point under[4] = {{r->x_min, r->y_min, b->floor},
+												{r->x_max, r->y_min, b->floor},
+												{r->x_max, r->y_max, b->floor},
+												{r->x_min, r->y_max, b->floor}};
+
+				level_face_add(m, under, 4, test != 0 ? level_planes_rect(&under[0], &under[2], test) : 0,
+							   GREY_UNDERSIDE, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
+			}
+		}
+	}
+}
+
+/*
+ * The slave's share of the city (grey_groups_draw, part 1): built and drawn on the slave, in a
+ * mesh of its own (its points, polygons and attributes beside the master's, corridor_memory)
+ */
+static level_mesh grey_slave_out;
+static jo_3d_mesh grey_slave_mesh;
+
+static void grey_slave_job(void)
+{
+	level_mesh_begin(&grey_slave_out, grey_slave_points, grey_slave_polygons, grey_slave_attributes, GREY_POINTS_MAX,
+					 GREY_QUADS_MAX);
+	grey_groups_draw(&grey_slave_out, 1);
+	if (grey_slave_out.quad_count == 0)
+		return;
+	grey_slave_mesh.data.points = grey_slave_points;
+	grey_slave_mesh.data.polygons = grey_slave_polygons;
+	grey_slave_mesh.data.attributes = grey_slave_attributes;
+	grey_slave_mesh.data.point_count = (unsigned short)grey_slave_out.point_count;
+	grey_slave_mesh.data.polygon_count = (unsigned short)grey_slave_out.quad_count;
+	slave_draw_mesh_here(&grey_slave_mesh); // on the slave, which built it
+}
+
 static void grey_boxes_add(void)
 {
 	const frustum_point *e = &level_view.eye;
@@ -2943,7 +3388,21 @@ static void grey_boxes_add(void)
 		if (roof >= 0)
 		{
 			seen = city_seen[roof][city_seen_patch(&city_towers[roof], level_eye_out, level_eye_across)];
-			corridor_hidden = !((city_seen_doorway[roof >> 3] >> (roof & 7)) & 1);
+			corridor_hidden = !city_seen_has(city_seen_doorway, roof);
+		}
+		/*
+		 * Jumping a street: the piece of street you're over has its own table (city.h,
+		 * city_seen_street; the user, 2026-11-18). Without it every tower was drawn, and to the
+		 * ground: 606k pixels mid-jump, VDP1 missed 8-10 frames a jump and the roof ahead went
+		 * missing. (There's no roof under you, so nothing for floor_hides, below; and the corridor's
+		 * still looked at: the doorway's table says what it sees of the towers, not of the streets)
+		 */
+		else
+		{
+			const int street = city_street_under(level_eye_out, level_eye_across, e->z);
+
+			if (street >= 0)
+				seen = city_seen_street[street];
 		}
 	}
 	/*
@@ -2971,16 +3430,12 @@ static void grey_boxes_add(void)
 		floor_hides_none(&stand_floor);
 		if (roof >= 0 && FLOOR_HIDES)
 		{
-			// The roof's box, in the world's x and y (grey_city_order maps the boxes to city.h's towers)
-			for (int i = CORRIDOR_BOXES; i < GREY_BOXES; ++i)
-				if (grey_city_order[i - CORRIDOR_BOXES] == roof)
-				{
-					const world_rect *r = &grey_boxes[i].rect;
+			// The roof's box, in the world's x and y: the boxes are in the seen rows' order, so its
+			// place is its bit (city_seen_bit). Before, a search of all 285
+			const int i = CORRIDOR_BOXES + city_seen_bit(roof);
+			const world_rect *r = &grey_boxes[i].rect;
 
-					floor_hides_begin(&stand_floor, e->x, e->y, e->z, r->x_min, r->x_max, r->y_min, r->y_max,
-									  grey_boxes[i].height);
-					break;
-				}
+			floor_hides_begin(&stand_floor, e->x, e->y, e->z, r->x_min, r->x_max, r->y_min, r->y_max, grey_boxes[i].height);
 		}
 		if (roof >= 0)
 		{
@@ -3011,8 +3466,8 @@ static void grey_boxes_add(void)
 			const grey_group *group = &grey_groups[g];
 			const int lowest = group->lowest;
 
-			if (group->first < CORRIDOR_BOXES)
-				continue;
+			if (group->first < CORRIDOR_BOXES || !grey_group_seen(seen, group))
+				continue; // (a block that's hidden itself hides nothing that's seen: as its towers, below)
 			if (lowest >= e->z)
 			{
 				const skyline_box block = {(short)(group->middle.x - group->half.x + 1), (short)(group->middle.x + group->half.x - 1),
@@ -3024,8 +3479,9 @@ static void grey_boxes_add(void)
 			// (and its towers too: one guard page in a block of lower towers hides more than the
 			// block does, as low as its lowest)
 			for (int i = group->first; i <= group->last; ++i)
-				if (grey_boxes[i].height >= e->z && // (one you see over is turned away: don't box it up)
-					grey_city_seen(seen, i))		 // (nor one that's hidden itself)
+				if (grey_city_seen(seen, i) &&		 // (not one that's hidden itself: and the seen table's
+													 // byte first, before the box itself is read)
+					grey_boxes[i].height >= e->z) // (one you see over is turned away: don't box it up)
 				{
 					const skyline_box tower = grey_skyline_box(&grey_boxes[i]);
 
@@ -3033,126 +3489,35 @@ static void grey_boxes_add(void)
 				}
 		}
 	}
+	/*
+	 * The groups nearest first (game/near_first.h): the mesh has room for so many faces, and one
+	 * that doesn't fit is left out. In the plan's order it was the end of the list, the hub's rows,
+	 * right under you up the CD block's lift (the user, 2026-11-16). Nearest first, it's the
+	 * furthest, deep in the fog. The corridor's two groups go first (as they always did)
+	 */
+	_Static_assert(GREY_GROUPS <= NEAR_FIRST_MAX, "near_first.h orders up to NEAR_FIRST_MAX");
+	int group_distance[GREY_GROUPS];
+	unsigned char group_order[GREY_GROUPS];
+
 	for (int g = 0; g < GREY_GROUPS; ++g)
+		group_distance[g] = g < 2 ? -1 : JO_ABS(grey_groups[g].middle.x - e->x) + JO_ABS(grey_groups[g].middle.y - e->y);
+	near_first_order(group_distance, GREY_GROUPS, group_order);
+	// This frame's state for grey_groups_draw (both CPUs read it)
+	grey_frame_seen = seen;
+	grey_frame_corridor_hidden = corridor_hidden;
+	for (int o = 0; o < GREY_GROUPS; ++o)
+		grey_frame_order[o] = group_order[o];
+	// Out in the city on foot, the blocks shared with the slave (GREY_ON_SLAVE): its share queued
+	// first, so it works while this CPU does its own. Elsewhere (the corridor, the mirror's pass,
+	// the arena) all of them here, as before
+	if (GREY_ON_SLAVE && grey_slave_meshes != JO_NULL && level_view_on && view_is_on_foot() && portal.outside && !mirror_shade)
 	{
-		const grey_group *group = &grey_groups[g];
-		const bool city = group->first >= CORRIDOR_BOXES;
-
-		if (!city && corridor_hidden)
-			continue; // the corridor's boxes, from a roof that can't see into it
-		// The screen's edges, and the doorway's if the group is in the other room from you (from
-		// the city, the corridor's boxes stand on its floor: only the planes that can hide that)
-		const unsigned planes =
-			FRUSTUM_SCREEN | (city ? (portal.inside ? portal.planes : 0) : (portal.outside ? portal.floor_planes : 0));
-		// The planes the group crosses (0: it's all in view)
-		unsigned crossed = 0;
-
-		if (level_view_on)
-		{
-			crossed = frustum_classify_box(&level_view, group->middle, group->half, planes);
-			if (crossed == FRUSTUM_OUTSIDE)
-				continue; // none of it can be seen from here
-			if (city)
-			{
-				// The whole block behind a nearer, taller one: none of it's drawn
-				const skyline_box block = {(short)(group->middle.x - group->half.x + 1), (short)(group->middle.x + group->half.x - 1),
-										   (short)(group->middle.y - group->half.y + 1), (short)(group->middle.y + group->half.y - 1),
-										   (short)(group->middle.z + group->half.z)};
-
-				if (skyline_hides(&city_skyline, &block))
-					continue;
-			}
-			if (g == 0 && grey_stairs_far(group, e))
-			{
-				grey_stairs_ramp(crossed); // the stairs (the first group), far off
-				continue;
-			}
-		}
-		grey_stairs_profile_on = false;
-		if (g == 0 && level_view_on && grey_group_distance(group, e) > GREY_STAIRS_PROFILE &&
-			((grey_stairs_open_along_x ? e->y : e->x) - grey_stairs_open_line) * grey_stairs_open_out > 0)
-		{
-			const frustum_point *side = grey_stairs_side_corners;
-
-			grey_stairs_profile_on = true; // you're outside the open side: its profile, once
-			level_face_add(&grey_out, side, 4, crossed != 0 ? level_planes_rect(&side[0], &side[2], crossed) : 0,
-						   GREY_SIDE_Y, LEVEL_FOG_FLAT, JO_3D_SORT_CENTER, false);
-		}
-		for (int i = group->first; i <= group->last; ++i)
-		{
-			const grey_box *b = &grey_boxes[i];
-			const world_rect *r = &b->rect;
-			// What its faces are tested against: only the planes it crosses (none if it's all in view)
-			unsigned test = 0;
-			// A city tower: the screen's top and bottom are left out of its test, and its sides'
-			// (grey_side_add has why). One wholly above or below the view isn't turned away here:
-			// its sides come out with no height once they're trimmed, and its top is tested with them
-			unsigned tall = 0;
-
-			if (city && !grey_city_seen(seen, i))
-				continue; // hidden from this patch of roof (city_seen)
-			if (city && floor_hides_box(&stand_floor, r->x_min, r->x_max, r->y_min, r->y_max, b->height))
-				continue; // all of it below your roof's edge, behind the roof (game/floor_hides.h)
-			if (crossed != 0)
-			{
-				const frustum_point middle = {b->centre.x, b->centre.y, b->middle};
-				const frustum_point half = {((r->x_max - r->x_min) >> 1) + 1, ((r->y_max - r->y_min) >> 1) + 1,
-											((b->height - b->floor) >> 1) + 1};
-				unsigned against = crossed;
-
-				if (city && city_slope_up < FRUSTUM_STEEP && city_slope_down > -FRUSTUM_STEEP)
-				{
-					tall = crossed & FRUSTUM_TOP_BOTTOM;
-					against = crossed & ~(unsigned)FRUSTUM_TOP_BOTTOM;
-				}
-				if (against != 0)
-				{
-					test = frustum_classify_box(&level_view, middle, half, against);
-					if (test == FRUSTUM_OUTSIDE)
-						continue; // none of it can be seen from here
-				}
-			}
-			if (city && level_view_on)
-			{
-				const skyline_box tower = grey_skyline_box(b);
-
-				if (skyline_hides(&city_skyline, &tower))
-					continue; // behind a nearer, taller tower
-			}
-
-			if (e->x < r->x_min || !level_view_on)
-				grey_side_add(i, GREY_X_MIN, false, r->x_min, r->y_min, r->y_max, test, tall);
-			if (e->x > r->x_max || !level_view_on)
-				grey_side_add(i, GREY_X_MAX, false, r->x_max, r->y_min, r->y_max, test, tall);
-			if (e->y < r->y_min || !level_view_on)
-				grey_side_add(i, GREY_Y_MIN, true, r->y_min, r->x_min, r->x_max, test, tall);
-			if (e->y > r->y_max || !level_view_on)
-				grey_side_add(i, GREY_Y_MAX, true, r->y_max, r->x_min, r->x_max, test, tall);
-			if (-view_z > b->height)
-			{
-				const frustum_point top[4] = {{r->x_min, r->y_min, b->height},
-											  {r->x_max, r->y_min, b->height},
-											  {r->x_max, r->y_max, b->height},
-											  {r->x_min, r->y_max, b->height}};
-
-				if (level_face_add(&grey_out, top, 4, (test | tall) != 0 ? level_planes_rect(&top[0], &top[2], test | tall) : 0,
-								   b->lit ? HUB_TOP : grey_top_colour(b->height), LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false) &&
-					city && scan_lit_count > 0)
-					scan_lit_add(r, b->height, test | tall); // the drone's scan line on it
-			}
-			// A bar (its floor above the corridor's): its underside, from below it
-			if (b->floor > 0 && -view_z < b->floor)
-			{
-				const frustum_point under[4] = {{r->x_min, r->y_min, b->floor},
-												{r->x_max, r->y_min, b->floor},
-												{r->x_max, r->y_max, b->floor},
-												{r->x_min, r->y_max, b->floor}};
-
-				level_face_add(&grey_out, under, 4, test != 0 ? level_planes_rect(&under[0], &under[2], test) : 0,
-							   GREY_UNDERSIDE, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
-			}
-		}
+		level_city_shared = true; // (main.c waits for it before the sky: level.h)
+		slave_draw_job(grey_slave_job);
+		grey_groups_draw(&grey_out, 0);
 	}
+	else
+		grey_groups_draw(&grey_out, -1);
 }
 
 /*
@@ -3249,6 +3614,7 @@ static void corridor_walls_add(const corridor *passage)
 
 void draw_corridor_boxes(const corridor *passage, const wall_clip_camera *camera)
 {
+	level_city_shared = false; // (set again below if the slave takes a share this frame)
 	(void)camera; // cut to level_view, this frame's planes (level_view_begin)
 	if (passage == JO_NULL || !passage->open || corridor_meshes == JO_NULL)
 		return;
@@ -3340,16 +3706,16 @@ static int level_deepest(const level_mesh *m, int first, int last)
 static int level_ahead(level_mesh *m, int deepest)
 {
 	const frustum *v = &level_view;
-	const int depth = ((jo_fixed2int(m->points[deepest].x) - v->eye.x) * v->forward[0] +
-					   (jo_fixed2int(m->points[deepest].y) - v->eye.y) * v->forward[1] +
-					   (jo_fixed2int(m->points[deepest].z) - v->eye.z) * v->forward[2]) >> 10; // world units
+	const int depth = ASR((jo_fixed2int(m->points[deepest].x) - v->eye.x) * v->forward[0] +
+							  (jo_fixed2int(m->points[deepest].y) - v->eye.y) * v->forward[1] +
+							  (jo_fixed2int(m->points[deepest].z) - v->eye.z) * v->forward[2], 10); // world units
 	jo_pos3D_fixed *p;
 
 	if (m->point_count >= m->points_max)
 		return deepest;
 	p = &m->points[m->point_count];
-	p->x = jo_int2fixed(v->eye.x + ((v->forward[0] * depth) >> 10));
-	p->y = jo_int2fixed(v->eye.y + ((v->forward[1] * depth) >> 10));
+	p->x = jo_int2fixed(v->eye.x + (ASR(v->forward[0] * depth, 10)));
+	p->y = jo_int2fixed(v->eye.y + (ASR(v->forward[1] * depth, 10)));
 	// At the deepest point's height (the floor's), not the eye's: the floor's drawn over it there, as it
 	// was over the deepest point (the dot is black; in the middle of the sky it showed). Looking down
 	// or up, that moves it a little nearer or further than `depth`: forward[2] x the height between
@@ -3749,8 +4115,8 @@ void level_body_set(body *b, body_state *state, int yaw, int feet)
 	{
 		const body_point *j = &b->joint[k];
 
-		body_world[k].x = (level_view.eye.x << BODY_SUB_SHIFT) + ((j->x * right_x + j->y * forward_x) >> 10);
-		body_world[k].y = (level_view.eye.y << BODY_SUB_SHIFT) + ((j->x * right_y + j->y * forward_y) >> 10);
+		body_world[k].x = (level_view.eye.x << BODY_SUB_SHIFT) + (ASR(j->x * right_x + j->y * forward_x, 10));
+		body_world[k].y = (level_view.eye.y << BODY_SUB_SHIFT) + (ASR(j->x * right_y + j->y * forward_y, 10));
 		body_world[k].z = ground + j->z;
 	}
 	body_on = true;
@@ -3777,16 +4143,16 @@ static bool body_across(int i, const frustum *fine, int *across)
 		to_y >>= 1;
 		to_z >>= 1;
 	}
-	x = (along_y * to_z - along_z * to_y) >> 6;
-	y = (along_z * to_x - along_x * to_z) >> 6;
-	z = (along_x * to_y - along_y * to_x) >> 6;
+	x = ASR(along_y * to_z - along_z * to_y, 6);
+	y = ASR(along_z * to_x - along_x * to_z, 6);
+	z = ASR(along_x * to_y - along_y * to_x, 6);
 	length = frustum_isqrt((unsigned int)(x * x + y * y + z * z));
 	if (length < 8)
 		return false;
 	recip = (1 << 24) / length;
-	across[0] = (x * recip) >> 14;
-	across[1] = (y * recip) >> 14;
-	across[2] = (z * recip) >> 14;
+	across[0] = ASR(x * recip, 14);
+	across[1] = ASR(y * recip, 14);
+	across[2] = ASR(z * recip, 14);
 	return true;
 }
 
@@ -3802,15 +4168,15 @@ static bool body_across(int i, const frustum *fine, int *across)
 static bool body_mitre(const int *one, const int *other, int *edge)
 {
 	const int x = one[0] + other[0], y = one[1] + other[1], z = one[2] + other[2];
-	const int size = (x * x + y * y + z * z) >> 10; // |sum|^2, 4096 for the same across twice
+	const int size = ASR(x * x + y * y + z * z, 10); // |sum|^2, 4096 for the same across twice
 	int scale;
 
 	if (size < 1024)
 		return false;
 	scale = (2048 << 10) / size;
-	edge[0] = (x * scale) >> 10;
-	edge[1] = (y * scale) >> 10;
-	edge[2] = (z * scale) >> 10;
+	edge[0] = ASR(x * scale, 10);
+	edge[1] = ASR(y * scale, 10);
+	edge[2] = ASR(z * scale, 10);
 	return true;
 }
 
@@ -3907,9 +4273,9 @@ static void body_build(bool own_eyes, bool in_job)
 			const int *edge = k < 2 ? start : end;
 			const int half = (k == 0 || k == 3 ? -1 : 1) * (k < 2 ? bone->half_from : bone->half_to);
 
-			corners[k].x = joint->x + ((edge[0] * half) >> 10);
-			corners[k].y = joint->y + ((edge[1] * half) >> 10);
-			corners[k].z = joint->z + ((edge[2] * half) >> 10);
+			corners[k].x = joint->x + (ASR(edge[0] * half, 10));
+			corners[k].y = joint->y + (ASR(edge[1] * half, 10));
+			corners[k].z = joint->z + (ASR(edge[2] * half, 10));
 		}
 		planes = frustum_classify(&fine, corners, 4, FRUSTUM_SCREEN | FRUSTUM_GUARD);
 		if (planes == FRUSTUM_OUTSIDE)
@@ -4032,8 +4398,8 @@ static void mirror_glints(const corridor *passage)
 			continue; // off the glass, or a sliver at its edge
 		// Across where the slant is at those heights, drifted; kept on the glass (a band past its
 		// side would shine on the wall)
-		at_low = bottom + drift + (((top - bottom) * (z_low - WALL_BOTTOM_Z)) >> 9);
-		at_high = bottom + drift + (((top - bottom) * (z_high - WALL_BOTTOM_Z)) >> 9);
+		at_low = bottom + drift + (ASR((top - bottom) * (z_low - WALL_BOTTOM_Z), 9));
+		at_high = bottom + drift + (ASR((top - bottom) * (z_high - WALL_BOTTOM_Z), 9));
 		at_low = at_low < passage->across_min ? passage->across_min : at_low;
 		at_high = at_high > passage->across_max - wide ? passage->across_max - wide : at_high;
 		if (at_low > passage->across_max - wide || at_high < passage->across_min)
@@ -4143,13 +4509,18 @@ static bool sky_hidden(const frustum_point *c, int n)
 // one: not at all), unless the corridor's walls hide it. (Cut only past the guard band, as the
 // towers are, VDP1 filled more off the screen and the corridor got slower: tried 2026-11-12)
 // (and by any more planes: extra, their bits; a landmark's cut by the city's ring, landmark_ring_cut)
-static void sky_face_cut(level_mesh *m, const frustum_point *c, jo_color colour, unsigned extra)
+static void sky_face_sorted(level_mesh *m, const frustum_point *c, jo_color colour, unsigned extra, int sort)
 {
 	const unsigned crossed = frustum_classify(&level_view, c, 4, FRUSTUM_SCREEN | extra);
 
 	if (crossed == FRUSTUM_OUTSIDE || sky_hidden(c, 4))
 		return;
-	level_face_add(m, c, 4, crossed, colour, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false);
+	level_face_add(m, c, 4, crossed, colour, LEVEL_FOG_NONE, sort, false);
+}
+
+static void sky_face_cut(level_mesh *m, const frustum_point *c, jo_color colour, unsigned extra)
+{
+	sky_face_sorted(m, c, colour, extra, JO_3D_SORT_CENTER);
 }
 
 static void sky_face(level_mesh *m, const frustum_point *c, jo_color colour)
@@ -4215,7 +4586,7 @@ static void sky_face(level_mesh *m, const frustum_point *c, jo_color colour)
 static struct
 {
 	bool on;
-	int cx, cy, r, foot;
+	int cx, cy, r, foot, top;
 } sky_ring;
 static jo_3d_polygon_attribute skyline_attribute[2]; // the picture's left half, and its right
 // The ring's corners: cos and sin of 0, 11.25, 22.5 ... degrees, x1024 (skyline_load fills it in
@@ -4284,7 +4655,9 @@ static void sky_textured(level_mesh *m, const frustum_point *c, const jo_3d_poly
 	m->point_count += 4;
 }
 
-static void skyline_add(level_mesh *m, int place, int side, int wall, int middle)
+// ring_dx, ring_dy: how far the ring's slid with you (game/sky_slide.h: the quarter of a slide its
+// centre doesn't follow you by)
+static void skyline_add(level_mesh *m, int place, int side, int wall, int middle, int ring_dx, int ring_dy)
 {
 	const short (*round)[2] = skyline_round;
 	const frustum_point *e = &level_view.eye;
@@ -4314,7 +4687,7 @@ static void skyline_add(level_mesh *m, int place, int side, int wall, int middle
 	const int half = arena_half();
 	const int r_arena = JO_MIN(half + (half >> 1) + SKYLINE_RING_CLEAR, SKYLINE_RADIUS_MAX);
 	const int reach = JO_MAX(((r_arena * 181) >> 8) - half - SKYLINE_RING_MARGIN, 0); // 181 / 256: 0.707
-	const int fx = (e->x * SKYLINE_FOLLOW) >> 8, fy = (e->y * SKYLINE_FOLLOW) >> 8;
+	const int fx = ((e->x * SKYLINE_FOLLOW) >> 8) + ring_dx, fy = ((e->y * SKYLINE_FOLLOW) >> 8) + ring_dy;
 	const int cx = city ? fx : JO_MAX(-reach, JO_MIN(reach, fx)), cy = city ? fy : JO_MAX(-reach, JO_MIN(reach, fy));
 	const int r = city ? SKYLINE_RADIUS_CITY : r_arena;
 	const int arena_top = (r_arena * SKYLINE_TOP_X256) >> 8;
@@ -4347,13 +4720,14 @@ static void skyline_add(level_mesh *m, int place, int side, int wall, int middle
 	sky_ring.cy = cy;
 	sky_ring.r = r;
 	sky_ring.foot = foot;
+	sky_ring.top = top;
 	if (!skyline_loaded || foot >= top)
 		return;
 	for (int k = 0; k < SKYLINE_STRIPS; ++k)
 	{
 		const int next = (k + 1) & (SKYLINE_STRIPS - 1);
-		const int x0 = cx + ((round[k][0] * r) >> 10), y0 = cy + ((round[k][1] * r) >> 10);
-		const int x1 = cx + ((round[next][0] * r) >> 10), y1 = cy + ((round[next][1] * r) >> 10);
+		const int x0 = cx + (ASR(round[k][0] * r, 10)), y0 = cy + (ASR(round[k][1] * r, 10));
+		const int x1 = cx + (ASR(round[next][0] * r, 10)), y1 = cy + (ASR(round[next][1] * r, 10));
 		// (its middle's out, x1024: the two ends' halved. Under 2^15 x 2^10 each: inside 32 bits)
 		const bool beyond = corridor_ring && (((x0 + x1) >> 1) - wall_point.x) * out_x + (((y0 + y1) >> 1) - wall_point.y) * out_y >
 												 (CORRIDOR_LENGTH + SKYLINE_BEYOND) * 1024;
@@ -4399,6 +4773,7 @@ static void skyline_add(level_mesh *m, int place, int side, int wall, int middle
 #define LANDMARK_SIZE_CITY 448	// and larger still: 2.8 times as big to the eye
 #define LANDMARK_EASE 2			// a frame, while out of sight
 static short landmark_near[LANDMARK_COUNT], landmark_size[LANDMARK_COUNT];
+static short landmark_drawn_near[LANDMARK_COUNT]; // as drawn this frame (landmark_behind_ring): the A-bus runs to it
 static bool landmark_scaled = false;
 
 static int ease_to(int now, int to)
@@ -4426,7 +4801,7 @@ static int ease_to(int now, int to)
 static frustum_plane ring_cut_kept;
 static int ring_cut_count;
 
-static unsigned landmark_ring_cut(int fx, int fy)
+static unsigned landmark_ring_cut(int fx, int fy, int height, bool in_front_too)
 {
 	const frustum_point *e = &level_view.eye;
 	const int vx = fx - e->x, vy = fy - e->y;
@@ -4436,8 +4811,8 @@ static unsigned landmark_ring_cut(int fx, int fy)
 	for (int k = 0; k < SKYLINE_STRIPS; ++k)
 	{
 		const int next = (k + 1) & (SKYLINE_STRIPS - 1);
-		const int x0 = sky_ring.cx + ((skyline_round[k][0] * sky_ring.r) >> 10), y0 = sky_ring.cy + ((skyline_round[k][1] * sky_ring.r) >> 10);
-		const int x1 = sky_ring.cx + ((skyline_round[next][0] * sky_ring.r) >> 10), y1 = sky_ring.cy + ((skyline_round[next][1] * sky_ring.r) >> 10);
+		const int x0 = sky_ring.cx + (ASR(skyline_round[k][0] * sky_ring.r, 10)), y0 = sky_ring.cy + (ASR(skyline_round[k][1] * sky_ring.r, 10));
+		const int x1 = sky_ring.cx + (ASR(skyline_round[next][0] * sky_ring.r, 10)), y1 = sky_ring.cy + (ASR(skyline_round[next][1] * sky_ring.r, 10));
 		// Which side of the line you-to-landmark each end of the strip is: the line passes between
 		const int side0 = vx * (y0 - e->y) - vy * (x0 - e->x), side1 = vx * (y1 - e->y) - vy * (x1 - e->x);
 		int you, it;
@@ -4449,11 +4824,11 @@ static unsigned landmark_ring_cut(int fx, int fy)
 		// Which side of the strip you are, and the landmark: the same side, it's nearer
 		you = (x1 - x0) * (e->y - y0) - (y1 - y0) * (e->x - x0);
 		it = (x1 - x0) * (fy - y0) - (y1 - y0) * (fx - x0);
-		if ((you < 0) == (it < 0))
+		if ((you < 0) == (it < 0) && !in_front_too)
 			return 0;
 		{
-			const frustum_point a = {x0, y0, sky_ring.foot}, b = {x1, y1, sky_ring.foot};
-			const frustum_point above = {(x0 + x1) >> 1, (y0 + y1) >> 1, sky_ring.foot + 1000}; // the side kept
+			const frustum_point a = {x0, y0, height}, b = {x1, y1, height};
+			const frustum_point above = {(x0 + x1) >> 1, (y0 + y1) >> 1, height + 1000}; // the side kept
 			unsigned bit;
 
 			ring_cut_count = level_view.count;
@@ -4479,7 +4854,95 @@ static void landmark_ring_cut_end(unsigned bit)
 	level_view.count = ring_cut_count;
 }
 
-static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place)
+/*
+ * Behind the city's ring, always (the user, 2026-11-18: the sound landmark "is too close, it needs to
+ * be behind the background city"). Drawn 5/8 of the way to where it stands (LANDMARK_NEAR_CITY), the
+ * sound chip's capacitors were ~9800 from the CD block's lift: on the ring (SKYLINE_RADIUS_CITY,
+ * round a centre that follows you), or inside it, so they stood in front of the skyline, on the
+ * black under it. So its foot's pushed out to where the line to it meets the ring, and
+ * LANDMARK_BEHIND_RING more, and it's made as much bigger: to the eye it's the same size, only
+ * behind the skyline now (landmark_ring_cut hides its foot). From the eye e towards the landmark
+ * (d away), the ring (centre c, radius r) is t = -b + sqrt(b^2 - |e - c|^2 + r^2) out, b the eye's
+ * offset from c along the way. One square root and three divisions a landmark: per object, once a
+ * frame. 64 bits for the squares (up to ~47 000 each way). *near and *size: x256, as landmark_near
+ */
+#define LANDMARK_BEHIND_RING 800
+// jo's points are 16.16: a world coordinate must stay under 32 768. Pushed out and made bigger, a
+// landmark's corners go further: its foot is kept so the foot and its half width stay inside this
+#define LANDMARK_WORLD_LIMIT 31000
+
+static bool landmark_behind_ring(int ax, int ay, int half_width, int *near, int *size)
+{
+	const frustum_point *e = &level_view.eye;
+	const long long dx = ax - e->x, dy = ay - e->y;
+	const long long wx = e->x - sky_ring.cx, wy = e->y - sky_ring.cy;
+	long long d2, w2, r2;
+	int d, b, ring, drawn, want, needed;
+
+	if (!sky_ring.on)
+		return true;
+	d2 = dx * dx + dy * dy;
+	if (d2 == 0 || d2 >= (1LL << 32))
+		return true;
+	d = frustum_isqrt((unsigned int)d2);
+	if (d <= 0)
+		return true;
+	b = (int)((wx * dx + wy * dy) / d); // the eye's offset from the ring's centre, along the way
+	w2 = wx * wx + wy * wy;
+	r2 = (long long)sky_ring.r * sky_ring.r;
+	if (w2 >= r2)
+		return true; // outside the ring (it hasn't caught up): nothing to be behind
+	{
+		const long long disc = (long long)b * b - w2 + r2; // > 0: the eye's inside
+		ring = disc < (1LL << 32) ? -b + frustum_isqrt((unsigned int)disc) : sky_ring.r;
+	}
+	drawn = (int)(((long long)d * *near) >> 8);
+	// All of it behind the ring, not only its foot's middle: a wide one's ends (the sound chip's
+	// board is ~5000 either side, scaled) were nearer than the ring in their own direction
+	want = ring + LANDMARK_BEHIND_RING + (int)((long long)half_width * *size / 256);
+	if (drawn >= want || drawn <= 0)
+		return true; // beyond it already
+	needed = want;
+	{
+		// Inside jo's range (LANDMARK_WORLD_LIMIT), its widest half included: as big as it would be
+		// at `want` (an upper bound: a smaller push makes it smaller). Along each axis, the furthest
+		// t the foot can go: (limit - the eye's) x d / |d along that axis|. A division an axis
+		const long long extent = ((long long)half_width * *size / 256) * want / drawn;
+		const long long limit = LANDMARK_WORLD_LIMIT - extent;
+		const long long ex = e->x, ey = e->y;
+
+		if (limit <= 0)
+			return false;
+		if (dx != 0)
+		{
+			const long long room = dx > 0 ? limit - ex : limit + ex;
+			const long long t_max = room > 0 ? room * d / (dx > 0 ? dx : -dx) : 0;
+
+			if (t_max < want)
+				want = (int)t_max;
+		}
+		if (dy != 0)
+		{
+			const long long room = dy > 0 ? limit - ey : limit + ey;
+			const long long t_max = room > 0 ? room * d / (dy > 0 ? dy : -dy) : 0;
+
+			if (t_max < want)
+				want = (int)t_max;
+		}
+		if (want < needed)
+			return false; // no room to push it all out: in front of the ring (landmarks_add hides it below its top)
+	}
+	{
+		const int pushed = (int)(((long long)want << 8) / d);
+
+		*size = (int)(((long long)*size * pushed) / *near); // as much bigger: the same size to the eye
+		*near = pushed;
+	}
+	return true;
+}
+
+// slide_out, slide_across: the sky slid with you, in the corridor's frame (game/sky_slide.h)
+static void landmarks_add(level_mesh *m, int side, int slide_out, int slide_across, unsigned int frame, int place)
 {
 	const frustum_point *e = &level_view.eye;
 	const bool city = place != PLACE_ARENA;
@@ -4500,37 +4963,49 @@ static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place
 		frustum_point box[4];
 		// Its foot, and the way along its plane (a unit step on x or y: corridor_point_behind is
 		// a straight map), as it stands; then its foot drawn nearer, by the share
-		const world_point at = corridor_point_behind(side, 0, l->out, l->across);
-		const world_point one = corridor_point_behind(side, 0, l->out + (l->faces_out ? 0 : 1), l->across + (l->faces_out ? 1 : 0));
+		const world_point at = corridor_point_behind(side, slide_out, l->out, l->across + slide_across);
+		const world_point one = corridor_point_behind(side, slide_out, l->out + (l->faces_out ? 0 : 1),
+													 l->across + slide_across + (l->faces_out ? 1 : 0));
 		const int ux = one.x - at.x, uy = one.y - at.y;
-		const int near = landmark_near[i], size = landmark_size[i];
-		const int fx = e->x + (((at.x - e->x) * near) >> 8), fy = e->y + (((at.y - e->y) * near) >> 8);
-		int count;
+		int near = landmark_near[i], size = landmark_size[i];
+		int fx, fy, count;
+		bool behind = true;
+
+		// (only as drawn: what eases is landmark_near). If it can't be put behind the ring, it's
+		// hidden below the ring's top instead (below): it only shows where it rises over the skyline
+		if (city)
+			behind = landmark_behind_ring(at.x, at.y, l->half_width, &near, &size);
+		landmark_drawn_near[i] = (short)JO_MIN(near, 0x7FFF);
+		fx = e->x + (int)(((long long)(at.x - e->x) * near) >> 8);
+		fy = e->y + (int)(((long long)(at.y - e->y) * near) >> 8);
 
 		if (l->place == place)
 			continue; // you're there: it's all round you, not on the horizon
 		// Its plane's four corners (its whole width, the ground to its height)
 		for (int k = 0; k < 4; ++k)
 		{
-			const int along = (((k == 0 || k == 3) ? -l->half_width : l->half_width) * size) >> 8;
+			const int along = ASR(((k == 0 || k == 3) ? -l->half_width : l->half_width) * size, 8);
 
 			box[k].x = fx + along * ux;
 			box[k].y = fy + along * uy;
-			box[k].z = k < 2 ? 0 : (l->height * size) >> 8;
+			box[k].z = k < 2 ? 0 : ASR(l->height * size, 8);
 		}
 		// Out of view: none of it's looked at, and it may grow or shrink unseen. Behind the
 		// corridor's walls: not drawn either (it doesn't change then: it may be seen any moment)
 		if (frustum_classify(&level_view, box, 4, FRUSTUM_SCREEN) == FRUSTUM_OUTSIDE)
 		{
-			landmark_near[i] = (short)ease_to(near, city ? LANDMARK_NEAR_CITY : LANDMARK_NEAR_ARENA);
-			landmark_size[i] = (short)ease_to(size, city ? LANDMARK_SIZE_CITY : LANDMARK_SIZE_ARENA);
+			landmark_near[i] = (short)ease_to(landmark_near[i], city ? LANDMARK_NEAR_CITY : LANDMARK_NEAR_ARENA);
+			landmark_size[i] = (short)ease_to(landmark_size[i], city ? LANDMARK_SIZE_CITY : LANDMARK_SIZE_ARENA);
 			continue;
 		}
 		if (sky_hidden(box, 4))
 			continue;
 		count = landmark_shapes(i, frame, shapes);
 		{
-			const unsigned cut = landmark_ring_cut(fx, fy); // behind the city's ring: its foot hidden
+			// Behind the city's ring: hidden below its foot. In front of it (no room to push it out:
+			// landmark_behind_ring), below its top: it can't be drawn behind the ring's towers (VDP1
+			// draws far to near, and it's nearer), so only what rises over them is drawn
+			const unsigned cut = landmark_ring_cut(fx, fy, behind ? sky_ring.foot : sky_ring.top, !behind);
 
 			for (int s = 0; s < count; ++s)
 			{
@@ -4538,13 +5013,16 @@ static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place
 
 				for (int k = 0; k < 4; ++k)
 				{
-					const int along = (shapes[s].along[k] * size) >> 8;
+					const int along = ASR(shapes[s].along[k] * size, 8);
 
 					c[k].x = fx + along * ux;
 					c[k].y = fy + along * uy;
-					c[k].z = (shapes[s].up[k] * size) >> 8;
+					c[k].z = ASR(shapes[s].up[k] * size, 8);
 				}
-				sky_face_cut(m, c, (jo_color)shapes[s].colour, cut);
+				// By its furthest corner (JO_3D_SORT_MAX): drawn before the city's ring, which sorts by
+				// its strips' middles, so the ring's towers stand in front of it (the user, 2026-11-18:
+				// the sound landmark drawn over the skyline)
+				sky_face_sorted(m, c, (jo_color)shapes[s].colour, cut, JO_3D_SORT_MAX);
 			}
 			landmark_ring_cut_end(cut);
 		}
@@ -4579,7 +5057,7 @@ static void landmarks_add(level_mesh *m, int side, unsigned int frame, int place
 
 static void abus_add(level_mesh *m, int side, int wall, int middle, unsigned int frame)
 {
-	const city_tower *hub = city_tower_at(3, 11); // Backup RAM's
+	const city_tower *hub = city_tower_at(CITY_BACKUP_COLUMN, CITY_BACKUP_ROW); // Backup RAM's
 	const world_point from = corridor_point_behind(side, wall, (hub->out_min + hub->out_max) >> 1,
 												   middle + ((hub->across_min + hub->across_max) >> 1));
 	const frustum_point *e = &level_view.eye;
@@ -4594,8 +5072,8 @@ static void abus_add(level_mesh *m, int side, int wall, int middle, unsigned int
 		// The cartridge's foot as it's drawn now (landmarks_add's own sums)
 		const landmark *l = &landmarks[which];
 		const world_point at = corridor_point_behind(side, 0, l->out, l->across);
-		const int near = landmark_near[which];
-		const int to_x = e->x + (((at.x - e->x) * near) >> 8), to_y = e->y + (((at.y - e->y) * near) >> 8);
+		const int near = landmark_drawn_near[which] > 0 ? landmark_drawn_near[which] : landmark_near[which];
+		const int to_x = e->x + (int)(((long long)(at.x - e->x) * near) >> 8), to_y = e->y + (int)(((long long)(at.y - e->y) * near) >> 8);
 		const int dx = to_x - from.x, dy = to_y - from.y;
 		const int length = frustum_isqrt((unsigned)(dx * dx + dy * dy)); // under 32 000 each way: fits
 		// Where the bus starts, x 256 of the way: ABUS_GAP out (a division, once a frame)
@@ -4613,9 +5091,9 @@ static void abus_add(level_mesh *m, int side, int wall, int middle, unsigned int
 		{
 			// The strip from end to end; the packet from run / 256 of the way to a sixteenth on
 			const int t0 = part == 0 ? start : run, t1 = part == 0 ? 256 : run + (256 >> ABUS_PACKET_SHIFT);
-			const int ax = from.x + ((dx * t0) >> 8), ay = from.y + ((dy * t0) >> 8);
-			const int bx = from.x + ((dx * t1) >> 8), by = from.y + ((dy * t1) >> 8);
-			const int az = hub->height + (((-hub->height) * t0) >> 8), bz = hub->height + (((-hub->height) * t1) >> 8);
+			const int ax = from.x + (ASR(dx * t0, 8)), ay = from.y + (ASR(dy * t0, 8));
+			const int bx = from.x + (ASR(dx * t1, 8)), by = from.y + (ASR(dy * t1, 8));
+			const int az = hub->height + (ASR((-hub->height) * t0, 8)), bz = hub->height + (ASR((-hub->height) * t1, 8));
 			const frustum_point c[4] = {{ax - across_x, ay - across_y, az + 1}, {bx - across_x, by - across_y, bz + 1},
 										{bx + across_x, by + across_y, bz + 1}, {ax + across_x, ay + across_y, az + 1}};
 
@@ -4721,10 +5199,10 @@ static void disc_add(level_mesh *m, int side, int wall, int middle, unsigned int
 		const int next = (k + 1) & 7;
 		// A sector: from the hole's edge out to the rim, between two corners of the octagon
 		const frustum_point c[4] = {
-			{centre.x + ((round[k][0] * CITY_DISC_HOLE) >> 10), centre.y + ((round[k][1] * CITY_DISC_HOLE) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[k][0] * CITY_DISC_RADIUS) >> 10), centre.y + ((round[k][1] * CITY_DISC_RADIUS) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[next][0] * CITY_DISC_RADIUS) >> 10), centre.y + ((round[next][1] * CITY_DISC_RADIUS) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[next][0] * CITY_DISC_HOLE) >> 10), centre.y + ((round[next][1] * CITY_DISC_HOLE) >> 10), CITY_DISC_HEIGHT}};
+			{centre.x + (ASR(round[k][0] * CITY_DISC_HOLE, 10)), centre.y + (ASR(round[k][1] * CITY_DISC_HOLE, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[k][0] * CITY_DISC_RADIUS, 10)), centre.y + (ASR(round[k][1] * CITY_DISC_RADIUS, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[next][0] * CITY_DISC_RADIUS, 10)), centre.y + (ASR(round[next][1] * CITY_DISC_RADIUS, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[next][0] * CITY_DISC_HOLE, 10)), centre.y + (ASR(round[next][1] * CITY_DISC_HOLE, 10)), CITY_DISC_HEIGHT}};
 
 		sky_face(m, c, k == reading ? DISC_READING : (k & 1) ? DISC_SLATE_ALT : DISC_SLATE);
 	}
@@ -4819,10 +5297,10 @@ static void mirror_far_wall(const corridor *passage)
 	{
 		const int next = (k + 1) & 7;
 		const frustum_point c[4] = {
-			{centre.x + ((round[k][0] * CITY_DISC_HOLE) >> 10), centre.y + ((round[k][1] * CITY_DISC_HOLE) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[k][0] * CITY_DISC_RADIUS) >> 10), centre.y + ((round[k][1] * CITY_DISC_RADIUS) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[next][0] * CITY_DISC_RADIUS) >> 10), centre.y + ((round[next][1] * CITY_DISC_RADIUS) >> 10), CITY_DISC_HEIGHT},
-			{centre.x + ((round[next][0] * CITY_DISC_HOLE) >> 10), centre.y + ((round[next][1] * CITY_DISC_HOLE) >> 10), CITY_DISC_HEIGHT}};
+			{centre.x + (ASR(round[k][0] * CITY_DISC_HOLE, 10)), centre.y + (ASR(round[k][1] * CITY_DISC_HOLE, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[k][0] * CITY_DISC_RADIUS, 10)), centre.y + (ASR(round[k][1] * CITY_DISC_RADIUS, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[next][0] * CITY_DISC_RADIUS, 10)), centre.y + (ASR(round[next][1] * CITY_DISC_RADIUS, 10)), CITY_DISC_HEIGHT},
+			{centre.x + (ASR(round[next][0] * CITY_DISC_HOLE, 10)), centre.y + (ASR(round[next][1] * CITY_DISC_HOLE, 10)), CITY_DISC_HEIGHT}};
 		const unsigned crossed = frustum_classify(&level_view, c, 4, edges);
 
 		if (crossed != FRUSTUM_OUTSIDE)
@@ -4836,9 +5314,27 @@ static void mirror_far_wall(const corridor *passage)
 	jo_3d_mesh_draw(&far_mesh);
 }
 
+// How far the sky's slid with you (game/sky_slide.h): set as you're moved, eased back a frame at a time
+static sky_slide the_sky_slide = {0, 0};
+
+void level_sky_slide(int dx, int dy)
+{
+	sky_slide_add(&the_sky_slide, dx, dy);
+}
+
 void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift, bool extras)
 {
 	level_mesh m;
+	int slide_out, slide_across;
+
+	/*
+	 * The sky slid with you (game/sky_slide.h): in the arena only, where the rounds move you. Out of
+	 * it (the corridor, the city) everything stands where it is: the slide's gone by then anyway
+	 * (eased away within ~22 s), and if a round's ended early it goes now, under the breach
+	 */
+	if (place != PLACE_ARENA)
+		sky_slide_init(&the_sky_slide);
+	sky_slide_frame(&the_sky_slide, side, &slide_out, &slide_across);
 
 	/*
 	 * On the flight down into the cycle there's no view (level_view_on: nothing else is cut to it
@@ -4851,18 +5347,21 @@ void level_sky_draw(int side, int wall, int middle, unsigned int frame, int plac
 		return;
 	level_mesh_begin(&m, sky_points, sky_polygons, sky_attributes, SKY_POINTS, SKY_QUADS);
 	sky_ring.on = false; // (skyline_add sets it)
-	skyline_add(&m, place, side, wall, middle); // always: without it the sky's pink horizon shows
+	// (the ring's centre follows you three quarters of the way already: it's slid by the rest)
+	skyline_add(&m, place, side, wall, middle, (the_sky_slide.x * (256 - SKYLINE_FOLLOW)) >> 8,
+				(the_sky_slide.y * (256 - SKYLINE_FOLLOW)) >> 8); // always: without it the sky's pink horizon shows
 	// The landmarks and the A-bus: what the draw budget may leave out (game/draw_budget.h). Not the
 	// skyline above, nor the CD block's disc below: those are the background itself, and leaving
 	// the skyline out showed VDP2's pink horizon where the city should be (the user, 2026-11-15)
 	if (extras)
 	{
-		landmarks_add(&m, side, frame, place);
+		landmarks_add(&m, side, slide_out, slide_across, frame, place);
 		if (place == PLACE_WORK_RAM && portal.outside)
 			abus_add(&m, side, wall, middle, frame); // out to Backup RAM
 	}
 	if (place != PLACE_CD_BLOCK)
-		disc_add(&m, side, wall, middle, frame, place, in_lift);
+		disc_add(&m, side, wall + slide_out, middle + slide_across, frame, place, in_lift);
+	sky_slide_step(&the_sky_slide); // a step back to where everything stands, each frame
 	if (m.quad_count == 0)
 		return;
 	sky_mesh.data.points = sky_points;
@@ -4878,12 +5377,11 @@ void level_sky_draw(int side, int wall, int middle, unsigned int frame, int plac
 }
 
 /*
- * The watchdog drone's scan (drone_draw.c): a sheet of light, level, and its edges.
+ * A watchdog drone's beam (drone_draw.c): a square pyramid of light, and its edges.
  *
- * The sheet's a fan, `corners` points: its apex at the sensor, then its rays' ends across it
- * (game/drone.h: each stops at the first tower in its way, so the fan's outline follows the tower
- * faces it meets, and isn't convex). Drawn as a triangle between each two rays, each cut to the
- * view as every face on foot is (level_face_add), with VDP1's mesh: only the pixels where x + y is
+ * Its apex is the sensor, its base a square on the roofs ahead (game/drone.h, drone_beam). Each
+ * side facing you is drawn, a triangle cut to the view as every face on foot is (level_face_add),
+ * with VDP1's mesh: only the pixels where x + y is
  * even, a screen door you see through. That's the Saturn's own see-through, and the one that works
  * here: VDP1's half-transparency blends only over pixels VDP1 has drawn (their MSB set: SKILLS.md),
  * and behind a drone in the air there's mostly VDP2, the floor and the sky, where it would come out
@@ -4921,7 +5419,7 @@ static bool scan_line_cut(frustum_point *a, frustum_point *b, unsigned planes)
 			// So both are taken down 8 bits first: the share's the same, to a few units in 1500
 			frustum_point *out = da < 0 ? a : b;
 			const frustum_point from = *a, to = *b;
-			const int d = (da - db) >> 8;
+			const int d = ASR(da - db, 8);
 
 			da >>= 8;
 			if (d == 0)
@@ -4963,36 +5461,67 @@ static void scan_line_add(level_mesh *m, frustum_point a, frustum_point b, jo_co
 	m->quad_count++;
 }
 
-void level_scan_draw(const frustum_point *fan, int corners, const frustum_point *rail, jo_color sheet, jo_color edge)
+void level_beam_draw(const drone_beam *beam, jo_color sheet, jo_color edge)
 {
 	level_mesh m;
+	frustum_point apex, base[4];
+	unsigned facing;
 
 	if (!level_view_on)
 		return;
-	level_mesh_begin(&m, scan_points, scan_polygons, scan_attributes, SCAN_POINTS, SCAN_QUADS);
-	for (int k = 1; k + 1 < corners; ++k)
+	apex.x = beam->apex.x;
+	apex.y = beam->apex.y;
+	apex.z = beam->apex.z;
+	for (int k = 0; k < 4; ++k)
 	{
-		const frustum_point triangle[3] = {fan[0], fan[k], fan[k + 1]};
-		const unsigned crossed = frustum_classify(&level_view, triangle, 3, FRUSTUM_SCREEN);
-		const int first = m.quad_count;
+		base[k].x = beam->base[k].x;
+		base[k].y = beam->base[k].y;
+		base[k].z = beam->base[k].z;
+	}
+	// The sides you're outside of are the ones that face you (game/drone.h): the back ones would
+	// only lie under the front ones, the same screen door twice, at twice VDP1's time
+	facing = drone_beam_outside(beam, level_view.eye.x, level_view.eye.y, level_view.eye.z);
+	/*
+	 * Inside it (it has you), no side faces you from outside: you'd see only its edges, a wireframe,
+	 * just when it matters most. So from inside, every side is drawn, seen from within: the walls of
+	 * light round you, red (the user, 2026-11-17: "switched to inward facing when detected")
+	 */
+	const bool inside = facing == 0;
 
+	if (inside)
+		facing = 0xF;
+	level_mesh_begin(&m, scan_points, scan_polygons, scan_attributes, SCAN_POINTS, SCAN_QUADS);
+	for (int k = 0; k < 4; ++k)
+	{
+		const frustum_point triangle[3] = {apex, base[k], base[(k + 1) & 3]};
+		unsigned crossed;
+		int first;
+
+		if (!(facing & (1u << k)))
+			continue;
+		crossed = frustum_classify(&level_view, triangle, 3, FRUSTUM_SCREEN);
+		first = m.quad_count;
 		/*
-		 * Not a triangle that reaches behind the eye (one the near plane would cut): that's you in
-		 * its fan, close, and it filled the screen as the sheet passed your eye (a ceiling or a
-		 * floor of light), 42 fps; left out, the approach in drone.steps went from 46-52 fps to
-		 * 54-59 (2026-11-14). The rest of the fan still shows, and the sensor and the red
+		 * Outside, not a side that reaches behind the eye (one the near plane would cut): that's
+		 * you right by it, and it filled the screen as it passed your eye, 42 fps; left out, the
+		 * approach in drone.steps went from 46-52 fps to 54-59 (2026-11-14). Its edges still show.
+		 * Inside too: cut to the near plane and drawn, the sides passing your eye filled the screen
+		 * twice over (watchdogs.steps, 2026-11-17: 53 fps, VDP1 missed 8 frames a second). The
+		 * sides ahead of you, that don't reach behind the eye, are the walls you see
 		 */
 		if (crossed != FRUSTUM_OUTSIDE && !(crossed & (1u << FRUSTUM_NEAR)) &&
-			level_face_add(&m, triangle, 3, crossed, sheet, LEVEL_FOG_NONE, JO_3D_SORT_CENTER, false))
+			level_face_add(&m, triangle, 3, crossed, sheet, LEVEL_FOG_CAPPED, JO_3D_SORT_CENTER, false))
 			for (int i = first; i < m.quad_count; ++i)
 				scan_attributes[i].draw_mode |= JO_VDP1_MESH; // the screen door
 	}
-	for (int k = 1; k + 1 < corners; ++k)
-		scan_line_add(&m, fan[k], fan[k + 1], edge); // along the rays' ends
-	scan_line_add(&m, fan[0], fan[1], edge);		   // the two outer rays
-	scan_line_add(&m, fan[0], fan[corners - 1], edge);
-	if (rail)
-		scan_line_add(&m, rail[0], rail[1], edge); // an upright line it rides
+	// Its edges, solid, every one (seen through the sides, the glass's): the four rays from the
+	// sensor, and the square round the base. Fogged as the drone is, by where its sensor is
+	edge = object_fog_flat_colour(edge, level_fog_capped(apex.x, apex.y));
+	for (int k = 0; k < 4; ++k)
+	{
+		scan_line_add(&m, apex, base[k], edge);
+		scan_line_add(&m, base[k], base[(k + 1) & 3], edge);
+	}
 	if (m.quad_count == 0)
 		return;
 	scan_mesh.data.points = scan_points;

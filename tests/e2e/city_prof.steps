@@ -1,0 +1,41 @@
+# Running across the city, checked for holes on every frame (the user, 2026-11-17: "There are still
+# VDP1 floors not drawn when going throughout the city"). West along row 6 from 0680 to 06E0: down 90
+# within each block (-360 to -630), level jumps across its streets, away from every watchdog's patrol.
+# Booted facing back to the corridor (east); turned right round, west. A GLITCH_CHECK
+# build: anything not drawn shows the magenta back colour, and holes_to fails the film. The last
+# shot's "vdp1 over N/T": T is every frame VDP1 didn't finish
+boot_at 0680
+wait_up
+wait 1.0
+hold left 1.0
+wait 1.0
+shot ct_00
+keydown up
+wait 0.5
+shot ct_01
+wait 0.5
+shot ct_02
+wait 0.5
+shot ct_03
+wait 0.5
+shot ct_04
+wait 0.5
+shot ct_05
+wait 0.5
+shot ct_06
+wait 0.5
+shot ct_07
+wait 0.5
+shot ct_08
+wait 0.5
+shot ct_09
+wait 0.5
+shot ct_10
+wait 0.5
+shot ct_11
+wait 0.5
+shot ct_12
+keyup up
+wait 1.0
+shot ct_99_stopped
+savestate city_prof

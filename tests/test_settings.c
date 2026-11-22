@@ -1,6 +1,7 @@
 #include <string.h>
 #include "test.h"
 #include "../src/game/settings.h"
+#include "../src/game/jumps.h"
 #include "../src/features.h"
 
 static void starts_as_features_h_says(void)
@@ -99,8 +100,50 @@ static void lines_are_all_one_length(void)
 	CHECK(strcmp(line + SETTINGS_LINE_LENGTH - 5, "token") == 0);
 }
 
+// "Jump to": R goes round every place (game/jumps.h) and back to stay; its line names the place
+static void jump_goes_round_the_places(void)
+{
+	settings s;
+	char line[SETTINGS_LINE_LENGTH + 1];
+
+	settings_init(&s);
+	CHECK_EQ(JUMP_NONE, settings_value(&s, SETTING_JUMP));
+	s.cursor = SETTING_JUMP;
+	for (int i = 1; i < JUMP_COUNT; ++i)
+	{
+		CHECK_EQ(SETTING_JUMP, settings_change(&s));
+		CHECK_EQ(i, settings_value(&s, SETTING_JUMP));
+		settings_line(&s, SETTING_JUMP, line);
+		CHECK_EQ(SETTINGS_LINE_LENGTH, (int)strlen(line));
+	}
+	settings_change(&s);
+	CHECK_EQ(JUMP_NONE, settings_value(&s, SETTING_JUMP));
+	s.value[SETTING_JUMP] = JUMP_CD_HUB;
+	settings_line(&s, SETTING_JUMP, line);
+	CHECK(strcmp(line, "> Jump to ......... CD hub") == 0);
+}
+
+// The wireframe (main.c, jo_3d_set_wireframe): off at boot, the last line, R flips it
+static void wireframe_is_off_and_last(void)
+{
+	settings s;
+	char line[SETTINGS_LINE_LENGTH + 1];
+
+	settings_init(&s);
+	CHECK(!settings_on(&s, SETTING_WIREFRAME));
+	CHECK_EQ(SETTING_COUNT - 1, SETTING_WIREFRAME);
+	CHECK_EQ(SETTING_JUMP + 1, SETTING_WIREFRAME); // ("Jump to" stays six L's down: the films press that)
+	s.cursor = SETTING_WIREFRAME;
+	CHECK_EQ(SETTING_WIREFRAME, settings_change(&s));
+	CHECK(settings_on(&s, SETTING_WIREFRAME));
+	settings_line(&s, SETTING_WIREFRAME, line);
+	CHECK(strcmp(line, "> Wireframe ........... on") == 0);
+}
+
 void run_settings_tests(void)
 {
+	wireframe_is_off_and_last();
+	jump_goes_round_the_places();
 	starts_as_features_h_says();
 	l_goes_round_the_list();
 	r_flips_the_one_under_the_cursor();

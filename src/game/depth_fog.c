@@ -41,6 +41,13 @@ int depth_fog_level(const depth_fog *f, int x, int y)
 	return low;
 }
 
+int depth_fog_box_full(const depth_fog *f, int x_min, int x_max, int y_min, int y_max)
+{
+	// Depth grows with x if forward's x is positive: then the low end of x is the nearer, else
+	// the high end. The same for y. That corner's the least deep of the four
+	return depth_fog_level(f, f->forward_x > 0 ? x_min : x_max, f->forward_y > 0 ? y_min : y_max) >= MAX_LEVEL;
+}
+
 unsigned short depth_fog_darken(unsigned short colour, int steps)
 {
 	int r = (colour & 31) - steps, g = ((colour >> 5) & 31) - steps, b = ((colour >> 10) & 31) - steps;

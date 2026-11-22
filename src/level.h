@@ -32,6 +32,23 @@ void draw_arena_walls(const world_rect *view, const world_point *eye, const wall
 // with the corridor's doorway onto the city added to it as planes (level.c: grey_portal).
 // free_camera: the debug camera (no cuts: everything's drawn)
 void level_view_begin(const corridor *passage, bool free_camera);
+/*
+ * SG-9: straight after level_view_begin, before anything of the world's drawn. If a box's side near
+ * you covers the whole screen (game/screen_wall.h), jo leaves out every polygon further than it
+ * (jo_3d_set_depth_limit); otherwise no limit. Put back to none (-1) once the world's drawn, before
+ * the mirror and the HUD (main.c)
+ */
+void level_screen_wall_limit(void);
+/*
+ * Whether the slave was handed a share of the city's blocks this frame (level.c, grey_groups_draw).
+ * Then main.c waits for it before the sky (whose ring cut changes level_view, which the share
+ * reads); in other frames it doesn't: in the corridor the slave's glass tiles and boxes went on
+ * while the master drew the sky, and waiting there took the bench's corridor views from 0-16 late
+ * frames to 49-68 (2026-11-19)
+ */
+extern bool level_city_shared;
+// Its depth this frame, world units (-1: no wall covers the screen): the debug line's sw
+extern int level_screen_wall;
 
 /*
  * The mirror over the hole you broke through (level.c has how). After the frame's corridor is
@@ -90,23 +107,31 @@ void draw_arena_surround(int rise, bool cutaway);
 // the CD block's disc are always drawn
 void level_sky_draw(int side, int wall, int middle, unsigned int frame, int place, bool in_lift, bool extras);
 
+// You were moved by (dx, dy) in one frame (a round's layout rising, the loop slid to the middle):
+// the sky goes with you, so it doesn't jump, and eases back (game/sky_slide.h)
+void level_sky_slide(int dx, int dy);
+
 // Whether you're on foot out past the corridor's doorway, in the city (as of the frame last
 // drawn): the floor's the circuit board there (main.c), and the towers stand on it
 bool level_in_city(void);
 
 /*
- * The watchdog drone's scan (drone_draw.c): a level fan of light, `corners` points round it (the
- * apex first), drawn see-through (VDP1's mesh: a screen door) in `sheet`, its outline in solid
- * lines of `edge`, and the rail it rides up and down (rail[0] to rail[1], a line too). Cut to
- * this frame's view; in the world's matrix, on foot
+ * A watchdog drone's beam (drone_draw.c, game/drone.h): a square pyramid, the sides that face the
+ * eye drawn see-through (VDP1's mesh: a screen door) in `sheet`, every edge a solid line of `edge`.
+ * Cut to this frame's view; in the world's matrix, on foot
  */
-void level_scan_draw(const frustum_point *fan, int corners, const frustum_point *rail, jo_color sheet, jo_color edge);
+void level_beam_draw(const drone_beam *beam, jo_color sheet, jo_color edge);
 
 /*
  * The roofs the drone's scan line lights this frame (game/drone.h, drone_scan_lit), coloured as
  * they're drawn: set before the city's drawn (drone_draw_prepare). Each a lit part of one roof
  */
 void level_scan_set(const drone_box *lit, int count, jo_color colour);
+
+// The fog level at a point on the floor (object_fog_level), never past the cap the far city's
+// drawn at from up high (level.c, LEVEL_FOG_CAP): a watchdog's fogged by it as the roofs under it
+// are. 0 while the fog's off
+int level_fog_capped(int x, int y);
 
 // Whether a box (its middle, half its size each way) could be seen this frame: in the view, and in
 // the city not behind a nearer, taller tower. After the city's drawn (its skyline's built then)

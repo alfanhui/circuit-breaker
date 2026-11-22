@@ -23,6 +23,8 @@ typedef enum
 	SETTING_CYCLE_SHAPE,	// ribbon / token / cursor / linked (features.h, CYCLE_SHAPE)
 	SETTING_CITY_SIDES,		// the city's tower sides down to the board (level.c)
 	SETTING_NO_TERMINATION, // a crash only stops the cycle (also Z while paused)
+	SETTING_JUMP,			// on foot, a place to jump to (game/jumps.h): each R the next, and you're there
+	SETTING_WIREFRAME,		// every polygon as its outline: what's drawn behind what (main.c; LEVELS.md)
 	SETTING_COUNT
 } setting;
 

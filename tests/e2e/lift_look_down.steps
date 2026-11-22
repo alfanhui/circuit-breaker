@@ -1,0 +1,27 @@
+# Looking down over the city from the CD block hub's lift (BOOT_AT_HUB 1: stood facing west, 150
+# short of the pad). Onto the pad, look down as it rises (B held: let go, the head comes back up),
+# and turn: the city below must be there near and far, fogged out only in the distance (the user,
+# 2026-11-16: "the city below when looking down is cut nearest to the player, that spans almost
+# half of the city")
+boot_at hub
+wait_up
+wait 1.0
+hold up 0.45
+wait 0.3
+keydown b
+wait 2.5
+shot lld_01_low
+wait 1.5
+shot lld_02_rising
+hold right 0.75
+wait 0.3
+shot lld_03_turned
+hold right 0.75
+wait 0.3
+shot lld_04_turned
+hold right 0.75
+wait 0.3
+shot lld_05_turned
+wait 1.5
+shot lld_06_top
+keyup b

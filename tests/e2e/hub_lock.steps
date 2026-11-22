@@ -1,0 +1,20 @@
+# The head locked onto the CD block's hub (game/target.h; boot_at hub: stood facing west, 150 short
+# of the lift's pad). Its mark is at the top of the lift, the pickup's hatch over the pad (the
+# user, 2026-11-16: "it would be better if the target marker was on the top of the elevator, so
+# players can see where it goes"): locked, the head looks up the beam to it. X takes the nearest on
+# the left, Z on the right: one of them is the hub's (it's straight ahead)
+boot_at hub
+wait_up
+wait 1.0
+shot hl_00_ahead
+press x
+wait 1.0
+shot hl_01_locked_x
+press x
+wait 1.0
+press z
+wait 1.0
+shot hl_02_locked_z
+hold down 1.5
+wait 0.5
+shot hl_03_backed_off

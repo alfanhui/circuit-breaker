@@ -159,8 +159,45 @@ static void other_corners_have_none(void)
 	CHECK_EQ(-1, depth_fog_shared_table(5, 5, 5, 6));
 }
 
+// A box is wholly in full fog exactly when all four of its corners are, whichever way you face
+// (level.c leaves the city's blocks that are out, under your eye)
+static void a_box_is_full_when_every_corner_is(void)
+{
+	const int forwards[8][2] = {{0, -1024}, {0, 1024}, {1024, 0}, {-1024, 0}, {724, -724}, {-724, 724}, {300, 979}, {-979, -300}};
+	unsigned int r = 99;
+	int disagree = 0, full = 0;
+
+	for (int k = 0; k < 8; ++k)
+	{
+		depth_fog f;
+		world_point eye = {100, -200};
+
+		depth_fog_set_distances(&f, START, END);
+		depth_fog_set_camera(&f, eye, forwards[k][0], forwards[k][1]);
+		for (int n = 0; n < 2000; ++n)
+		{
+			int x, y, w, h, all;
+
+			r = r * 1103515245u + 12345u;
+			x = (int)((r >> 8) % 12000u) - 6000;
+			r = r * 1103515245u + 12345u;
+			y = (int)((r >> 8) % 12000u) - 6000;
+			w = 50 + (int)((r >> 4) & 1023);
+			h = 50 + (int)((r >> 14) & 1023);
+			all = depth_fog_level(&f, x, y) == DEPTH_FOG_LEVELS - 1 && depth_fog_level(&f, x + w, y) == DEPTH_FOG_LEVELS - 1 &&
+				  depth_fog_level(&f, x, y + h) == DEPTH_FOG_LEVELS - 1 && depth_fog_level(&f, x + w, y + h) == DEPTH_FOG_LEVELS - 1;
+			full += all;
+			if (all != depth_fog_box_full(&f, x, x + w, y, y + h))
+				++disagree;
+		}
+	}
+	CHECK_EQ(0, disagree);
+	CHECK(full > 100); // (and the test met some)
+}
+
 void run_depth_fog_tests(void)
 {
+	RUN(a_box_is_full_when_every_corner_is);
 	RUN(two_level_pieces_share_a_table);
 	RUN(every_shared_table_round_trips);
 	RUN(other_corners_have_none);

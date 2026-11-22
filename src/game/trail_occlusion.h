@@ -31,8 +31,18 @@
  * SH-2 has no divide instruction, so each was a software call of tens of cycles. Now it's two
  * divisions per near segment (at most TRAIL_OCCLUDERS_MAX of them a frame).
  *
- * Only segments running the same way are compared (every trail runs N/S/E/W). Diagonal ones
- * (the debug stress trail's head) are never hidden and hide nothing.
+ * Segments running across each other too (the user, 2026-11-18, in the wireframe: "not all the
+ * trails are culled when out of sight, notably ones which are perpendicular to the player - but
+ * not in its entirety, just in sections"). Until then only segments running the same way were
+ * compared, so a trail crossing behind a nearer one was drawn there. The eye's under every top, so
+ * a nearer trail hides a farther one whichever way each runs. A far segment running across the
+ * near one, c along the near one's line from the eye (its own across), at t across: the line from
+ * the eye to it crosses the near one's line at c x d1 / |t| along. That's hidden where it's
+ * between the near one's ends A and B, and |t| > d1: |t| from c x d1 / B to c x d1 / A. Again no
+ * division per pair: d1 / A and d1 / B (x65536) are worked out once, as the near one's added
+ * (cross_k_*), two more divisions a segment. Rounded inwards, as the slopes are.
+ *
+ * Diagonal ones (the debug stress trail's head) are never hidden and hide nothing.
  */
 
 #define TRAIL_OCCLUDERS_MAX 32 // nearby segments that can hide others: the nearest ones in view
@@ -52,6 +62,12 @@ typedef struct
 	// Rounded inwards, the min up and the max down, so the range hidden can only come out smaller
 	int slope_min[TRAIL_OCCLUDERS_MAX];
 	int slope_max[TRAIL_OCCLUDERS_MAX];
+	// For a far segment running across it, on its +along side (c > 0) and its -along side: d1 /
+	// the end nearer the eye's line and d1 / the further end, x65536 (0: no end that side, hidden
+	// to the edge of the view; for the further end, -1: nothing that side is hidden)
+	int cross_k_near_pos[TRAIL_OCCLUDERS_MAX], cross_k_far_pos[TRAIL_OCCLUDERS_MAX];
+	int cross_k_near_neg[TRAIL_OCCLUDERS_MAX], cross_k_far_neg[TRAIL_OCCLUDERS_MAX];
+	unsigned char spans_eye_line[TRAIL_OCCLUDERS_MAX]; // A <= 0 <= B: it crosses the eye's own line
 } trail_occluders;
 
 // Starts a frame's list, seen from eye (the 1st person camera, on the floor under it)

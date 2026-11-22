@@ -1,0 +1,33 @@
+# parallel_trails.steps with the pause menu's Wireframe on (START, L seven times, R, START): the
+# trails' outlines, to see which parts are left out behind nearer ones (the user, 2026-11-18:
+# sections of trails across the view weren't culled; game/trail_occlusion.h)
+wait_boot
+skip_prologue
+press start
+wait 0.6
+press l 7
+press r
+wait 0.5
+shot ptw_00_menu
+press start
+wait 1.4
+wait 3
+press left
+wait 1
+press left
+wait 4
+press left
+wait 2
+press left
+wait 0.5
+shot ptw_1
+wait 0.4
+shot ptw_2
+wait 0.4
+shot ptw_3
+wait 0.4
+shot ptw_4
+wait 0.4
+shot ptw_5
+wait 0.4
+shot ptw_6

@@ -1,0 +1,7 @@
+# The benchmark's views (bench.steps), with a save state near the end for jo's PC sampler
+# (PCPROF_FRAME set when it's built: tests/e2e/pcprof.py reads it back)
+bench
+wait_up
+wait 48
+savestate bench_prof
+wait_verdict 420

@@ -104,6 +104,33 @@ static void add_segment(trail_occluders *o, world_point from, world_point to, co
 	// The only divisions: two per segment listed, at most TRAIL_OCCLUDERS_MAX a frame
 	o->slope_min[o->count] = div_ceil(along_min << SLOPE_SHIFT, d1);
 	o->slope_max[o->count] = div_floor(along_max << SLOPE_SHIFT, d1);
+	/*
+	 * For far segments running across it (trail_occlusion.h): d1 / its ends, x65536, each side of
+	 * the eye's line. On the + side the line of sight crosses it between 0 and c along, so only
+	 * its part from max(A, 0) to B can hide anything there: none if B <= 0 (-1), and no near
+	 * bound (0: to the view's edge) if A <= 0. The - side is the same, mirrored (-B to -A). The
+	 * near bound's rounded down, the far one's up: what's hidden only comes out smaller. Up to
+	 * four more divisions a segment listed (at most TRAIL_OCCLUDERS_MAX a frame)
+	 */
+	{
+		const int n = o->count;
+		const int d1_x = d1 << SLOPE_SHIFT; // (d1 under 2^14 here: under 2^30)
+
+		if (d1 > ACROSS_LIMIT)
+		{
+			o->cross_k_far_pos[n] = o->cross_k_far_neg[n] = -1; // too far across to be worked out
+			o->cross_k_near_pos[n] = o->cross_k_near_neg[n] = 0;
+			o->spans_eye_line[n] = 0;
+		}
+		else
+		{
+			o->cross_k_near_pos[n] = along_min > 0 ? div_floor(d1_x, along_min) : 0;
+			o->cross_k_far_pos[n] = along_max > 0 ? div_ceil(d1_x, along_max) : -1;
+			o->cross_k_near_neg[n] = along_max < 0 ? div_floor(d1_x, -along_max) : 0;
+			o->cross_k_far_neg[n] = along_min < 0 ? div_ceil(d1_x, -along_min) : -1;
+			o->spans_eye_line[n] = (unsigned char)(along_min <= 0 && along_max >= 0);
+		}
+	}
 	o->count++;
 }
 
@@ -214,8 +241,45 @@ int trail_occluders_visible(const trail_occluders *o, world_point from, world_po
 		int h0;
 		int h1;
 
-		// Only a parallel segment, on the same side, nearer across (none listed is on the eye's line)
-		if (o->along_x[i] != far.runs_along_x || (o->across[i] < 0) != (far.across < 0))
+		if (o->along_x[i] != far.runs_along_x)
+		{
+			// Running across it (trail_occlusion.h): hidden from |t| = c x d1 / B to c x d1 / A, and
+			// only past it (|t| > d1). c is where the far one crosses its line, along from the eye
+			const int c = far.across < 0 ? -far.across : far.across;
+			const int k_near = far.across > 0 ? o->cross_k_near_pos[i] : o->cross_k_near_neg[i];
+			const int k_far = far.across > 0 ? o->cross_k_far_pos[i] : o->cross_k_far_neg[i];
+			int lo, hi;
+
+			d1 = o->across[i] < 0 ? -o->across[i] : o->across[i];
+			if (far.across == 0)
+			{
+				if (!o->spans_eye_line[i])
+					continue; // straight ahead of the eye, and it's off to one side
+				lo = d1 + 1;
+				hi = ALONG_LIMIT << 2; // (nothing further is drawn)
+			}
+			else
+			{
+				if (k_far < 0)
+					continue; // all of it's on the far one's other side of the eye's line
+				lo = scale_up(k_far, c);
+				if (lo < d1 + 1)
+					lo = d1 + 1;
+				hi = k_near == 0 ? ALONG_LIMIT << 2 : scale_down(k_near, c);
+			}
+			if (lo >= hi)
+				continue;
+			// In the far one's own along (its points' across from the near one's line), the near
+			// one's side of the eye
+			t0 = o->across[i] > 0 ? lo : -hi;
+			t1 = o->across[i] > 0 ? hi : -lo;
+			h0 = direction > 0 ? t0 - far.from_along : far.from_along - t1;
+			h1 = direction > 0 ? t1 - far.from_along : far.from_along - t0;
+			count = cut_out(h0, h1, starts, ends, count, max);
+			continue;
+		}
+		// A parallel segment: on the same side, nearer across (none listed is on the eye's line)
+		if ((o->across[i] < 0) != (far.across < 0))
 			continue;
 		d1 = o->across[i] < 0 ? -o->across[i] : o->across[i];
 		if (d1 >= d2)

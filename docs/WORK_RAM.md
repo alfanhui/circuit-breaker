@@ -157,6 +157,241 @@ stands on the floor, black at its foot; in the city it's nearer and towers over 
 landmarks are drawn nearer and bigger than they are in the city (the user's trick): they only
 change while they're out of sight.
 
+## A bigger city: both banks of Work RAM, a page a tower (proposal, 2026-11-15)
+
+The ask (the user, 2026-11-15): the city at least 3 times as big, a level in itself, its size
+after Work RAM's. Its ways full of dead ends, more than one route, T-junctions and crossroads, so
+you can run past the watchdog, outrun it and hide. Start in the middle, where the crash puts you.
+Laid out so that what's in the way blocks the view enough to keep 60 fps.
+
+### The size: 256 towers, one megabyte
+
+- **Low Work RAM is 1 MB at `0x0020_0000`.** 16 x 16 towers of 4 KB each (`0x1000`) is 256
+  towers, exactly 1 MB.
+  - The tower at row r, column c is `0x0020_0000 + r x 0x1_0000 + c x 0x1000`.
+  - The debug line's `at 0650` becomes `at 0026_5000`: the same row and column, as an address.
+  - The towers' faces could carry their addresses (the art pass).
+- **About 3 times today's size:**
+  - 256 towers against 84 is 3.05 times.
+  - The ground is 9,600 square (16 towers and 8 streets each way), against 4,100 x 7,000: 3.2 times.
+- **Guard pages become real.** An operating system leaves a 4 KB page unmapped beside a stack or
+  buffer, so a program that runs over it is caught. The city's walls are those pages, 4 KB each.
+- **High Work RAM too** (the user's review of draft 1). It's 1 MB at `0x0600_0000`, the same
+  16 x 16: the second district, across the arena from Low, reached by the data buses. 512 towers in
+  all, six times today's city.
+
+### Starting in the middle, of the west edge
+
+- **The corridor opens at the middle of the west edge** (column 0, row 8: `0x0028_0000`). The
+  first proposal was the district's very middle, but the arena's pyramid is in the way (Decided,
+  below).
+- **Every way leads somewhere.** The routes fan out north, south and east. The six ways out are
+  three in each bank, where the Saturn has them round Work RAM (draft 2, below).
+- **Heights fall away in rings** from the entry, to -720 at the far corners. The rule is in
+  Decided, below.
+
+### The routes: lanes, junctions and loops
+
+- **The roofs you can reach are lanes,** a block wide (2 towers), walled by guard pages taller than
+  you. Where lanes meet they make the shapes asked for:
+  - a T-junction;
+  - a crossroads (four lanes meeting at a street corner, jumped across);
+  - a dead end;
+  - a loop.
+- **Loops are how you outrun the drone.** Go round a block and it loses you behind the walls.
+  - The plan tool checks there are several loops near the start, and on the way to each hub.
+  - Round a loop, any height lost at a drop or a jump down is won back by climbs within blocks.
+- **Dead ends are allowed again.** Until now the tool sealed every dead end. Now a dead end is a
+  place to hide: a recess out of the drone's sight, at the price of no way on if it finds you.
+- **Hiding:** out of the drone's scan, behind a wall, or in a recess. The drone's patrols run along
+  the lanes, so a lane next to one is where it doesn't look.
+
+### Seeing less: the level built to block the view
+
+Today's city shows too much: from a roof patch you see a median of 54 of the 84 towers, and from
+some all 84 (measured from `city_seen.c`). A city that falls away below you shows you all of it.
+Three times that would be three times VDP1's work. So:
+
+- **The lanes are walled.** Guard pages stand above the roofs beside a lane, so you see along your
+  lane to its next turn, and over the walls only the skyline ring and the landmarks.
+- **No long straight views.** A lane turns or tees within about 3 blocks (LEVELS.md: break long
+  canyons). That's also what makes it a maze.
+- **Measured on paper, before it's built.** The plan tool runs `make_city_seen.py`'s rule on the
+  plan, and reports for every place you can stand how many towers can be seen from it.
+  - The aim is 40 at most anywhere; the tool lists the worst places, to change the map there.
+  - A view that's too open is fixed in the plan, not in the game's code.
+- **Then the game's own culling** (LEVELS.md's order) on what's left: the frustum, the hiders,
+  the floor rule, and the draw budget last.
+
+### Memory and code: what has to change
+
+| What | Today (84) | At 256 | How |
+|---|---|---|---|
+| The towers' table | 1 KB | 3 KB | as it is |
+| What each place sees (`city_seen`) | 3.7 KB | 32 KB per tower: too much | by block instead (64 blocks: 8 bytes a patch): 8 KB, then each tower in a seen block by the hiders, as now |
+| The grey boxes | ~3 KB | ~9 KB | indices of 1 byte become 2 (they stop at 255) |
+| The walker's roofs | a list of 128 at most, searched | 256+ | found by the grid: the roof under a point from its column and row, not a search |
+| The drone's sight | tested against all 84 boxes | 256 | a walk along the grid cells between the drone and you |
+
+All fits Work RAM. The per-frame work is set by what's seen, not by how big the city is.
+
+### Decided (the user, 2026-11-15)
+
+- **Low Work RAM now:** 256 towers. High Work RAM later, as a second district.
+- **Heights in rings, nothing one way.** Every street is level, so you can jump it either way.
+  Each block steps down 90 on its side away from the entry: a clean drop out, a climb back in. So
+  every move works both ways, and a loop can be run round and round. The edge is at -720.
+- **The entry in the middle of the west edge**, not the city's middle. The arena's pyramid falls to
+  the ground exactly where the corridor ends (its 45-degree slope from the walls' top, 1500, to
+  the ground, -3000, is 4500 out: the corridor's length), so the city can't reach back round the
+  corridor without towers standing through the pyramid. The corridor opens at column 0, row 8,
+  and the routes fan out north, south and east.
+- **The plan first.**
+
+### Draft 2: both banks, the ways out by address (2026-11-15)
+
+The user's review of draft 1: all six ways out were in Low Work RAM; plan High too, three in each,
+placed roughly as the real Saturn has them round Work RAM; the arena's pyramid in the middle, with
+two data buses north and south of it.
+
+`tools/ram_banks_plan.py` draws `docs/images/ram_banks_plan.svg`, both banks in one picture.
+
+- **Where everything is:** Low Work RAM on one side of the arena, High on the other, each with its
+  column 0 at the pyramid's foot. The corridor opens onto Low's middle, as before.
+- **The buses:** two, north and south of the pyramid. Each runs from Low's corner by the pyramid
+  (column 0, rows 0 and E), out round the pyramid (12,500 from the middle), to High's.
+  - They're long, about 30,000: the rides the highway proposal (below) wanted, with the other bank
+    loading meanwhile.
+  - High's heights fall from both buses' ends, so every move there works both ways too.
+- **The ways out, by address.** A bank's addresses run row by row (64 KB a row, 4 KB a tower along
+  it). So a place whose address is below a bank's sits by its first page (row 0, low columns), and
+  one above it by its last (row E, high columns), in address order:
+
+| Address | Place | Bank, tower | Why there |
+|---|---|---|---|
+| `0x0018_0000` | Backup RAM | Low, row 0, column 4 (`0x0020_4000`) | just below Low Work RAM |
+| `0x0020_0000` | Low Work RAM | | |
+| `0x0580_0000` | CD block (A-bus) | Low, row E, column A (`0x002E_A000`) | above Low |
+| `0x05A0_0000` | SCSP (B-bus) | Low, row E, column E (`0x002E_E000`) | above the CD block |
+| `0x05C0_0000` | VDP1 (B-bus) | High, row 0, column 4 (`0x0600_4000`) | just below High Work RAM |
+| `0x05E0_0000` | VDP2 (B-bus) | High, row 0, column 8 (`0x0600_8000`) | above VDP1 |
+| `0x0600_0000` | High Work RAM | | |
+| (VDP2's output) | Video output | High, row E, column E (`0x060E_E000`) | the end of the line: the far corner |
+
+  Split at the middle of the number line, that's the story's order as well: the CD block, Backup
+  RAM and SCSP in Low; VDP1, VDP2 and the video output in High, after a bus ride.
+
+| Check | Low | High |
+|---|---|---|
+| Roofs / guard pages | 135 / 121 | 135 / 121 |
+| Reached, every move both ways | all, yes | all, yes |
+| Ways out, towers walked | CD block 16, SCSP 24, Backup RAM 56 (from the corridor; the north bus lands beside it) | VDP1 40, VDP2 40, Video output 56 (from the north bus) |
+| Dead ends, T-junctions, crossroads, loops | 7, 17, 3, 8 | 5, 16, 3, 8 |
+| Longest straight lane | 9 | 9 |
+| Towers seen, walls together: median, worst, roofs over 40 | 32, 53, 22 | 31, 58, 23 |
+
+- Low's maze is draft 1's. High's is the generator's seed 54, picked from 120 for the shortest
+  lanes and the most dead ends.
+- **Still as draft 1 found:** the table that says what's seen has to be made with the walls working
+  together (by today's rule each bank would show ~140 towers from the median roof). Long lanes are
+  the worst views, and dead ends are few: both are hand edits to the maps.
+
+### Built: Low Work RAM (2026-11-16)
+
+The user: "Execute the lower working ram level. Do not place the watchdog, as I will produce
+coordinate routes for these watchdog processes." The 84-tower city is replaced by draft 2's Low
+Work RAM, as the plan has it.
+
+- **The towers:** `game/city.c`'s table is the plan's (`python tools/ram_banks_plan.py --quick
+  --c`), 16 x 16, row 8 on the corridor's middle line.
+  - The debug line's `at` shows the page you stand on, e.g. `at 0028_0000` on the entry.
+  - The films' `boot_at` codes stay row << 8 | column << 4: `0800` is the entry, `0EA0` the CD
+    block's hub.
+- **The ways out:**
+  - **The CD block** (row E, column A): the hub, its lift and the disc. The disc now hangs north of
+    the hub, over the city, since the hub is on the south edge.
+  - **Backup RAM** (row 0, column 4): the A-bus leaves from it, past its gap.
+  - **The SCSP** (row E, column E): lit, and a target, like the other hubs.
+  - **The landmarks** stand where the addresses say (`game/landmarks.c`): Backup RAM's beyond the
+    north edge, the SCSP's beyond the south-east corner, High's three across the arena.
+- **No watchdog.** `city.h`'s `city_drone_place` is the format for your routes:
+  - each stop is `{out, across, height, CITY_FACES_..., wait}`, in the city's own frame;
+  - `city.h` gives the sums from a tower's column and row to its out and across;
+  - set `CITY_DRONE_STOPS` to the count.
+
+  Until then the drone isn't flown, drawn or looked for. Its tower boxes are still made (the debug
+  line's `at` uses them).
+- **Tables widened:** the walker's roofs (300), the grey boxes' groups (two bytes), the seen table
+  (32 KB).
+- **Tests:**
+  - Every street is level and every step in a block a climb or less.
+  - The walker runs the route to each of the three hubs, and back, one move at a time.
+  - The seen table matches the game's rule (every seventh roof, in full).
+- **Measured** (Mednafen, films `low_ram_first`, `low_ram_turn_hub`, `low_ram_turn_mid`, and the
+  benchmark with Low Work RAM's 12 views):
+  - 9 views pass.
+  - "mid back" (47 late frames, cpu 133%), "hub q0" (57, 137%) and "scsp" (22, 122%) don't: the
+    CPU, not VDP1.
+  - Turning at the CD block's hub, VDP1 missed 25 frames.
+- **Why, and what's next:** the seen table by today's rule leaves 161 towers seen on average. The
+  table made with the walls working together (median 32 by the plan) is the next step
+  (BACKLOG, "Low Work RAM's seen table").
+
+### Draft 1 on paper (2026-11-15)
+
+Low Work RAM alone (its tool, since replaced by draft 2's). The map is a maze on the towers at
+even columns and rows: the towers between two of them are a roof where the maze joins them, a
+guard page where it doesn't. Made by the tool's generator (seed 12, turning preferred to going
+straight, 8 walls opened for loops), then the hubs put in the story's order by walking distance.
+It's for editing by hand: one character a tower.
+
+| Check | Draft 1 |
+|---|---|
+| Roofs / guard pages | 135 / 121 |
+| Reached from the entry, every move both ways | all 135, yes |
+| Hubs, towers walked | CD block 16, Backup RAM 24, VDP1 34, SCSP 34, VDP2 66, Video output 74 |
+| Dead ends (besides the 6 hubs), T-junctions, crossroads, loops | 2, 17, 3, 8 |
+| Longest straight lane | 9 towers (row 8, east of the entry) |
+| Towers seen, by today's table rule | median 140, worst 168 of 256 |
+| Towers seen, the walls together (sight lines) | median 32, 90% 43, worst 53; 22 roofs over 40 |
+
+**What it found:**
+
+- **Today's way of making the table can't hold this city.** `make_city_seen.py` calls a tower
+  hidden only if one hider covers all of it. A lane's wall is many guard pages, broken by a street
+  every two towers: no one of them covers a tower behind, so by that rule you'd see 140 of the 256
+  from the median roof. Together the walls hide most of it: 32.
+  - So the table has to be made with the walls working together, and still be sure, never
+    hiding a sliver that shows. That's step 3's hard part (below).
+  - The tool's sight lines are sampled: an estimate for the plan, not a table for the game.
+- **The worst views are the long lanes:** row 8 east of the entry, row E, column 4. Breaking them
+  with a turn or a wall brings those roofs under 40.
+- **Few dead ends:** the loops opened most of them. Fewer loops, or spurs added by hand, if more
+  hiding places are wanted.
+
+### Build order
+
+1. **On paper.** `tools/ram_banks_plan.py` (new; `work_ram_plan.py` stays the first city's), and
+   its checks:
+   - every hub reached;
+   - loops near the start;
+   - dead ends allowed;
+   - the sight count for every patch.
+
+   An SVG to agree on. No game code.
+2. **The game's tables widened**, and the grid lookups (walker, drone, address), still with
+   today's 84 towers: the tests and films must come out the same.
+3. **The district in.** The 256 towers, and `city_seen` made a new way, by blocks and with the
+   walls working together, conservatively.
+   - One idea to make that sure: for a patch and a tower, the walls hide it if every line from the
+     patch to the tower crosses one. Lines in the plan, and towers as rectangles, so this can be
+     worked out exactly with intervals of angle and height, not samples.
+
+   Then the benchmark's views and running films, with `px` under 350k.
+4. **The drone's patrols on the new lanes:** a chase, and losing it.
+5. **The hubs on the edges.** The CD block's lift and disc move with its hub, Backup RAM's too.
+   Today's route test (`test_city.c`) and the city's films are replaced.
+
 ## Crossing the city: the highways, and hiding the loads (proposal, 2026-11-12)
 
 The city can't all be in memory at once: the Saturn has 2 MB of Work RAM, and the city slice
@@ -291,6 +526,53 @@ the rule.
   watchdog.
 - **Its model:** ~40-60 flat-coloured polygons, the corridor's colours. The beam as a mesh-pattern
   quad or a VDP2 colour effect, not VDP1 half-transparency (slow).
+
+### The watchdog in Low Work RAM (the user, 2026-11-17)
+
+The ask, in seven points: warn the player without words; patrol in small loops or back and forth
+between junctions, three before the CD block (the third round its lift); a beam that's always
+seen (a square cone); a light red glow while seen; chase, hide, search, or escape by lift; crouch
+and more hiding places after; randomness in its stops, turns and flight.
+
+Decided with the user:
+
+- **The warning is a near miss on you,** not a scene played on someone else: the first
+  watchdog's beam sweeps up to the entry roof, stops just short of you, red at its edge, and turns
+  away (built third).
+- **It chases over the roofs,** straight at where it last saw you. Walls hide you; they don't stop
+  it.
+- **Caught is a reset to the last checkpoint:** the entry roof, or the last lift used.
+
+How it's built, step by step:
+
+1. **Three patrols, the beam, the glow.**
+   - Patrols (`city.c`, `city_patrols`): 1, a loop round the block south of the entry (columns
+     0-2, rows A-C); 2, back and forth along row C between the crossroads at column 4 and the
+     corner at column 8; 3, a loop round the CD block's lift.
+   - It flies, not slides: it steers its yaw towards the next stop (a turn of at most
+     DRONE_TURN_MAX a frame, the error's tangent from a sine and a cosine, one division a drone a
+     frame) and moves along where it faces, so it banks round corners.
+   - Randomness, from a seeded generator per drone (films stay the same run to run): each stop's
+     wait is 0.5 to 1.5 times the route's; at a stop it may glance a quarter turn aside; it may
+     turn back the other way round its route; each leg's speed differs; it weaves; now and then it
+     hesitates in flight.
+   - The beam is a square pyramid, its apex at the sensor, its base a square on the roofs ahead.
+     You're seen inside it, with nothing in the way. Each side's drawn only if it faces you (the
+     same plane test), so from anywhere outside at least one side shows.
+   - The glow: VDP2's colour offset, a little red added, easing in fast and out slow.
+2. **The chase, the search, the catch, the lift.** Built 2026-11-17 (`game/drone.h`, its moods):
+   - Seen, from any mood, it chases: straight at where it saw you, 5 a frame (your run's 6),
+     turning twice as fast as on patrol, 350 over your eye, and never under 150 over the towers
+     within 400 of it. While it sees you it holds back 840 (you in its square's middle).
+   - Unseen for 20 frames, it goes right over where it saw you last and searches for 8 s: turns
+     to look a random way, hops up to 500 off, looks again. Then back to its patrol, clear of the
+     towers on the way.
+   - The catch counts up a frame in its beam and down a frame out of it: at 120 (2 s) you're
+     caught. Terminated, as a fall: the terminal screen, then your checkpoint.
+   - The checkpoint is where you got up, until the lift takes you; then the lift's pad (the lift
+     waits for you to step off). While the lift has you, no watchdog sees you: a chase loses you
+     there.
+3. **The near miss.**
 
 ## On the Saturn
 

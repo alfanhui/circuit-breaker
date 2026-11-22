@@ -1,8 +1,10 @@
 #include <jo/jo.h>
 #include "drone_draw.h"
-#include "level.h"		   // level_scan_draw
+#include "level.h"		   // level_beam_draw
 #include "utils/perf.h"	   // the debug line's dm and ds
+#include "object_fog_vdp1.h" // the fog, as the city has it (level_fog_capped)
 #include "game/world.h"	   // WORLD_HEADING_DX, WORLD_HEADING_DY
+#include "utils/fastmath.h" // ASR: shifts without libgcc's slow routines
 
 /*
  * The watchdog's drone: a Tron light cycle that flies. Its look (docs/WORK_RAM.md, "The art pass",
@@ -49,7 +51,7 @@
 #define HUB JO_COLOR_RGB(110, 116, 130)		 // the grey hub at its middle
 #define DASH JO_COLOR_RGB(255, 255, 255)	 // the white dash, flashing in one place
 
-// The scan (level_scan_draw): a pale cyan sheet with white edges; red once it has you
+// The beam (level_beam_draw): a pale cyan sheet with white edges; red once it has you
 #define SCAN_SHEET JO_COLOR_RGB(80, 220, 255)
 #define SCAN_EDGE JO_COLOR_RGB(220, 250, 255)
 #define SCAN_SHEET_SEEN JO_COLOR_RGB(255, 40, 40)
@@ -82,6 +84,7 @@
  * points and 3 polygons, not 20 and 10. The hull and arms as near. 42 points (not 98), 33 polygons
  */
 #define DRONE_FAR 1200
+#define DRONE_SCAN_NEAR 2500 // further than this (along the floor), its scan line lights no roofs
 #define POINTS (98 + 24) // the near model's, and the far rotors' squares and dash lines
 #define POLYGONS 61
 #define FAR_POLYGONS 33
@@ -342,52 +345,39 @@ void drone_draw_init(void)
 }
 
 /*
- * Before the city's drawn (main.c): the roofs the scan line lights (game/drone.h, drone_scan_lit),
- * handed to level.c, which colours each one's lit part straight after drawing that roof
- * (level_scan_set). Cyan, red once it has you
+ * Before the city's drawn (main.c): the roofs the nearest drone's scan line lights (game/drone.h,
+ * drone_scan_lit), handed to level.c, which colours each one's lit part straight after drawing
+ * that roof (level_scan_set). Cyan, red once it has you. Nearest along the floor (level_reach)
  */
-void drone_draw_prepare(const drone *d, const drone_box *boxes, int box_count)
+void drone_draw_prepare(const drone *drones, int count, const drone_box *boxes, int box_count)
 {
 	drone_box lit[DRONE_LIT_MAX];
 	const int frc = jo_time_get_frc();
-	const int count = drone_scan_lit(d, boxes, box_count, lit);
+	const drone *nearest = &drones[0];
+	int nearest_reach = level_reach(drones[0].x, drones[0].y);
+	int lit_count;
 
-	level_scan_set(lit, count, d->seen ? SCAN_SHEET_SEEN : SCAN_SHEET);
+	for (int i = 1; i < count; ++i)
+	{
+		const int reach = level_reach(drones[i].x, drones[i].y);
+
+		if (reach < nearest_reach)
+		{
+			nearest = &drones[i];
+			nearest_reach = reach;
+		}
+	}
+	/*
+	 * Only near: further off the lit line's a few pixels on a roof, and finding it walks the 256
+	 * towers, and again for each lit part's line of sight (drone_scan_lit). At the SCSP, far from
+	 * every patrol, it was still worked out every frame (2026-11-17, `ds`)
+	 */
+	lit_count = nearest_reach <= DRONE_SCAN_NEAR ? drone_scan_lit(nearest, boxes, box_count, lit) : 0;
+	level_scan_set(lit, lit_count, nearest->seen ? SCAN_SHEET_SEEN : SCAN_SHEET);
 	perf_part_add(PERF_DRONE_SCAN, frc);
 }
 
-/*
- * The scan's beam: from the sensor, angled down to the scan line on the roofs (drone_scan_rect),
- * one triangle, see-through (level_scan_draw: VDP1's mesh), its two edges and the line itself in
- * solid lines. The line's ends are at the height of the roof under its middle (or 400 under the
- * drone, over a street)
- */
-static void scan_draw(const drone *d, const drone_box *boxes, int box_count)
-{
-	const int heading = drone_heading(d);
-	const int fx = WORLD_HEADING_DX(heading), fy = WORLD_HEADING_DY(heading); // ahead
-	const int sx = -fy, sy = fx;											   // aside, square to it
-	const int ahead = drone_scan_ahead(d) + (DRONE_SCAN_DEEP >> 1);		   // the line's middle
-	const int ground = drone_scan_ground(d, boxes, box_count, d->z - 400) + 2;
-	frustum_point beam[3];
-	int x, y, z;
-
-	drone_sensor(d, &x, &y, &z);
-	beam[0].x = x;
-	beam[0].y = y;
-	beam[0].z = z;
-	for (int end = 0; end < 2; ++end)
-	{
-		const int side = end == 0 ? -ahead : ahead; // the fan's 45 degrees: as far aside as ahead
-
-		beam[1 + end].x = x + fx * ahead + sx * side;
-		beam[1 + end].y = y + fy * ahead + sy * side;
-		beam[1 + end].z = ground;
-	}
-	level_scan_draw(beam, 3, JO_NULL, d->seen ? SCAN_SHEET_SEEN : SCAN_SHEET, d->seen ? SCAN_EDGE_SEEN : SCAN_EDGE);
-}
-
-void drone_draw(const drone *d, const drone_box *boxes, int box_count, unsigned int frame)
+void drone_draw(const drone *d, unsigned int frame)
 {
 	// The hover: up and down 3, round every 64 frames, a triangle wave (no sine)
 	static const signed char hover[8] = {0, 1, 2, 3, 3, 2, 1, 0};
@@ -429,16 +419,62 @@ void drone_draw(const drone *d, const drone_box *boxes, int box_count, unsigned 
 			const int i = far ? far_map[j] : j;
 			const int x = where[i][0], y = where[i][1];
 
-			mesh->data.points[j].x = jo_int2fixed(d->x + ((x * cos1024 - y * sin1024) >> 10));
-			mesh->data.points[j].y = jo_int2fixed(d->y + ((x * sin1024 + y * cos1024) >> 10));
+			mesh->data.points[j].x = jo_int2fixed(d->x + (ASR(x * cos1024 - y * sin1024, 10)));
+			mesh->data.points[j].y = jo_int2fixed(d->y + (ASR(x * sin1024 + y * cos1024, 10)));
 			mesh->data.points[j].z = jo_int2fixed(z + where[i][2]);
+		}
+		/*
+		 * Fogged as the city is where it flies (the user, 2026-11-18: up the lift "the watchdogs are
+		 * very visible - but the city paths which they patrol isn't. The balance is not right"):
+		 * one level for all of it, its middle's, capped as the far roofs are (level_fog_capped).
+		 * Each polygon's Gouraud table set to it (object_fog_set_quad: none at level 0, as near).
+		 * The attributes are shared by the three drones: set again for each, before it's drawn
+		 */
+		{
+			const int level = level_fog_capped(d->x, d->y);
+
+			if (object_fog_enabled)
+				for (int k = 0; k < (int)mesh->data.polygon_count; ++k)
+					object_fog_set_quad(&mesh->data.attributes[k], level, level, level, level);
 		}
 		// Drawn here, by the master: handed to the slave it was worse (see above)
 		jo_3d_mesh_draw(mesh);
 		perf_part_add(PERF_DRONE_MODEL, model_frc);
 	}
-	const int scan_frc = jo_time_get_frc();
+	// Its beam: the square pyramid (game/drone.h), the sides facing you see-through, its edges solid
+	{
+		const int scan_frc = jo_time_get_frc();
+		drone_beam beam;
 
-	scan_draw(d, boxes, box_count);
-	perf_part_add(PERF_DRONE_SCAN, scan_frc);
+		drone_beam_get(d, &beam);
+		/*
+		 * Only if it could be seen, as the model: the box round its five corners in the view and not
+		 * behind a nearer, taller tower. Without this all three beams were classified, cut and sent
+		 * every frame wherever they were: `ds` 26% of a frame at the SCSP, far from every patrol, and
+		 * the benchmark's late frames 334 against 155 with no watchdogs (2026-11-17). Halves by
+		 * shifts: no division
+		 */
+		int x_min = beam.apex.x, x_max = beam.apex.x, y_min = beam.apex.y, y_max = beam.apex.y;
+		int z_min = beam.apex.z, z_max = beam.apex.z;
+
+		for (int k = 0; k < 4; ++k)
+		{
+			const drone_point *p = &beam.base[k];
+
+			x_min = p->x < x_min ? p->x : x_min;
+			x_max = p->x > x_max ? p->x : x_max;
+			y_min = p->y < y_min ? p->y : y_min;
+			y_max = p->y > y_max ? p->y : y_max;
+			z_min = p->z < z_min ? p->z : z_min;
+			z_max = p->z > z_max ? p->z : z_max;
+		}
+		{
+			const frustum_point beam_centre = {(x_min + x_max) >> 1, (y_min + y_max) >> 1, (z_min + z_max) >> 1};
+			const frustum_point beam_half = {((x_max - x_min) >> 1) + 1, ((y_max - y_min) >> 1) + 1, ((z_max - z_min) >> 1) + 1};
+
+			if (level_box_seen(beam_centre, beam_half))
+				level_beam_draw(&beam, d->seen ? SCAN_SHEET_SEEN : SCAN_SHEET, d->seen ? SCAN_EDGE_SEEN : SCAN_EDGE);
+		}
+		perf_part_add(PERF_DRONE_SCAN, scan_frc);
+	}
 }

@@ -13,15 +13,18 @@ const bench_view bench_views[] = {
 	{"start out", BENCH_AT_START, 2, 0, 0},		 // where you get up, facing the city
 	{"start back", BENCH_AT_START, 0, 0, 0},	 // the same, facing the mirror
 	{"mirror up", BENCH_AT_START, 0, DIGI_Y, 0}, // facing the mirror, looking up at it
-	{"0650 back", 0x0650, 0, 0, 1}, // the user's slow run (2026-11-14), known: BACKLOG "Slow in the city"
-	{"0640 back", 0x0640, 0, 0, 0}, // (the same row; 0 repeated fields by jo's late count, 2026-11-15: no longer known)
-	{"0630 back", 0x0630, 0, 0, 0},
-	{"0A40 back", 0x0A40, 0, 0, 0}, // up column 4
-	{"0B40 back", 0x0B40, 0, 0, 0}, // by Backup RAM's hub
-	{"hub q0", 0x0010, 0, 0, 0},	// the CD block's hub, each way round
-	{"hub q1", 0x0010, 1, 0, 0},
-	{"hub q2", 0x0010, 2, 0, 0},
-	{"hub q3", 0x0010, 3, 0, 0},
+	// Low Work RAM (2026-11-16: game/city.h), by tower code (row << 8 | column << 4)
+	{"entry out", 0x0800, 2, 0, 0}, // the entry roof (0x0028_0000), facing the bank
+	// The three known (2026-11-16, the new seen table: 48, 54 and 10 late, cpu 130-140%): BACKLOG
+	// "Low Work RAM: the towers' per-frame work"
+	{"mid back", 0x0880, 0, 0, 1},	// the bank's middle (0x0028_8000)
+	{"mid out", 0x0880, 2, 0, 0},
+	{"hub q0", 0x0EA0, 0, 0, 1},	// the CD block's hub (0x002E_A000), each way round. Known
+	{"hub q1", 0x0EA0, 1, 0, 0},
+	{"hub q2", 0x0EA0, 2, 0, 0},
+	{"hub q3", 0x0EA0, 3, 0, 0},
+	{"backup", 0x0040, 2, 0, 0},	// Backup RAM's hub (0x0020_4000)
+	{"scsp", 0x0EE0, 0, 0, 1},		// the SCSP's (0x002E_E000), facing back across the bank. Known
 };
 const int bench_view_count = (int)(sizeof bench_views / sizeof bench_views[0]);
 

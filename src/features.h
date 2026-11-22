@@ -115,6 +115,18 @@
  */
 #define FLOOR_HIDES 1
 
+/*
+ * SG-9: a wall that covers the whole screen hides everything behind it (game/screen_wall.h; level.c,
+ * level_screen_wall_limit). 0: no depth limit, for comparing films with and without it
+ */
+#define SCREEN_WALL 1
+
+/*
+ * The city's blocks shared between the two CPUs (level.c, grey_groups_draw): the slave builds and draws
+ * every other one. 0: the master does all of them, as before: for comparing films
+ */
+#define GREY_ON_SLAVE 1
+
 // The debug readout, top left: fps, cpu, polygons, the cycle, the bots, the parts' costs (main.c,
 // debug_3d; pause menu). false: none, as a player would see it
 #define SHOW_DEBUG_TEXT true

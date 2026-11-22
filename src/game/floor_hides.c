@@ -1,4 +1,5 @@
 #include "floor_hides.h"
+#include "../utils/fastmath.h" // ASR: shifts without libgcc's slow routines
 
 #define INV_SHIFT 20	 // the reciprocals are 2^20 / distance
 #define EDGE_MIN 16		 // nearer an edge than this, that way hides nothing (no reciprocal)
@@ -49,7 +50,8 @@ static int way_ratio(int d, int inv_low, int inv_high)
 		return 0; // straight above or below the eye that way: this way's edge isn't reached
 	if (inv == 0 || d > REACH_MAX)
 		return -1;
-	return (d * inv) >> RATIO_SHIFT; // (d < 2^14, inv <= 2^16: under 2^30)
+	return (int)((unsigned int)(d * inv) >> RATIO_SHIFT); // (d < 2^14, inv <= 2^16: under 2^30; both 0 or more:
+	                                                    // a logical shift, no libgcc call)
 }
 
 int floor_hides_below(const floor_hides *f, int x, int y)
@@ -66,7 +68,7 @@ int floor_hides_below(const floor_hides *f, int x, int y)
 	if (ratio > RATIO_MAX)
 		return FLOOR_HIDES_NOTHING; // hidden only so far down there's nothing there
 	// (H < 2^12 over any floor you stand on, ratio < 2^18: under 2^30)
-	below = f->eye_z - (((f->eye_z - f->floor_z) * ratio) >> 8) - MARGIN;
+	below = f->eye_z - (ASR((f->eye_z - f->floor_z) * ratio, 8)) - MARGIN;
 	// Under the floor itself (ratio under 1) it's hidden only below the floor: not at its height,
 	// where it's the floor's own surface (the unit test's first find)
 	if (below > f->floor_z - 1)
